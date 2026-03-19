@@ -11,11 +11,12 @@ That means the documentation assumes the reader:
 
 If you are new to the project, read the documents in this order:
 
-1. [`HANDOFF.md`](./HANDOFF.md) for the current state, critical context, and immediate next steps
-2. [`PRODUCT.md`](./PRODUCT.md) for the project goals, constraints, and UX direction
-3. [`ARCHITECTURE.md`](./ARCHITECTURE.md) for how the current codebase is structured
-4. [`DEVELOPMENT.md`](./DEVELOPMENT.md) for setup, build, test, and shipping workflow
-5. [`STATUS.md`](./STATUS.md) for the current implementation status, known gaps, and recommended roadmap
+1. [`../QUICKSTART.md`](../QUICKSTART.md) to run the app locally with the fewest steps
+2. [`HANDOFF.md`](./HANDOFF.md) for the current state, critical context, and immediate next steps
+3. [`PRODUCT.md`](./PRODUCT.md) for the project goals, constraints, and UX direction
+4. [`ARCHITECTURE.md`](./ARCHITECTURE.md) for how the current codebase is structured
+5. [`DEVELOPMENT.md`](./DEVELOPMENT.md) for setup, build, test, and shipping workflow
+6. [`STATUS.md`](./STATUS.md) for the current implementation status, known gaps, and recommended roadmap
 
 ## Quick Facts
 

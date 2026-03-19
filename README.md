@@ -12,6 +12,7 @@ This repository includes a full handoff-oriented documentation set for future ma
 
 Start here:
 
+- [`QUICKSTART.md`](./QUICKSTART.md)
 - [`docs/README.md`](./docs/README.md)
 - [`docs/HANDOFF.md`](./docs/HANDOFF.md)
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
@@ -67,7 +68,9 @@ This keeps parser and vault logic easier to test, debug, and eventually port to 
 
 ## Quick Start
 
-The easiest way to try Obviewer on your Mac is:
+The fastest path is in [`QUICKSTART.md`](./QUICKSTART.md).
+
+The one-command version is:
 
 ```bash
 git clone https://github.com/felizvida/obviewer.git
