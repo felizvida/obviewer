@@ -549,7 +549,7 @@ public struct ObsidianParser: Sendable {
     }
 
     private func isDimensionSpecifier(_ value: String) -> Bool {
-        matchFirst(in: value, pattern: #"^\d+(x\d+)?$"#) != nil
+        matchFirst(in: value, pattern: #"^(\d+(?:x\d+)?)$"#) != nil
     }
 
     private func isImagePath(_ path: String) -> Bool {

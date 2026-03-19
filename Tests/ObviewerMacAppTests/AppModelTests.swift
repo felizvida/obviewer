@@ -3,8 +3,8 @@ import XCTest
 @testable import ObviewerCore
 @testable import ObviewerMacApp
 
-@MainActor
 final class AppModelTests: XCTestCase {
+    @MainActor
     func testChooseVaultLoadsSnapshotPersistsBookmarkAndActivatesScope() async {
         let vaultURL = URL(fileURLWithPath: "/tmp/obviewer-tests/vault")
         let snapshot = makeSnapshot()
@@ -28,6 +28,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(loader.recordedURLs, [vaultURL])
     }
 
+    @MainActor
     func testRestoreVaultLoadsOnlyOnce() async {
         let vaultURL = URL(fileURLWithPath: "/tmp/obviewer-tests/restored")
         let bookmarkStore = BookmarkStoreSpy(restoredURL: vaultURL)
@@ -46,6 +47,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(bookmarkStore.savedURLs.isEmpty)
     }
 
+    @MainActor
     func testRestoreVaultFailureSurfacesErrorAndSkipsLoading() async {
         let bookmarkStore = BookmarkStoreSpy(restoreError: FixtureError.sample)
         let loader = VaultLoaderSpy(result: .success(makeSnapshot()))
@@ -65,6 +67,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(loader.recordedURLs.isEmpty)
     }
 
+    @MainActor
     func testNavigateStoresPendingAnchorForResolvedNote() async {
         let snapshot = makeSnapshot()
         let model = AppModel(
@@ -81,6 +84,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.pendingAnchor(for: "Projects/Plan.md"), "details")
     }
 
+    @MainActor
     func testSearchAndSectionsSupportTagFilteringAndFolderGrouping() async {
         let snapshot = makeSnapshot()
         let model = AppModel(
@@ -100,6 +104,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.noteSections.map(\.title), ["Vault Root", "Journal", "Projects"])
     }
 
+    @MainActor
     func testReloadVaultKeepsExistingSelectionWhenNoteStillExists() async {
         let vaultURL = URL(fileURLWithPath: "/tmp/obviewer-tests/vault")
         let firstSnapshot = makeSnapshot()
@@ -126,6 +131,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(loader.recordedURLs, [vaultURL, vaultURL])
     }
 
+    @MainActor
     func testLoadFailureSurfacesErrorAndLeavesBookmarkUntouched() async {
         let model = AppModel(
             bookmarkStore: BookmarkStoreSpy(),

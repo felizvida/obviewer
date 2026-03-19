@@ -97,7 +97,17 @@ public struct VaultReader: VaultLoading, Sendable {
     }
 
     private func makeRelativePath(fileURL: URL, rootURL: URL) -> String {
-        fileURL.path.replacingOccurrences(of: rootURL.path + "/", with: "")
+        let normalizedRoot = rootURL.standardizedFileURL.resolvingSymlinksInPath()
+        let normalizedFile = fileURL.standardizedFileURL.resolvingSymlinksInPath()
+        let rootComponents = normalizedRoot.pathComponents
+        let fileComponents = normalizedFile.pathComponents
+
+        guard fileComponents.starts(with: rootComponents) else {
+            return normalizedFile.lastPathComponent
+        }
+
+        let relativeComponents = fileComponents.dropFirst(rootComponents.count)
+        return relativeComponents.joined(separator: "/")
     }
 }
 
