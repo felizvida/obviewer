@@ -1,9 +1,8 @@
-import Testing
+import XCTest
 @testable import ObviewerCore
 
-struct ObsidianParserTests {
-    @Test
-    func parserExtractsTitleLinksAndTags() {
+final class ObsidianParserTests: XCTestCase {
+    func testParserExtractsTitleLinksAndTags() {
         let markdown = """
         ---
         aliases: [Demo]
@@ -19,15 +18,14 @@ struct ObsidianParserTests {
 
         let result = ObsidianParser().parse(markdown: markdown, fallbackTitle: "Fallback")
 
-        #expect(result.title == "Reader Note")
-        #expect(result.outboundLinks == ["Second Note"])
-        #expect(result.tags == ["research"])
-        #expect(result.blocks.count == 3)
-        #expect(result.tableOfContents.map(\.title) == ["Reader Note"])
+        XCTAssertEqual(result.title, "Reader Note")
+        XCTAssertEqual(result.outboundLinks, ["Second Note"])
+        XCTAssertEqual(result.tags, ["research"])
+        XCTAssertEqual(result.blocks.count, 3)
+        XCTAssertEqual(result.tableOfContents.map(\.title), ["Reader Note"])
     }
 
-    @Test
-    func parserRecognizesCalloutsAndStandaloneImagesWithSizingHints() {
+    func testParserRecognizesCalloutsAndStandaloneImagesWithSizingHints() {
         let markdown = """
         > [!warning] Handle Carefully
         > This should stay read only.
@@ -37,7 +35,7 @@ struct ObsidianParserTests {
 
         let result = ObsidianParser().parse(markdown: markdown, fallbackTitle: "Fallback")
 
-        #expect(result.blocks.contains { block in
+        XCTAssertTrue(result.blocks.contains { block in
             if case .callout(let kind, let title, let body) = block {
                 return kind == .warning
                     && title.plainText == "Handle Carefully"
@@ -46,7 +44,7 @@ struct ObsidianParserTests {
             return false
         })
 
-        #expect(result.blocks.contains { block in
+        XCTAssertTrue(result.blocks.contains { block in
             if case .image(let path, _) = block {
                 return path == "cover.png"
             }
@@ -54,8 +52,7 @@ struct ObsidianParserTests {
         })
     }
 
-    @Test
-    func parserBuildsTableAndInlineLinks() {
+    func testParserBuildsTableAndInlineLinks() {
         let markdown = """
         ## Data
 
@@ -69,9 +66,9 @@ struct ObsidianParserTests {
 
         let result = ObsidianParser().parse(markdown: markdown, fallbackTitle: "Fallback")
 
-        #expect(result.outboundLinks == ["Vault Note"])
-        #expect(result.tableOfContents.map(\.title) == ["Data"])
-        #expect(result.blocks.contains { block in
+        XCTAssertEqual(result.outboundLinks, ["Vault Note"])
+        XCTAssertEqual(result.tableOfContents.map(\.title), ["Data"])
+        XCTAssertTrue(result.blocks.contains { block in
             if case .table(let headers, let rows) = block {
                 return headers.map(\.plainText) == ["Name", "Value"]
                     && rows.count == 2
@@ -82,15 +79,14 @@ struct ObsidianParserTests {
         })
     }
 
-    @Test
-    func parserKeepsInlineEmbedsVisible() {
+    func testParserKeepsInlineEmbedsVisible() {
         let markdown = """
         Before ![[cover.png|300]] and ![Poster](images/poster.jpg) after.
         """
 
         let result = ObsidianParser().parse(markdown: markdown, fallbackTitle: "Fallback")
 
-        #expect(result.blocks.contains { block in
+        XCTAssertTrue(result.blocks.contains { block in
             guard case .paragraph(let text) = block else { return false }
 
             let imageLinks = text.runs.compactMap { run -> (String, LinkDestination)? in
@@ -106,15 +102,14 @@ struct ObsidianParserTests {
         })
     }
 
-    @Test
-    func parserClassifiesAttachmentAndAnchorLinks() {
+    func testParserClassifiesAttachmentAndAnchorLinks() {
         let markdown = """
         See [Manual](manual.pdf), [Cover](images/cover.png), [Jump](#Deep Dive), and [Next](note.md#Part Two).
         """
 
         let result = ObsidianParser().parse(markdown: markdown, fallbackTitle: "Fallback")
 
-        #expect(result.blocks.contains { block in
+        XCTAssertTrue(result.blocks.contains { block in
             guard case .paragraph(let text) = block else { return false }
 
             let links = text.runs.compactMap { run -> (String, LinkDestination)? in

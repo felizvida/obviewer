@@ -1,18 +1,16 @@
-import Testing
+import XCTest
 @testable import ObviewerCore
 
-struct VaultReferenceTests {
-    @Test
-    func normalizeVaultReferenceTrimsMarkdownSuffixWithoutTouchingOtherExtensions() {
-        #expect(normalizeVaultReference("./Journal/Daily.md") == "journal/daily")
-        #expect(normalizeVaultReference("Attachments/cover.png") == "attachments/cover.png")
-        #expect(normalizeVaultReference(" Roadmap.MD ") == "roadmap")
+final class VaultReferenceTests: XCTestCase {
+    func testNormalizeVaultReferenceTrimsMarkdownSuffixWithoutTouchingOtherExtensions() {
+        XCTAssertEqual(normalizeVaultReference("./Journal/Daily.md"), "journal/daily")
+        XCTAssertEqual(normalizeVaultReference("Attachments/cover.png"), "attachments/cover.png")
+        XCTAssertEqual(normalizeVaultReference(" Roadmap.MD "), "roadmap")
     }
 
-    @Test
-    func makeAnchorSlugNormalizesHeadingText() {
-        #expect(makeAnchorSlug("Deep Dive") == "deep-dive")
-        #expect(makeAnchorSlug("Section 2.1 / API") == "section-2-1-api")
-        #expect(makeAnchorSlug("!!!") == "section")
+    func testMakeAnchorSlugNormalizesHeadingText() {
+        XCTAssertEqual(makeAnchorSlug("Deep Dive"), "deep-dive")
+        XCTAssertEqual(makeAnchorSlug("Section 2.1 / API"), "section-2-1-api")
+        XCTAssertEqual(makeAnchorSlug("!!!"), "section")
     }
 }

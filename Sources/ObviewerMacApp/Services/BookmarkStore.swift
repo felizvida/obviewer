@@ -1,10 +1,12 @@
 import Foundation
 
+@MainActor
 protocol VaultBookmarkStoring {
     func save(url: URL) throws
     func restore() throws -> URL?
 }
 
+@MainActor
 struct BookmarkStore: VaultBookmarkStoring {
     private let key = "vault-bookmark"
 

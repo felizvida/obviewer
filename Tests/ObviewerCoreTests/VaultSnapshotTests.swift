@@ -1,10 +1,9 @@
 import Foundation
-import Testing
+import XCTest
 @testable import ObviewerCore
 
-struct VaultSnapshotTests {
-    @Test
-    func resolveNoteIDPrefersCurrentFolderForDuplicateBasenames() {
+final class VaultSnapshotTests: XCTestCase {
+    func testResolveNoteIDPrefersCurrentFolderForDuplicateBasenames() {
         let snapshot = VaultSnapshot(
             rootURL: URL(fileURLWithPath: "/tmp/obviewer-tests"),
             notes: [
@@ -20,11 +19,10 @@ struct VaultSnapshotTests {
             from: "Journal/Today.md"
         )
 
-        #expect(resolved == "Journal/Daily.md")
+        XCTAssertEqual(resolved, "Journal/Daily.md")
     }
 
-    @Test
-    func attachmentLookupPrefersCurrentFolderForDuplicateBasenames() {
+    func testAttachmentLookupPrefersCurrentFolderForDuplicateBasenames() {
         let snapshot = VaultSnapshot(
             rootURL: URL(fileURLWithPath: "/tmp/obviewer-tests"),
             notes: [
@@ -41,7 +39,7 @@ struct VaultSnapshotTests {
             from: "Projects/Overview.md"
         )
 
-        #expect(resolved?.relativePath == "Projects/cover.png")
+        XCTAssertEqual(resolved?.relativePath, "Projects/cover.png")
     }
 }
 

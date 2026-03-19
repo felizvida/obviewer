@@ -1,10 +1,9 @@
 import Foundation
-import Testing
+import XCTest
 @testable import ObviewerCore
 
-struct VaultReaderTests {
-    @Test
-    func loadVaultIndexesNotesAndAttachmentsFromDisk() throws {
+final class VaultReaderTests: XCTestCase {
+    func testLoadVaultIndexesNotesAndAttachmentsFromDisk() throws {
         let sandbox = try TemporaryVault()
         defer { sandbox.cleanup() }
 
@@ -32,11 +31,11 @@ struct VaultReaderTests {
 
         let snapshot = try VaultReader().loadVault(at: sandbox.rootURL)
 
-        #expect(snapshot.notes.count == 2)
-        #expect(snapshot.resolveNoteID(for: "Projects/Plan") == "Projects/Plan.md")
-        #expect(snapshot.attachment(for: "cover.png", from: "Journal/Today.md")?.kind == .image)
-        #expect(snapshot.attachment(for: "manual.pdf")?.kind == .pdf)
-        #expect(snapshot.attachment(for: "notes.txt")?.kind == .other)
+        XCTAssertEqual(snapshot.notes.count, 2)
+        XCTAssertEqual(snapshot.resolveNoteID(for: "Projects/Plan"), "Projects/Plan.md")
+        XCTAssertEqual(snapshot.attachment(for: "cover.png", from: "Journal/Today.md")?.kind, .image)
+        XCTAssertEqual(snapshot.attachment(for: "manual.pdf")?.kind, .pdf)
+        XCTAssertEqual(snapshot.attachment(for: "notes.txt")?.kind, .other)
     }
 }
 

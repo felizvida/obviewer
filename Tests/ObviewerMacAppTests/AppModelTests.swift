@@ -1,12 +1,11 @@
 import Foundation
-import Testing
+import XCTest
 @testable import ObviewerCore
 @testable import ObviewerMacApp
 
 @MainActor
-struct AppModelTests {
-    @Test
-    func chooseVaultLoadsSnapshotPersistsBookmarkAndActivatesScope() async {
+final class AppModelTests: XCTestCase {
+    func testChooseVaultLoadsSnapshotPersistsBookmarkAndActivatesScope() async {
         let vaultURL = URL(fileURLWithPath: "/tmp/obviewer-tests/vault")
         let snapshot = makeSnapshot()
         let bookmarkStore = BookmarkStoreSpy()
@@ -22,15 +21,14 @@ struct AppModelTests {
 
         await model.chooseVault()
 
-        #expect(model.vaultURL == vaultURL)
-        #expect(model.selectedNoteID == snapshot.notes.first?.id)
-        #expect(bookmarkStore.savedURLs == [vaultURL])
-        #expect(securityScope.activatedURLs == [vaultURL])
-        #expect(loader.recordedURLs == [vaultURL])
+        XCTAssertEqual(model.vaultURL, vaultURL)
+        XCTAssertEqual(model.selectedNoteID, snapshot.notes.first?.id)
+        XCTAssertEqual(bookmarkStore.savedURLs, [vaultURL])
+        XCTAssertEqual(securityScope.activatedURLs, [vaultURL])
+        XCTAssertEqual(loader.recordedURLs, [vaultURL])
     }
 
-    @Test
-    func restoreVaultLoadsOnlyOnce() async {
+    func testRestoreVaultLoadsOnlyOnce() async {
         let vaultURL = URL(fileURLWithPath: "/tmp/obviewer-tests/restored")
         let bookmarkStore = BookmarkStoreSpy(restoredURL: vaultURL)
         let loader = VaultLoaderSpy(result: .success(makeSnapshot()))
@@ -44,12 +42,11 @@ struct AppModelTests {
         await model.restoreVaultIfNeeded()
         await model.restoreVaultIfNeeded()
 
-        #expect(loader.recordedURLs == [vaultURL])
-        #expect(bookmarkStore.savedURLs.isEmpty)
+        XCTAssertEqual(loader.recordedURLs, [vaultURL])
+        XCTAssertTrue(bookmarkStore.savedURLs.isEmpty)
     }
 
-    @Test
-    func restoreVaultFailureSurfacesErrorAndSkipsLoading() async {
+    func testRestoreVaultFailureSurfacesErrorAndSkipsLoading() async {
         let bookmarkStore = BookmarkStoreSpy(restoreError: FixtureError.sample)
         let loader = VaultLoaderSpy(result: .success(makeSnapshot()))
         let model = AppModel(
@@ -61,15 +58,14 @@ struct AppModelTests {
 
         await model.restoreVaultIfNeeded()
 
-        #expect(model.errorMessage == FixtureError.sample.localizedDescription)
-        #expect(model.snapshot == nil)
-        #expect(model.vaultURL == nil)
-        #expect(model.selectedNoteID == nil)
-        #expect(loader.recordedURLs.isEmpty)
+        XCTAssertEqual(model.errorMessage, FixtureError.sample.localizedDescription)
+        XCTAssertNil(model.snapshot)
+        XCTAssertNil(model.vaultURL)
+        XCTAssertNil(model.selectedNoteID)
+        XCTAssertTrue(loader.recordedURLs.isEmpty)
     }
 
-    @Test
-    func navigateStoresPendingAnchorForResolvedNote() async {
+    func testNavigateStoresPendingAnchorForResolvedNote() async {
         let snapshot = makeSnapshot()
         let model = AppModel(
             bookmarkStore: BookmarkStoreSpy(),
@@ -81,12 +77,11 @@ struct AppModelTests {
         await model.chooseVault()
         model.navigate(to: "Plan", anchor: "details", from: "Journal/Today.md")
 
-        #expect(model.selectedNoteID == "Projects/Plan.md")
-        #expect(model.pendingAnchor(for: "Projects/Plan.md") == "details")
+        XCTAssertEqual(model.selectedNoteID, "Projects/Plan.md")
+        XCTAssertEqual(model.pendingAnchor(for: "Projects/Plan.md"), "details")
     }
 
-    @Test
-    func searchAndSectionsSupportTagFilteringAndFolderGrouping() async {
+    func testSearchAndSectionsSupportTagFilteringAndFolderGrouping() async {
         let snapshot = makeSnapshot()
         let model = AppModel(
             bookmarkStore: BookmarkStoreSpy(),
@@ -98,15 +93,14 @@ struct AppModelTests {
         await model.chooseVault()
         model.select(tag: "research")
 
-        #expect(model.searchText == "#research")
-        #expect(model.filteredNotes.map(\.id) == ["Journal/Today.md"])
+        XCTAssertEqual(model.searchText, "#research")
+        XCTAssertEqual(model.filteredNotes.map(\.id), ["Journal/Today.md"])
 
         model.searchText = ""
-        #expect(model.noteSections.map(\.title) == ["Vault Root", "Journal", "Projects"])
+        XCTAssertEqual(model.noteSections.map(\.title), ["Vault Root", "Journal", "Projects"])
     }
 
-    @Test
-    func reloadVaultKeepsExistingSelectionWhenNoteStillExists() async {
+    func testReloadVaultKeepsExistingSelectionWhenNoteStillExists() async {
         let vaultURL = URL(fileURLWithPath: "/tmp/obviewer-tests/vault")
         let firstSnapshot = makeSnapshot()
         let secondSnapshot = makeSnapshot(
@@ -128,12 +122,11 @@ struct AppModelTests {
 
         await model.reloadVault()
 
-        #expect(model.selectedNoteID == "Projects/Plan.md")
-        #expect(loader.recordedURLs == [vaultURL, vaultURL])
+        XCTAssertEqual(model.selectedNoteID, "Projects/Plan.md")
+        XCTAssertEqual(loader.recordedURLs, [vaultURL, vaultURL])
     }
 
-    @Test
-    func loadFailureSurfacesErrorAndLeavesBookmarkUntouched() async {
+    func testLoadFailureSurfacesErrorAndLeavesBookmarkUntouched() async {
         let model = AppModel(
             bookmarkStore: BookmarkStoreSpy(),
             picker: VaultPickerStub(url: URL(fileURLWithPath: "/tmp/obviewer-tests/vault")),
@@ -143,9 +136,9 @@ struct AppModelTests {
 
         await model.chooseVault()
 
-        #expect(model.errorMessage == FixtureError.sample.localizedDescription)
-        #expect(model.isLoading == false)
-        #expect(model.snapshot == nil)
+        XCTAssertEqual(model.errorMessage, FixtureError.sample.localizedDescription)
+        XCTAssertFalse(model.isLoading)
+        XCTAssertNil(model.snapshot)
     }
 }
 
@@ -169,7 +162,7 @@ private final class BookmarkStoreSpy: VaultBookmarkStoring {
             throw restoreError
         }
 
-        restoredURL
+        return restoredURL
     }
 }
 
