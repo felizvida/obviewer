@@ -57,7 +57,7 @@ jobs:
             > "dist/obviewer-${GITHUB_REF_NAME}-sha256.txt"
 
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: obviewer-${{ github.ref_name }}-release
           path: dist/*
