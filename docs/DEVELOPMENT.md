@@ -42,6 +42,14 @@ During bootstrap, local verification was blocked by a toolchain mismatch because
 3. Confirm that full Xcode is selected as the active developer directory.
 4. Open the package in Xcode or build from the command line.
 
+For the easiest local trial, use:
+
+```bash
+make try-local
+```
+
+That target checks for full Xcode, installs `xcodegen` if Homebrew is available, generates `Obviewer.xcodeproj`, and opens it in Xcode.
+
 Useful commands:
 
 ```bash
@@ -56,6 +64,12 @@ If the active developer directory points to Command Line Tools instead of Xcode,
 There are two common ways to work:
 
 ### Option 1: Xcode
+
+- Fastest first-run path:
+
+  ```bash
+  make try-local
+  ```
 
 - Open the folder or package in Xcode
 - Let Xcode resolve the package

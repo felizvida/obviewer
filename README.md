@@ -67,10 +67,29 @@ This keeps parser and vault logic easier to test, debug, and eventually port to 
 
 ## Quick Start
 
-1. Install full Xcode on macOS.
-2. Clone the repository.
-3. Open the package in Xcode or run `swift build` and `swift test` from a shell with the full Xcode toolchain selected.
-4. Attach `Configuration/Obviewer.entitlements` to the eventual app target before shipping.
+The easiest way to try Obviewer on your Mac is:
+
+```bash
+git clone https://github.com/felizvida/obviewer.git
+cd obviewer
+make try-local
+```
+
+That command will:
+
+- verify that full Xcode is selected
+- install `xcodegen` with Homebrew if needed
+- generate `Obviewer.xcodeproj`
+- open the project in Xcode
+
+Then:
+
+1. Select the `Obviewer` scheme.
+2. If Xcode asks about signing, choose your Personal Team.
+3. Press Run.
+4. Choose your local Obsidian vault inside the app.
+
+If you prefer the manual path, you can still open the package in Xcode or run `swift build` and `swift test` from a shell with the full Xcode toolchain selected.
 
 ## Easier App Packaging
 
@@ -126,4 +145,4 @@ The visual direction in this starter is intentionally not "developer utility gra
 
 ## License
 
-No license has been added yet. That choice has legal consequences, so it should be made explicitly by the repository owner.
+This repository is licensed under Apache 2.0. See [LICENSE](./LICENSE).
