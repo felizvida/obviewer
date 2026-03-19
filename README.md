@@ -6,12 +6,25 @@ Obviewer is a macOS-native, read-only Obsidian vault viewer built for calm, prem
 
 This starter leans hard into the one requirement that matters most: the vault itself must never be mutated. The intended production app should be sandboxed and granted only user-selected read-only access to the vault directory.
 
+## Documentation
+
+This repository includes a full handoff-oriented documentation set for future maintainers.
+
+Start here:
+
+- [`docs/README.md`](./docs/README.md)
+- [`docs/HANDOFF.md`](./docs/HANDOFF.md)
+- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
+- [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md)
+- [`docs/PRODUCT.md`](./docs/PRODUCT.md)
+- [`docs/STATUS.md`](./docs/STATUS.md)
+
 ## Product Direction
 
 - Native macOS app built with SwiftUI and selective AppKit bridges
 - Local-folder only, no sync layer, no editing affordances
 - High-contrast, typography-led reading experience with generous spacing and motion
-- Fast vault indexing for Markdown notes plus common attachments
+- Fast vault indexing for Markdown notes plus vault attachments
 - Obsidian-aware viewing for wiki links, callouts, tags, and image embeds
 
 ## Safety Model
@@ -31,21 +44,56 @@ The sample entitlements file in [`Configuration/Obviewer.entitlements`](/Users/l
 The package includes:
 
 - A native SwiftUI shell using `NavigationSplitView`
-- A read-only vault reader service
+- A reusable `ObviewerCore` module for vault models, parsing, and indexing
+- A macOS-specific `ObviewerMacApp` module for app state, security-scoped access, and UI
 - Security-scoped bookmark persistence for reopening the selected vault
-- An Obsidian-aware parser for headings, lists, callouts, tags, wiki links, and image embeds
-- A premium reading surface with note metadata and linked-note navigation
+- An Obsidian-aware parser for inline links, tables, headings, lists, callouts, tags, and image embeds
+- A premium reading surface with note metadata, inline links, table rendering, and linked-note navigation
+- A right-side contents rail for long-note navigation
+- XcodeGen-based app scaffolding and helper scripts for producing a signed release bundle once signing is configured
+
+## Architecture
+
+The codebase is now split into three targets:
+
+- `ObviewerCore`
+  Portable domain layer for notes, attachments, parsing, lookup, and vault indexing
+- `ObviewerMacApp`
+  macOS shell layer for `AppModel`, security-scoped access, bookmark persistence, picker integration, and SwiftUI/AppKit views
+- `Obviewer`
+  Thin executable entry point that boots the macOS app
+
+This keeps parser and vault logic easier to test, debug, and eventually port to another client shell.
 
 ## Quick Start
 
 1. Install full Xcode on macOS.
 2. Clone the repository.
-3. Open the package in Xcode or run `swift build` from a shell with the full Xcode toolchain selected.
+3. Open the package in Xcode or run `swift build` and `swift test` from a shell with the full Xcode toolchain selected.
 4. Attach `Configuration/Obviewer.entitlements` to the eventual app target before shipping.
+
+## Easier App Packaging
+
+The repository now includes an `XcodeGen` project spec plus helper scripts so a future maintainer can generate a real macOS app project and package a signed release bundle without reconstructing the project by hand.
+
+Typical flow:
+
+```bash
+brew install xcodegen
+export OBVIEWER_CODE_SIGN_IDENTITY="Developer ID Application: Example Corp (TEAMID1234)"
+export OBVIEWER_DEVELOPMENT_TEAM="TEAMID1234"
+make xcodeproj
+make build-app
+make package-app
+```
+
+`make package-app` now refuses to produce an unsigned artifact, because doing so would bypass the sandbox-based read-only guarantee.
 
 ## Repository Health
 
-- CI runs on each push and pull request through `.github/workflows/ci.yml`.
+- CI runs on push, pull request, and manual dispatch through `.github/workflows/ci.yml`.
+- CI validates the Swift package on `macos-14` and `macos-15`, plus the XcodeGen scaffolding and packaging scripts.
+- Tagging `v*` triggers `.github/workflows/release.yml`, which rebuilds, retests, generates source archives, and publishes a GitHub release.
 - Bug reports and feature requests are routed through issue forms.
 - Contribution, support, and security guidance live in the repository root and `.github/`.
 - `CODEOWNERS` is configured so review routing starts with the repository owner.
@@ -71,10 +119,9 @@ The visual direction in this starter is intentionally not "developer utility gra
 
 ## Next High-Value Steps
 
-- Replace the lightweight parser with a full CommonMark plus Obsidian extension pipeline
-- Add inline link navigation inside body text
-- Add quick switcher and fuzzy command palette
-- Add table rendering, footnotes, and Mermaid block previews
+- Replace the lightweight parser with a fuller CommonMark plus Obsidian extension pipeline
+- Add quick switcher and fuzzier large-vault navigation
+- Add footnotes, Mermaid block previews, and richer media rendering
 - Add live vault change observation through file-system events
 
 ## License

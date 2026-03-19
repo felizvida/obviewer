@@ -1,11 +1,13 @@
 import Foundation
 
-struct VaultReader: Sendable {
+public struct VaultReader: VaultLoading, Sendable {
     private let supportedImages = Set(["png", "jpg", "jpeg", "gif", "webp", "heic"])
     private let supportedAudio = Set(["mp3", "m4a", "wav"])
     private let supportedVideo = Set(["mp4", "mov"])
 
-    func loadVault(at rootURL: URL) throws -> VaultSnapshot {
+    public init() {}
+
+    public func loadVault(at rootURL: URL) throws -> VaultSnapshot {
         let resourceKeys: Set<URLResourceKey> = [
             .isRegularFileKey,
             .contentModificationDateKey,
@@ -21,7 +23,7 @@ struct VaultReader: Sendable {
         }
 
         var notes = [VaultNote]()
-        var attachments = [String: VaultAttachment]()
+        var attachments = [VaultAttachment]()
 
         for case let fileURL as URL in enumerator {
             let values = try fileURL.resourceValues(forKeys: resourceKeys)
@@ -39,9 +41,13 @@ struct VaultReader: Sendable {
                     id: relativePath,
                     title: parsed.title,
                     relativePath: relativePath,
+                    folderPath: (relativePath as NSString).deletingLastPathComponent == "."
+                        ? ""
+                        : (relativePath as NSString).deletingLastPathComponent,
                     previewText: parsed.previewText,
                     tags: parsed.tags,
                     outboundLinks: parsed.outboundLinks,
+                    tableOfContents: parsed.tableOfContents,
                     blocks: parsed.blocks,
                     wordCount: parsed.wordCount,
                     readingTimeMinutes: parsed.readingTimeMinutes,
@@ -58,9 +64,7 @@ struct VaultReader: Sendable {
                 kind: kind
             )
 
-            for key in attachmentLookupKeys(relativePath: relativePath) {
-                attachments[key] = attachment
-            }
+            attachments.append(attachment)
         }
 
         return VaultSnapshot(rootURL: rootURL, notes: notes, attachments: attachments)
@@ -89,28 +93,18 @@ struct VaultReader: Sendable {
         if supportedVideo.contains(extensionName) {
             return .video
         }
-        return nil
+        return .other
     }
 
     private func makeRelativePath(fileURL: URL, rootURL: URL) -> String {
         fileURL.path.replacingOccurrences(of: rootURL.path + "/", with: "")
     }
-
-    private func attachmentLookupKeys(relativePath: String) -> [String] {
-        let basename = (relativePath as NSString).lastPathComponent
-        return Array(
-            Set([
-                normalizeVaultReference(relativePath),
-                normalizeVaultReference(basename),
-            ])
-        )
-    }
 }
 
-enum VaultReaderError: LocalizedError {
+public enum VaultReaderError: LocalizedError {
     case unreadableVault(String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .unreadableVault(let path):
             return "Unable to read vault at \(path)."

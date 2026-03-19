@@ -1,6 +1,11 @@
 import Foundation
 
-struct BookmarkStore {
+protocol VaultBookmarkStoring {
+    func save(url: URL) throws
+    func restore() throws -> URL?
+}
+
+struct BookmarkStore: VaultBookmarkStoring {
     private let key = "vault-bookmark"
 
     func save(url: URL) throws {

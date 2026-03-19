@@ -1,7 +1,12 @@
 import AppKit
 import Foundation
 
-struct VaultPicker {
+protocol VaultChoosing {
+    @MainActor
+    func chooseVault() -> URL?
+}
+
+struct VaultPicker: VaultChoosing {
     @MainActor
     func chooseVault() -> URL? {
         let panel = NSOpenPanel()

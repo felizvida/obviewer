@@ -6,10 +6,24 @@ on:
       - main
       - "codex/**"
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  swift:
-    runs-on: macos-15
+  swift-package:
+    name: Swift Package (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - macos-14
+          - macos-15
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -25,3 +39,28 @@ jobs:
 
       - name: Test
         run: swift test
+
+  scaffolding:
+    name: Scaffolding Checks
+    runs-on: macos-15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate entitlements
+        run: plutil -lint Configuration/Obviewer.entitlements
+
+      - name: Validate packaging scripts
+        run: bash -n scripts/build_app.sh scripts/generate_xcode_project.sh scripts/package_release_app.sh
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: ./scripts/generate_xcode_project.sh
+
+      - name: Confirm generated project
+        run: test -d Obviewer.xcodeproj

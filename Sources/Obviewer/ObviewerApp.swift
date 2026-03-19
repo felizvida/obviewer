@@ -1,3 +1,4 @@
+import ObviewerMacApp
 import SwiftUI
 
 @main

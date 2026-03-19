@@ -1,0 +1,86 @@
+name: Obviewer
+
+options:
+  bundleIdPrefix: com.felizvida
+  deploymentTarget:
+    macOS: "14.0"
+
+configs:
+  Debug: debug
+  Release: release
+
+targets:
+  ObviewerCore:
+    type: framework
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/ObviewerCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer.core
+        PRODUCT_NAME: ObviewerCore
+        DEFINES_MODULE: YES
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+
+  ObviewerMacApp:
+    type: framework
+    platform: macOS
+    deploymentTarget: "14.0"
+    dependencies:
+      - target: ObviewerCore
+    sources:
+      - path: Sources/ObviewerMacApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer.macapp
+        PRODUCT_NAME: ObviewerMacApp
+        DEFINES_MODULE: YES
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+
+  Obviewer:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/Obviewer
+    dependencies:
+      - target: ObviewerMacApp
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Obviewer
+        LSApplicationCategoryType: public.app-category.productivity
+        NSPrincipalClass: NSApplication
+        NSHighResolutionCapable: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer
+        PRODUCT_NAME: Obviewer
+        SWIFT_VERSION: "5.10"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        CODE_SIGN_ENTITLEMENTS: Configuration/Obviewer.entitlements
+        GENERATE_INFOPLIST_FILE: NO
+        MARKETING_VERSION: 0.2.0
+        CURRENT_PROJECT_VERSION: 1
+
+  ObviewerCoreTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Tests/ObviewerCoreTests
+    dependencies:
+      - target: ObviewerCore
+
+  ObviewerMacAppTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Tests/ObviewerMacAppTests
+    dependencies:
+      - target: ObviewerMacApp
+      - target: ObviewerCore

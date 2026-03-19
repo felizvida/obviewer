@@ -1,9 +1,14 @@
+import ObviewerCore
 import SwiftUI
 
-struct ContentView: View {
+public struct ContentView: View {
     @ObservedObject var model: AppModel
 
-    var body: some View {
+    public init(model: AppModel) {
+        self.model = model
+    }
+
+    public var body: some View {
         NavigationSplitView {
             sidebar
         } detail: {
@@ -55,6 +60,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 20) {
                 header
                 search
+                librarySummary
                 noteList
             }
             .padding(28)
@@ -73,7 +79,14 @@ struct ContentView: View {
                 ReaderView(
                     note: note,
                     snapshot: snapshot,
-                    onNavigate: model.navigate(to:)
+                    onNavigate: { target, anchor in
+                        model.navigate(to: target, anchor: anchor, from: note.id)
+                    },
+                    onSelectTag: model.select(tag:),
+                    pendingAnchorID: model.pendingAnchor(for: note.id),
+                    onConsumePendingAnchor: {
+                        model.clearPendingAnchor(for: note.id)
+                    }
                 )
             } else {
                 EmptyReaderState {
@@ -107,6 +120,15 @@ struct ContentView: View {
         }
     }
 
+    private var librarySummary: some View {
+        HStack(spacing: 10) {
+            summaryPill(text: "\(model.filteredNotes.count) notes", systemImage: "doc.text")
+            if model.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                summaryPill(text: "Filtered", systemImage: "line.3.horizontal.decrease.circle")
+            }
+        }
+    }
+
     private var search: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Library")
@@ -130,11 +152,15 @@ struct ContentView: View {
 
     private var noteList: some View {
         List(selection: $model.selectedNoteID) {
-            ForEach(model.filteredNotes) { note in
-                noteRow(note)
-                    .tag(note.id)
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
+            ForEach(model.noteSections) { section in
+                Section(section.title) {
+                    ForEach(section.notes) { note in
+                        noteRow(note)
+                            .tag(note.id)
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                    }
+                }
             }
         }
         .listStyle(.plain)
@@ -151,6 +177,11 @@ struct ContentView: View {
                 .font(.system(size: 12, weight: .regular, design: .rounded))
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
+
+            Text(note.folderPath.isEmpty ? "Vault Root" : note.folderPath)
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(Color.black.opacity(0.55))
+                .lineLimit(1)
 
             HStack(spacing: 8) {
                 Label("\(note.readingTimeMinutes)m", systemImage: "clock")
@@ -169,6 +200,21 @@ struct ContentView: View {
                 .stroke(Color.black.opacity(0.05), lineWidth: 1)
         )
         .padding(.vertical, 4)
+    }
+
+    private func summaryPill(text: String, systemImage: String) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.system(size: 11, weight: .semibold, design: .rounded))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.72))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+            )
     }
 
     private var backgroundGradient: some View {
