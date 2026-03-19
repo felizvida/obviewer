@@ -39,7 +39,7 @@ struct ReaderView: View {
             .onAppear {
                 handlePendingAnchor(using: proxy)
             }
-            .onChange(of: pendingAnchorID) { _ in
+            .onChange(of: pendingAnchorID) {
                 handlePendingAnchor(using: proxy)
             }
         }

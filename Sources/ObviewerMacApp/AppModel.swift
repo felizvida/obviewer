@@ -19,7 +19,7 @@ public final class AppModel: ObservableObject {
 
     private var didAttemptRestore = false
 
-    public init() {
+    public convenience init() {
         self.init(
             bookmarkStore: BookmarkStore(),
             picker: VaultPicker(),
@@ -29,10 +29,10 @@ public final class AppModel: ObservableObject {
     }
 
     init(
-        bookmarkStore: any VaultBookmarkStoring = BookmarkStore(),
-        picker: any VaultChoosing = VaultPicker(),
-        reader: any VaultLoading = VaultReader(),
-        securityScopeManager: any SecurityScopeManaging = SecurityScopedAccessController()
+        bookmarkStore: any VaultBookmarkStoring,
+        picker: any VaultChoosing,
+        reader: any VaultLoading,
+        securityScopeManager: any SecurityScopeManaging
     ) {
         self.bookmarkStore = bookmarkStore
         self.picker = picker
@@ -90,12 +90,19 @@ public final class AppModel: ObservableObject {
         guard didAttemptRestore == false else { return }
         didAttemptRestore = true
 
-        guard let restoredURL = try? bookmarkStore.restore() else {
+        do {
+            guard let restoredURL = try bookmarkStore.restore() else {
+                return
+            }
+
+            await loadVault(from: restoredURL, persistBookmark: false)
+        } catch {
+            errorMessage = error.localizedDescription
+            snapshot = nil
+            vaultURL = nil
+            selectedNoteID = nil
             return
         }
-
-        guard let restoredURL else { return }
-        await loadVault(from: restoredURL, persistBookmark: false)
     }
 
     public func chooseVault() async {

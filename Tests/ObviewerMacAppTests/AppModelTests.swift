@@ -49,6 +49,26 @@ struct AppModelTests {
     }
 
     @Test
+    func restoreVaultFailureSurfacesErrorAndSkipsLoading() async {
+        let bookmarkStore = BookmarkStoreSpy(restoreError: FixtureError.sample)
+        let loader = VaultLoaderSpy(result: .success(makeSnapshot()))
+        let model = AppModel(
+            bookmarkStore: bookmarkStore,
+            picker: VaultPickerStub(url: nil),
+            reader: loader,
+            securityScopeManager: SecurityScopeSpy()
+        )
+
+        await model.restoreVaultIfNeeded()
+
+        #expect(model.errorMessage == FixtureError.sample.localizedDescription)
+        #expect(model.snapshot == nil)
+        #expect(model.vaultURL == nil)
+        #expect(model.selectedNoteID == nil)
+        #expect(loader.recordedURLs.isEmpty)
+    }
+
+    @Test
     func navigateStoresPendingAnchorForResolvedNote() async {
         let snapshot = makeSnapshot()
         let model = AppModel(
@@ -133,9 +153,11 @@ struct AppModelTests {
 private final class BookmarkStoreSpy: VaultBookmarkStoring {
     private(set) var savedURLs = [URL]()
     private let restoredURL: URL?
+    private let restoreError: Error?
 
-    init(restoredURL: URL? = nil) {
+    init(restoredURL: URL? = nil, restoreError: Error? = nil) {
         self.restoredURL = restoredURL
+        self.restoreError = restoreError
     }
 
     func save(url: URL) throws {
@@ -143,6 +165,10 @@ private final class BookmarkStoreSpy: VaultBookmarkStoring {
     }
 
     func restore() throws -> URL? {
+        if let restoreError {
+            throw restoreError
+        }
+
         restoredURL
     }
 }
