@@ -39,13 +39,9 @@ make try-local
 
 ## If It Stops Early
 
-If `make try-local` tells you that Command Line Tools are selected, run:
+If `make try-local` says Command Line Tools are selected, it will print the exact `xcode-select` command you should run.
 
-```bash
-sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-```
-
-Then rerun:
+If it says that no full Xcode app could be found, install Xcode from the App Store, open it once, and then rerun:
 
 ```bash
 make try-local
