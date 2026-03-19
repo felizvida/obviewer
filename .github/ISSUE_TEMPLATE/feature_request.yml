@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest an improvement to the reading experience.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      placeholder: Add inline wiki-link navigation inside rendered paragraphs
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What reading or product problem does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the best version of the feature.
+    validations:
+      required: true

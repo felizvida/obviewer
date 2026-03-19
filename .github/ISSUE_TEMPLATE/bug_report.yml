@@ -1,0 +1,42 @@
+name: Bug report
+description: Report a defect in the Obviewer experience.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Obviewer.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: A short description of the problem.
+      placeholder: Reader crashes when opening a vault with image embeds
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Tell us exactly how to reproduce the issue.
+      placeholder: |
+        1. Open vault
+        2. Select note
+        3. Observe the failure
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: macOS version, Xcode version, and any relevant vault details.
+    validations:
+      required: true
