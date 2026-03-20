@@ -2,7 +2,7 @@ import AppKit
 import ObviewerCore
 import SwiftUI
 
-public struct DocumentationScreenshotSpec: Hashable, Sendable {
+public struct DocumentationScreenshotSpec: Sendable {
     public let fileName: String
     public let title: String
     public let selectedNoteID: String?
