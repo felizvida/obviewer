@@ -1,9 +1,10 @@
-.PHONY: help try-local demo-vault xcodeproj build-app package-app clean-app
+.PHONY: help try-local demo-vault docs-screenshots xcodeproj build-app package-app clean-app
 
 help:
 	@printf '%s\n' \
 	"make try-local   Generate the Xcode project and open it for the easiest first run" \
 	"make demo-vault  Generate a rich sample Obsidian vault under build/SampleVault" \
+	"make docs-screenshots Generate polished product screenshots under docs/images" \
 	"make xcodeproj   Generate Obviewer.xcodeproj using XcodeGen" \
 	"make build-app   Build a signed Release app (requires signing env vars)" \
 	"make package-app Build and zip a signed Release app (requires signing env vars)" \
@@ -14,6 +15,9 @@ try-local:
 
 demo-vault:
 	./scripts/generate_demo_vault.sh
+
+docs-screenshots:
+	./scripts/generate_doc_screenshots.sh
 
 xcodeproj:
 	./scripts/generate_xcode_project.sh

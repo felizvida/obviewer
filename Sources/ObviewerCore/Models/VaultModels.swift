@@ -4,40 +4,46 @@ public struct VaultSnapshot: Sendable {
     public let rootURL: URL
     public let notes: [VaultNote]
     public let attachments: [VaultAttachment]
+    public let noteGraph: NoteGraph
 
     private let notesByID: [String: VaultNote]
     private let noteLookup: [String: [String]]
     private let attachmentLookup: [String: [VaultAttachment]]
 
     public init(rootURL: URL, notes: [VaultNote], attachments: [VaultAttachment]) {
-        self.rootURL = rootURL
-        self.notes = notes.sorted {
+        let sortedNotes = notes.sorted {
             if $0.modifiedAt != $1.modifiedAt {
                 return $0.modifiedAt > $1.modifiedAt
             }
             return $0.relativePath.localizedCaseInsensitiveCompare($1.relativePath) == .orderedAscending
         }
-        self.attachments = attachments.sorted {
+        let sortedAttachments = attachments.sorted {
             $0.relativePath.localizedCaseInsensitiveCompare($1.relativePath) == .orderedAscending
         }
-        self.notesByID = Dictionary(uniqueKeysWithValues: self.notes.map { ($0.id, $0) })
+        let notesByID = Dictionary(uniqueKeysWithValues: sortedNotes.map { ($0.id, $0) })
 
         var noteLookup = [String: [String]]()
-        for note in self.notes.sorted(by: {
+        for note in sortedNotes.sorted(by: {
             $0.relativePath.localizedCaseInsensitiveCompare($1.relativePath) == .orderedAscending
         }) {
             for key in note.lookupKeys {
                 noteLookup[key, default: []].append(note.id)
             }
         }
-        self.noteLookup = noteLookup
 
         var attachmentLookup = [String: [VaultAttachment]]()
-        for attachment in self.attachments {
+        for attachment in sortedAttachments {
             for key in attachmentLookupKeys(relativePath: attachment.relativePath) {
                 attachmentLookup[key, default: []].append(attachment)
             }
         }
+
+        self.rootURL = rootURL
+        self.notes = sortedNotes
+        self.attachments = sortedAttachments
+        self.noteGraph = NoteGraph(notes: sortedNotes, notesByID: notesByID, noteLookup: noteLookup)
+        self.notesByID = notesByID
+        self.noteLookup = noteLookup
         self.attachmentLookup = attachmentLookup
     }
 
@@ -46,95 +52,248 @@ public struct VaultSnapshot: Sendable {
     }
 
     public func resolveNoteID(for target: String, from sourceNoteID: String? = nil) -> String? {
-        let normalizedTarget = normalizeVaultReference(target)
-        guard let candidates = noteLookup[normalizedTarget], candidates.isEmpty == false else {
-            return nil
-        }
-
-        if candidates.count == 1 {
-            return candidates[0]
-        }
-
-        let sourceRelativePath = sourceNoteID.flatMap { notesByID[$0]?.relativePath }
-        return bestCandidate(
-            from: candidates,
-            targetKey: normalizedTarget,
-            sourceRelativePath: sourceRelativePath
-        ) { candidateID in
-            notesByID[candidateID]?.relativePath ?? candidateID
-        }
+        resolveResolvedNoteID(
+            for: target,
+            from: sourceNoteID,
+            notesByID: notesByID,
+            noteLookup: noteLookup
+        )
     }
 
     public func attachment(for path: String, from sourceNoteID: String? = nil) -> VaultAttachment? {
-        let normalizedTarget = normalizeVaultReference(path)
-        guard let candidates = attachmentLookup[normalizedTarget], candidates.isEmpty == false else {
-            return nil
-        }
-
-        if candidates.count == 1 {
-            return candidates[0]
-        }
-
         let sourceRelativePath = sourceNoteID.flatMap { notesByID[$0]?.relativePath }
-        return bestCandidate(
-            from: candidates,
-            targetKey: normalizedTarget,
-            sourceRelativePath: sourceRelativePath
-        ) { attachment in
-            attachment.relativePath
-        }
-    }
-
-    private func bestCandidate<Candidate>(
-        from candidates: [Candidate],
-        targetKey: String,
-        sourceRelativePath: String?,
-        relativePath: (Candidate) -> String
-    ) -> Candidate? {
-        let sourceFolder = sourceRelativePath.map(folderPath(for:))
-
-        return candidates.sorted { lhs, rhs in
-            let lhsPath = relativePath(lhs)
-            let rhsPath = relativePath(rhs)
-            let lhsScore = resolutionScore(
-                for: lhsPath,
-                targetKey: targetKey,
-                sourceFolder: sourceFolder
-            )
-            let rhsScore = resolutionScore(
-                for: rhsPath,
-                targetKey: targetKey,
-                sourceFolder: sourceFolder
-            )
-
-            if lhsScore != rhsScore {
-                return lhsScore > rhsScore
+        for targetKey in referenceLookupKeys(for: path, sourceRelativePath: sourceRelativePath) {
+            guard let candidates = attachmentLookup[targetKey], candidates.isEmpty == false else {
+                continue
             }
 
-            return lhsPath.localizedCaseInsensitiveCompare(rhsPath) == .orderedAscending
-        }.first
-    }
+            if candidates.count == 1 {
+                return candidates[0]
+            }
 
-    private func resolutionScore(
-        for candidateRelativePath: String,
-        targetKey: String,
-        sourceFolder: String?
-    ) -> (Int, Int, Int, Int) {
-        let normalizedCandidatePath = normalizeVaultReference(candidateRelativePath)
-        let normalizedStem = normalizeVaultReference((candidateRelativePath as NSString).deletingPathExtension)
-        let candidateFolder = folderPath(for: candidateRelativePath)
-        let exactPathMatch = (normalizedCandidatePath == targetKey || normalizedStem == targetKey) ? 1 : 0
-
-        guard let sourceFolder else {
-            return (exactPathMatch, 0, 0, 0)
+            return resolveBestCandidate(
+                from: candidates,
+                targetKey: targetKey,
+                sourceRelativePath: sourceRelativePath
+            ) { attachment in
+                attachment.relativePath
+            }
         }
 
-        return (
-            exactPathMatch,
-            candidateFolder == sourceFolder ? 1 : 0,
-            sharedPathPrefixLength(lhs: sourceFolder, rhs: candidateFolder),
-            -pathDistance(from: sourceFolder, to: candidateFolder)
+        return nil
+    }
+}
+
+public struct NoteGraph: Sendable {
+    public let nodes: [NoteGraphNode]
+    public let edges: [NoteGraphEdge]
+
+    private let nodesByID: [String: NoteGraphNode]
+    private let outgoing: [String: [String]]
+    private let incoming: [String: [String]]
+
+    init(notes: [VaultNote], notesByID: [String: VaultNote], noteLookup: [String: [String]]) {
+        var outgoing = [String: Set<String>]()
+        var incoming = [String: Set<String>]()
+        var edgeSet = Set<NoteGraphEdge>()
+
+        for note in notes {
+            for target in note.outboundLinks {
+                guard let resolvedTarget = resolveResolvedNoteID(
+                    for: target,
+                    from: note.id,
+                    notesByID: notesByID,
+                    noteLookup: noteLookup
+                ) else {
+                    continue
+                }
+
+                guard resolvedTarget != note.id else {
+                    continue
+                }
+
+                let edge = NoteGraphEdge(sourceID: note.id, targetID: resolvedTarget)
+                guard edgeSet.insert(edge).inserted else {
+                    continue
+                }
+
+                outgoing[note.id, default: []].insert(resolvedTarget)
+                incoming[resolvedTarget, default: []].insert(note.id)
+            }
+        }
+
+        let nodes = notes.map { note in
+            NoteGraphNode(
+                id: note.id,
+                title: note.title,
+                relativePath: note.relativePath,
+                folderPath: note.folderPath,
+                inboundCount: incoming[note.id]?.count ?? 0,
+                outboundCount: outgoing[note.id]?.count ?? 0,
+                tagCount: note.tags.count,
+                wordCount: note.wordCount
+            )
+        }.sorted {
+            if ($0.inboundCount + $0.outboundCount) != ($1.inboundCount + $1.outboundCount) {
+                return ($0.inboundCount + $0.outboundCount) > ($1.inboundCount + $1.outboundCount)
+            }
+            return $0.relativePath.localizedCaseInsensitiveCompare($1.relativePath) == .orderedAscending
+        }
+
+        let sortedEdges = edgeSet.sorted { lhs, rhs in
+            if lhs.sourceID != rhs.sourceID {
+                return lhs.sourceID.localizedCaseInsensitiveCompare(rhs.sourceID) == .orderedAscending
+            }
+            return lhs.targetID.localizedCaseInsensitiveCompare(rhs.targetID) == .orderedAscending
+        }
+
+        self.nodes = nodes
+        self.edges = sortedEdges
+        self.nodesByID = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
+        self.outgoing = outgoing.mapValues { noteIDs in
+            noteIDs.sorted { lhs, rhs in
+                lhs.localizedCaseInsensitiveCompare(rhs) == .orderedAscending
+            }
+        }
+        self.incoming = incoming.mapValues { noteIDs in
+            noteIDs.sorted { lhs, rhs in
+                lhs.localizedCaseInsensitiveCompare(rhs) == .orderedAscending
+            }
+        }
+    }
+
+    public func node(withID id: String) -> NoteGraphNode? {
+        nodesByID[id]
+    }
+
+    public func outboundNoteIDs(from noteID: String) -> [String] {
+        outgoing[noteID] ?? []
+    }
+
+    public func inboundNoteIDs(to noteID: String) -> [String] {
+        incoming[noteID] ?? []
+    }
+
+    public func adjacentNoteIDs(for noteID: String) -> [String] {
+        Array(Set(outboundNoteIDs(from: noteID) + inboundNoteIDs(to: noteID))).sorted {
+            $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
+        }
+    }
+
+    public func localSubgraph(
+        around centerID: String,
+        highlightedIDs: Set<String> = []
+    ) -> NoteGraphSubgraph {
+        guard nodesByID[centerID] != nil else {
+            return NoteGraphSubgraph(nodes: [], edges: [], highlightedNodeIDs: highlightedIDs, centerNodeID: nil)
+        }
+
+        var visibleIDs = Set([centerID])
+        visibleIDs.formUnion(outboundNoteIDs(from: centerID))
+        visibleIDs.formUnion(inboundNoteIDs(to: centerID))
+
+        if visibleIDs.count < 14 {
+            let firstRing = Array(visibleIDs)
+            for noteID in firstRing {
+                for neighbor in adjacentNoteIDs(for: noteID) {
+                    visibleIDs.insert(neighbor)
+                    if visibleIDs.count >= 18 {
+                        break
+                    }
+                }
+                if visibleIDs.count >= 18 {
+                    break
+                }
+            }
+        }
+
+        return subgraph(
+            visibleNoteIDs: visibleIDs,
+            highlightedIDs: highlightedIDs.union([centerID]),
+            centerNodeID: centerID
         )
+    }
+
+    public func globalSubgraph(
+        visibleNoteIDs: Set<String>,
+        highlightedIDs: Set<String> = [],
+        centerNodeID: String? = nil
+    ) -> NoteGraphSubgraph {
+        let effectiveVisibleNoteIDs = visibleNoteIDs.isEmpty
+            ? Set(nodesByID.keys)
+            : visibleNoteIDs
+
+        return subgraph(
+            visibleNoteIDs: effectiveVisibleNoteIDs,
+            highlightedIDs: highlightedIDs,
+            centerNodeID: centerNodeID
+        )
+    }
+
+    private func subgraph(
+        visibleNoteIDs: Set<String>,
+        highlightedIDs: Set<String>,
+        centerNodeID: String?
+    ) -> NoteGraphSubgraph {
+        let nodes = visibleNoteIDs.compactMap { nodesByID[$0] }.sorted {
+            if $0.id == centerNodeID { return true }
+            if $1.id == centerNodeID { return false }
+            if ($0.inboundCount + $0.outboundCount) != ($1.inboundCount + $1.outboundCount) {
+                return ($0.inboundCount + $0.outboundCount) > ($1.inboundCount + $1.outboundCount)
+            }
+            return $0.relativePath.localizedCaseInsensitiveCompare($1.relativePath) == .orderedAscending
+        }
+
+        let edges = edges.filter {
+            visibleNoteIDs.contains($0.sourceID) && visibleNoteIDs.contains($0.targetID)
+        }
+
+        return NoteGraphSubgraph(
+            nodes: nodes,
+            edges: edges,
+            highlightedNodeIDs: highlightedIDs,
+            centerNodeID: centerNodeID
+        )
+    }
+}
+
+public struct NoteGraphNode: Identifiable, Hashable, Sendable {
+    public let id: String
+    public let title: String
+    public let relativePath: String
+    public let folderPath: String
+    public let inboundCount: Int
+    public let outboundCount: Int
+    public let tagCount: Int
+    public let wordCount: Int
+}
+
+public struct NoteGraphEdge: Hashable, Sendable {
+    public let sourceID: String
+    public let targetID: String
+
+    public init(sourceID: String, targetID: String) {
+        self.sourceID = sourceID
+        self.targetID = targetID
+    }
+}
+
+public struct NoteGraphSubgraph: Sendable {
+    public let nodes: [NoteGraphNode]
+    public let edges: [NoteGraphEdge]
+    public let highlightedNodeIDs: Set<String>
+    public let centerNodeID: String?
+
+    public init(
+        nodes: [NoteGraphNode],
+        edges: [NoteGraphEdge],
+        highlightedNodeIDs: Set<String>,
+        centerNodeID: String?
+    ) {
+        self.nodes = nodes
+        self.edges = edges
+        self.highlightedNodeIDs = highlightedNodeIDs
+        self.centerNodeID = centerNodeID
     }
 }
 
@@ -222,8 +381,22 @@ public enum RenderBlock: Hashable, Sendable {
     case callout(kind: CalloutKind, title: RichText, body: RichText)
     case table(headers: [RichText], rows: [[RichText]])
     case code(language: String?, code: String)
-    case image(path: String, alt: String?)
+    case image(path: String, alt: String?, sizeHint: ImageSizeHint?)
     case divider
+}
+
+public struct ImageSizeHint: Hashable, Sendable {
+    public let width: Double?
+    public let height: Double?
+
+    public init(width: Double?, height: Double?) {
+        self.width = width
+        self.height = height
+    }
+
+    public var hasExplicitDimensions: Bool {
+        width != nil || height != nil
+    }
 }
 
 public struct TableOfContentsItem: Identifiable, Hashable, Sendable {
@@ -264,6 +437,7 @@ public enum InlineRun: Hashable, Sendable {
     case emphasis(String)
     case code(String)
     case link(label: String, destination: LinkDestination)
+    case image(path: String, alt: String?, sizeHint: ImageSizeHint?)
     case tag(String)
 
     public var plainText: String {
@@ -272,6 +446,13 @@ public enum InlineRun: Hashable, Sendable {
             return value
         case .link(let label, _):
             return label
+        case .image(let path, let alt, _):
+            let trimmedAlt = alt?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if trimmedAlt.isEmpty == false {
+                return trimmedAlt
+            }
+            let basename = (path as NSString).lastPathComponent
+            return basename.isEmpty ? path : basename
         case .tag(let value):
             return "#\(value)"
         }
@@ -333,10 +514,139 @@ private func attachmentLookupKeys(relativePath: String) -> [String] {
     )
 }
 
+private func resolveResolvedNoteID(
+    for target: String,
+    from sourceNoteID: String?,
+    notesByID: [String: VaultNote],
+    noteLookup: [String: [String]]
+) -> String? {
+    let sourceRelativePath = sourceNoteID.flatMap { notesByID[$0]?.relativePath }
+    for targetKey in referenceLookupKeys(for: target, sourceRelativePath: sourceRelativePath) {
+        guard let candidates = noteLookup[targetKey], candidates.isEmpty == false else {
+            continue
+        }
+
+        if candidates.count == 1 {
+            return candidates[0]
+        }
+
+        return resolveBestCandidate(
+            from: candidates,
+            targetKey: targetKey,
+            sourceRelativePath: sourceRelativePath
+        ) { candidateID in
+            notesByID[candidateID]?.relativePath ?? candidateID
+        }
+    }
+
+    return nil
+}
+
+private func resolveBestCandidate<Candidate>(
+    from candidates: [Candidate],
+    targetKey: String,
+    sourceRelativePath: String?,
+    relativePath: (Candidate) -> String
+) -> Candidate? {
+    let sourceFolder = sourceRelativePath.map(folderPath(for:))
+
+    return candidates.sorted { lhs, rhs in
+        let lhsPath = relativePath(lhs)
+        let rhsPath = relativePath(rhs)
+        let lhsScore = resolutionScore(
+            for: lhsPath,
+            targetKey: targetKey,
+            sourceFolder: sourceFolder
+        )
+        let rhsScore = resolutionScore(
+            for: rhsPath,
+            targetKey: targetKey,
+            sourceFolder: sourceFolder
+        )
+
+        if lhsScore != rhsScore {
+            return lhsScore > rhsScore
+        }
+
+        return lhsPath.localizedCaseInsensitiveCompare(rhsPath) == .orderedAscending
+    }.first
+}
+
+private func resolutionScore(
+    for candidateRelativePath: String,
+    targetKey: String,
+    sourceFolder: String?
+) -> (Int, Int, Int, Int) {
+    let normalizedCandidatePath = normalizeVaultReference(candidateRelativePath)
+    let normalizedStem = normalizeVaultReference((candidateRelativePath as NSString).deletingPathExtension)
+    let candidateFolder = folderPath(for: candidateRelativePath)
+    let exactPathMatch = (normalizedCandidatePath == targetKey || normalizedStem == targetKey) ? 1 : 0
+
+    guard let sourceFolder else {
+        return (exactPathMatch, 0, 0, 0)
+    }
+
+    return (
+        exactPathMatch,
+        candidateFolder == sourceFolder ? 1 : 0,
+        sharedPathPrefixLength(lhs: sourceFolder, rhs: candidateFolder),
+        -pathDistance(from: sourceFolder, to: candidateFolder)
+    )
+}
+
 private func folderPath(for relativePath: String) -> String {
     let folder = (relativePath as NSString).deletingLastPathComponent
     guard folder != "." else { return "" }
     return normalizeVaultReference(folder)
+}
+
+private func referenceLookupKeys(for target: String, sourceRelativePath: String?) -> [String] {
+    let normalizedTarget = normalizeVaultReference(target)
+    guard let sourceRelativePath,
+          let relativeTarget = resolveRelativeReference(target, from: sourceRelativePath),
+          relativeTarget != normalizedTarget else {
+        return [normalizedTarget]
+    }
+
+    return [normalizedTarget, relativeTarget]
+}
+
+private func resolveRelativeReference(_ target: String, from sourceRelativePath: String) -> String? {
+    let trimmed = target
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .replacingOccurrences(of: "\\", with: "/")
+
+    guard trimmed.isEmpty == false, trimmed.hasPrefix("/") == false else {
+        return nil
+    }
+
+    guard trimmed.hasPrefix(".") || trimmed.contains("/") else {
+        return nil
+    }
+
+    let sourceFolderComponents = folderPath(for: sourceRelativePath)
+        .split(separator: "/")
+        .map(String.init)
+    let targetComponents = trimmed
+        .split(separator: "/", omittingEmptySubsequences: false)
+        .map(String.init)
+
+    var resolvedComponents = sourceFolderComponents
+    for component in targetComponents {
+        switch component {
+        case "", ".":
+            continue
+        case "..":
+            guard resolvedComponents.isEmpty == false else {
+                return nil
+            }
+            resolvedComponents.removeLast()
+        default:
+            resolvedComponents.append(component)
+        }
+    }
+
+    return normalizeVaultReference(resolvedComponents.joined(separator: "/"))
 }
 
 private func sharedPathPrefixLength(lhs: String, rhs: String) -> Int {

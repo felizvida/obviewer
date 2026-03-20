@@ -6,6 +6,27 @@ import ObviewerFixtureSupport
 
 final class AppModelTests: XCTestCase {
     @MainActor
+    func testChooseVaultDoesNothingWhenPickerReturnsNil() async {
+        let bookmarkStore = BookmarkStoreSpy()
+        let loader = VaultLoaderSpy(result: .success(makeSnapshot()))
+        let securityScope = SecurityScopeSpy()
+        let model = AppModel(
+            bookmarkStore: bookmarkStore,
+            picker: VaultPickerStub(url: nil),
+            reader: loader,
+            securityScopeManager: securityScope
+        )
+
+        await model.chooseVault()
+
+        XCTAssertNil(model.snapshot)
+        XCTAssertNil(model.vaultURL)
+        XCTAssertTrue(bookmarkStore.savedURLs.isEmpty)
+        XCTAssertTrue(loader.recordedURLs.isEmpty)
+        XCTAssertTrue(securityScope.activatedURLs.isEmpty)
+    }
+
+    @MainActor
     func testChooseVaultLoadsSnapshotPersistsBookmarkAndActivatesScope() async {
         let vaultURL = URL(fileURLWithPath: "/tmp/obviewer-tests/vault")
         let snapshot = makeSnapshot()
@@ -49,6 +70,22 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
+    func testRestoreVaultDoesNothingWhenNoBookmarkExists() async {
+        let loader = VaultLoaderSpy(result: .success(makeSnapshot()))
+        let model = AppModel(
+            bookmarkStore: BookmarkStoreSpy(restoredURL: nil),
+            picker: VaultPickerStub(url: nil),
+            reader: loader,
+            securityScopeManager: SecurityScopeSpy()
+        )
+
+        await model.restoreVaultIfNeeded()
+
+        XCTAssertNil(model.snapshot)
+        XCTAssertTrue(loader.recordedURLs.isEmpty)
+    }
+
+    @MainActor
     func testRestoreVaultFailureSurfacesErrorAndSkipsLoading() async {
         let bookmarkStore = BookmarkStoreSpy(restoreError: FixtureError.sample)
         let loader = VaultLoaderSpy(result: .success(makeSnapshot()))
@@ -86,6 +123,25 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
+    func testNavigateToMissingNoteLeavesSelectionUnchanged() async {
+        let snapshot = makeSnapshot()
+        let model = AppModel(
+            bookmarkStore: BookmarkStoreSpy(),
+            picker: VaultPickerStub(url: URL(fileURLWithPath: "/tmp/obviewer-tests/vault")),
+            reader: VaultLoaderSpy(result: .success(snapshot)),
+            securityScopeManager: SecurityScopeSpy()
+        )
+
+        await model.chooseVault()
+        let originalSelection = model.selectedNoteID
+
+        model.navigate(to: "Missing Note", anchor: "details", from: "Journal/Today.md")
+
+        XCTAssertEqual(model.selectedNoteID, originalSelection)
+        XCTAssertNil(originalSelection.flatMap { model.pendingAnchor(for: $0) })
+    }
+
+    @MainActor
     func testSearchAndSectionsSupportTagFilteringAndFolderGrouping() async {
         let snapshot = makeSnapshot()
         let model = AppModel(
@@ -103,6 +159,98 @@ final class AppModelTests: XCTestCase {
 
         model.searchText = ""
         XCTAssertEqual(model.noteSections.map(\.title), ["Vault Root", "Journal", "Projects"])
+    }
+
+    @MainActor
+    func testSearchMatchesTitlePathAndPreviewText() async {
+        let snapshot = VaultSnapshot(
+            rootURL: URL(fileURLWithPath: "/tmp/obviewer-tests/vault"),
+            notes: [
+                .fixture(
+                    relativePath: "Root.md",
+                    title: "Root",
+                    tags: ["home"],
+                    previewText: "Vault home screen",
+                    modifiedAt: .distantPast
+                ),
+                .fixture(
+                    relativePath: "Projects/Plan.md",
+                    title: "Launch Plan",
+                    tags: ["roadmap"],
+                    previewText: "Ship the root handoff checklist",
+                    modifiedAt: .distantPast
+                ),
+            ],
+            attachments: []
+        )
+        let model = AppModel(
+            bookmarkStore: BookmarkStoreSpy(),
+            picker: VaultPickerStub(url: URL(fileURLWithPath: "/tmp/obviewer-tests/vault")),
+            reader: VaultLoaderSpy(result: .success(snapshot)),
+            securityScopeManager: SecurityScopeSpy()
+        )
+
+        await model.chooseVault()
+
+        model.searchText = "launch"
+        XCTAssertEqual(model.filteredNotes.map(\.id), ["Projects/Plan.md"])
+
+        model.searchText = "projects/plan"
+        XCTAssertEqual(model.filteredNotes.map(\.id), ["Projects/Plan.md"])
+
+        model.searchText = "root"
+        XCTAssertEqual(Set(model.filteredNotes.map(\.id)), ["Root.md", "Projects/Plan.md"])
+    }
+
+    @MainActor
+    func testGraphSubgraphTracksLocalAndGlobalModes() async throws {
+        let snapshot = makeSnapshot()
+        let model = AppModel(
+            bookmarkStore: BookmarkStoreSpy(),
+            picker: VaultPickerStub(url: URL(fileURLWithPath: "/tmp/obviewer-tests/vault")),
+            reader: VaultLoaderSpy(result: .success(snapshot)),
+            securityScopeManager: SecurityScopeSpy()
+        )
+
+        await model.chooseVault()
+        model.selectedNoteID = "Projects/Plan.md"
+        model.graphScope = .local
+
+        let localSubgraph = try XCTUnwrap(model.graphSubgraph)
+        XCTAssertEqual(localSubgraph.centerNodeID, "Projects/Plan.md")
+        XCTAssertEqual(
+            Set(localSubgraph.nodes.map(\.id)),
+            ["Root.md", "Journal/Today.md", "Projects/Plan.md"]
+        )
+
+        model.graphScope = .global
+        model.searchText = "#research"
+
+        let globalSubgraph = try XCTUnwrap(model.graphSubgraph)
+        XCTAssertEqual(
+            Set(globalSubgraph.nodes.map(\.id)),
+            ["Journal/Today.md", "Projects/Plan.md"]
+        )
+        XCTAssertEqual(globalSubgraph.highlightedNodeIDs, ["Journal/Today.md"])
+        XCTAssertEqual(globalSubgraph.centerNodeID, "Projects/Plan.md")
+    }
+
+    @MainActor
+    func testGraphStateUsesSelectionWhenSearchIsEmpty() async throws {
+        let snapshot = makeSnapshot()
+        let model = AppModel(
+            bookmarkStore: BookmarkStoreSpy(),
+            picker: VaultPickerStub(url: URL(fileURLWithPath: "/tmp/obviewer-tests/vault")),
+            reader: VaultLoaderSpy(result: .success(snapshot)),
+            securityScopeManager: SecurityScopeSpy()
+        )
+
+        await model.chooseVault()
+        model.selectedNoteID = "Projects/Plan.md"
+
+        let selectedGraphNode = try XCTUnwrap(model.selectedGraphNode)
+        XCTAssertEqual(selectedGraphNode.id, "Projects/Plan.md")
+        XCTAssertEqual(model.graphHighlightedNoteIDs, ["Projects/Plan.md"])
     }
 
     @MainActor
@@ -133,6 +281,57 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
+    func testReloadVaultFallsBackToFirstNoteWhenPreviousSelectionDisappears() async {
+        let vaultURL = URL(fileURLWithPath: "/tmp/obviewer-tests/vault")
+        let firstSnapshot = makeSnapshot()
+        let secondSnapshot = VaultSnapshot(
+            rootURL: vaultURL,
+            notes: [
+                .fixture(
+                    relativePath: "Archive/Replacement.md",
+                    title: "Replacement",
+                    tags: ["archive"],
+                    modifiedAt: Date(timeIntervalSince1970: 3_000)
+                ),
+            ],
+            attachments: []
+        )
+        let loader = VaultLoaderSpy(results: [
+            .success(firstSnapshot),
+            .success(secondSnapshot),
+        ])
+        let model = AppModel(
+            bookmarkStore: BookmarkStoreSpy(),
+            picker: VaultPickerStub(url: vaultURL),
+            reader: loader,
+            securityScopeManager: SecurityScopeSpy()
+        )
+
+        await model.chooseVault()
+        model.selectedNoteID = "Projects/Plan.md"
+
+        await model.reloadVault()
+
+        XCTAssertEqual(model.selectedNoteID, "Archive/Replacement.md")
+    }
+
+    @MainActor
+    func testReloadVaultDoesNothingWhenNoVaultIsLoaded() async {
+        let loader = VaultLoaderSpy(result: .success(makeSnapshot()))
+        let model = AppModel(
+            bookmarkStore: BookmarkStoreSpy(),
+            picker: VaultPickerStub(url: nil),
+            reader: loader,
+            securityScopeManager: SecurityScopeSpy()
+        )
+
+        await model.reloadVault()
+
+        XCTAssertTrue(loader.recordedURLs.isEmpty)
+        XCTAssertNil(model.snapshot)
+    }
+
+    @MainActor
     func testLoadFailureSurfacesErrorAndLeavesBookmarkUntouched() async {
         let model = AppModel(
             bookmarkStore: BookmarkStoreSpy(),
@@ -146,6 +345,23 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.errorMessage, FixtureError.sample.localizedDescription)
         XCTAssertFalse(model.isLoading)
         XCTAssertNil(model.snapshot)
+    }
+
+    @MainActor
+    func testDismissErrorClearsErrorMessage() async {
+        let model = AppModel(
+            bookmarkStore: BookmarkStoreSpy(),
+            picker: VaultPickerStub(url: URL(fileURLWithPath: "/tmp/obviewer-tests/vault")),
+            reader: VaultLoaderSpy(result: .failure(FixtureError.sample)),
+            securityScopeManager: SecurityScopeSpy()
+        )
+
+        await model.chooseVault()
+        XCTAssertEqual(model.errorMessage, FixtureError.sample.localizedDescription)
+
+        model.dismissError()
+
+        XCTAssertNil(model.errorMessage)
     }
 
     @MainActor
@@ -195,6 +411,11 @@ final class AppModelTests: XCTestCase {
         model.navigate(to: "Daily", from: fixture.manifest.alphaOverviewNoteID)
 
         XCTAssertEqual(model.selectedNoteID, fixture.manifest.alphaDailyNoteID)
+
+        model.navigate(to: "Knowledge/Architecture/Index.md", anchor: "patterns")
+        XCTAssertEqual(model.pendingAnchor(for: fixture.manifest.architectureIndexNoteID), "patterns")
+        model.clearPendingAnchor(for: fixture.manifest.architectureIndexNoteID)
+        XCTAssertNil(model.pendingAnchor(for: fixture.manifest.architectureIndexNoteID))
 
         model.searchText = "#alpha"
         XCTAssertTrue(model.filteredNotes.contains(where: { $0.id == fixture.manifest.alphaOverviewNoteID }))
@@ -299,9 +520,27 @@ private func makeSnapshot(modifiedAt: Date = .distantPast) -> VaultSnapshot {
     VaultSnapshot(
         rootURL: URL(fileURLWithPath: "/tmp/obviewer-tests/vault"),
         notes: [
-            .fixture(relativePath: "Root.md", title: "Root", tags: ["home"], modifiedAt: modifiedAt),
-            .fixture(relativePath: "Journal/Today.md", title: "Today", tags: ["research"], modifiedAt: modifiedAt),
-            .fixture(relativePath: "Projects/Plan.md", title: "Plan", tags: ["roadmap"], modifiedAt: modifiedAt),
+            .fixture(
+                relativePath: "Root.md",
+                title: "Root",
+                tags: ["home"],
+                outboundLinks: ["Projects/Plan"],
+                modifiedAt: modifiedAt
+            ),
+            .fixture(
+                relativePath: "Journal/Today.md",
+                title: "Today",
+                tags: ["research"],
+                outboundLinks: ["Projects/Plan"],
+                modifiedAt: modifiedAt
+            ),
+            .fixture(
+                relativePath: "Projects/Plan.md",
+                title: "Plan",
+                tags: ["roadmap"],
+                outboundLinks: ["Root"],
+                modifiedAt: modifiedAt
+            ),
         ],
         attachments: [
             .fixture(relativePath: "Projects/manual.pdf", kind: .pdf),
@@ -310,7 +549,14 @@ private func makeSnapshot(modifiedAt: Date = .distantPast) -> VaultSnapshot {
 }
 
 private extension VaultNote {
-    static func fixture(relativePath: String, title: String, tags: [String], modifiedAt: Date) -> VaultNote {
+    static func fixture(
+        relativePath: String,
+        title: String,
+        tags: [String],
+        outboundLinks: [String] = [],
+        previewText: String? = nil,
+        modifiedAt: Date
+    ) -> VaultNote {
         VaultNote(
             id: relativePath,
             title: title,
@@ -318,9 +564,9 @@ private extension VaultNote {
             folderPath: (relativePath as NSString).deletingLastPathComponent == "."
                 ? ""
                 : (relativePath as NSString).deletingLastPathComponent,
-            previewText: title,
+            previewText: previewText ?? title,
             tags: tags,
-            outboundLinks: [],
+            outboundLinks: outboundLinks,
             tableOfContents: [
                 TableOfContentsItem(id: "details", level: 2, title: "Details"),
             ],

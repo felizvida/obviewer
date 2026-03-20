@@ -2,6 +2,34 @@ import XCTest
 @testable import ObviewerCore
 
 final class ObsidianParserTests: XCTestCase {
+    func testParserUsesFallbackTitlePreviewAndUniqueAnchorsWhenHeadingsRepeat() {
+        let markdown = """
+        ---
+        status: draft
+        ---
+
+        ## Intro
+
+        Body text here.
+
+        ## Intro
+
+        More body text.
+        """
+
+        let result = ObsidianParser().parse(markdown: markdown, fallbackTitle: "Fallback Title")
+
+        XCTAssertEqual(result.title, "Fallback Title")
+        XCTAssertEqual(result.previewText, "Intro")
+        XCTAssertEqual(
+            result.tableOfContents,
+            [
+                TableOfContentsItem(id: "intro", level: 2, title: "Intro"),
+                TableOfContentsItem(id: "intro-2", level: 2, title: "Intro"),
+            ]
+        )
+    }
+
     func testParserExtractsTitleLinksAndTags() {
         let markdown = """
         ---
@@ -45,8 +73,26 @@ final class ObsidianParserTests: XCTestCase {
         })
 
         XCTAssertTrue(result.blocks.contains { block in
-            if case .image(let path, _) = block {
+            if case .image(let path, _, let sizeHint) = block {
                 return path == "cover.png"
+                    && sizeHint == ImageSizeHint(width: 300, height: nil)
+            }
+            return false
+        })
+    }
+
+    func testParserCapturesTwoDimensionalObsidianImageSizeHints() {
+        let markdown = """
+        ![[boards/plan.png|320x180]]
+        """
+
+        let result = ObsidianParser().parse(markdown: markdown, fallbackTitle: "Fallback")
+
+        XCTAssertEqual(result.blocks.count, 1)
+        XCTAssertTrue(result.blocks.contains { block in
+            if case .image(let path, _, let sizeHint) = block {
+                return path == "boards/plan.png"
+                    && sizeHint == ImageSizeHint(width: 320, height: 180)
             }
             return false
         })
@@ -79,6 +125,46 @@ final class ObsidianParserTests: XCTestCase {
         })
     }
 
+    func testParserRecognizesCodeQuoteDividerAndOrderedTagSet() {
+        let markdown = """
+        # Workshop
+
+        #alpha starts the note and appears again as #alpha later.
+
+        ---
+
+        > A quoted reminder.
+
+        ```swift
+        let readerMode = "read only"
+        ```
+        """
+
+        let result = ObsidianParser().parse(markdown: markdown, fallbackTitle: "Fallback")
+
+        XCTAssertEqual(result.tags, ["alpha"])
+        XCTAssertTrue(result.wordCount > 0)
+        XCTAssertEqual(result.readingTimeMinutes, 1)
+        XCTAssertTrue(result.blocks.contains { block in
+            if case .divider = block {
+                return true
+            }
+            return false
+        })
+        XCTAssertTrue(result.blocks.contains { block in
+            if case .quote(let text) = block {
+                return text.plainText == "A quoted reminder."
+            }
+            return false
+        })
+        XCTAssertTrue(result.blocks.contains { block in
+            if case .code(let language, let code) = block {
+                return language == "swift" && code.contains("readerMode")
+            }
+            return false
+        })
+    }
+
     func testParserKeepsInlineEmbedsVisible() {
         let markdown = """
         Before ![[cover.png|300]] and ![Poster](images/poster.jpg) after.
@@ -89,15 +175,19 @@ final class ObsidianParserTests: XCTestCase {
         XCTAssertTrue(result.blocks.contains { block in
             guard case .paragraph(let text) = block else { return false }
 
-            let imageLinks = text.runs.compactMap { run -> (String, LinkDestination)? in
-                guard case .link(let label, let destination) = run else { return nil }
-                return (label, destination)
+            let images = text.runs.compactMap { run -> (String, String?, ImageSizeHint?)? in
+                guard case .image(let path, let alt, let sizeHint) = run else { return nil }
+                return (path, alt, sizeHint)
             }
 
-            return imageLinks.contains(where: { label, destination in
-                label == "[Image: cover.png]" && destination == .attachment("cover.png")
-            }) && imageLinks.contains(where: { label, destination in
-                label == "[Image: Poster]" && destination == .attachment("images/poster.jpg")
+            return images.contains(where: { path, alt, sizeHint in
+                path == "cover.png"
+                    && alt == nil
+                    && sizeHint == ImageSizeHint(width: 300, height: nil)
+            }) && images.contains(where: { path, alt, sizeHint in
+                path == "images/poster.jpg"
+                    && alt == "Poster"
+                    && sizeHint == nil
             })
         })
     }
@@ -127,5 +217,19 @@ final class ObsidianParserTests: XCTestCase {
                 label == "Next" && destination == .note(target: "note.md", anchor: "part-two")
             })
         })
+    }
+
+    func testParserRecordsOutboundLinksOnlyForNoteDestinations() {
+        let markdown = """
+        [[Daily]]
+        [Manual](manual.pdf)
+        [Jump](#Section)
+        [Web](https://example.com)
+        [Next](Note.md#Details)
+        """
+
+        let result = ObsidianParser().parse(markdown: markdown, fallbackTitle: "Fallback")
+
+        XCTAssertEqual(result.outboundLinks, ["Daily", "Note.md"])
     }
 }

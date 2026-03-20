@@ -47,10 +47,11 @@ final class VaultReaderTests: XCTestCase {
         try sandbox.write("Two.md", contents: "# Two")
         try sandbox.writeData("cover.png", data: Data([0x89, 0x50, 0x4E, 0x47]))
 
-        var events = [VaultLoadingProgress]()
+        let recorder = ProgressRecorder()
         _ = try VaultReader().loadVault(at: sandbox.rootURL) { progress in
-            events.append(progress)
+            recorder.append(progress)
         }
+        let events = recorder.values
 
         XCTAssertFalse(events.isEmpty)
         XCTAssertEqual(events.last?.processedFileCount, 3)
@@ -58,14 +59,36 @@ final class VaultReaderTests: XCTestCase {
         XCTAssertEqual(events.last?.attachmentCount, 1)
     }
 
+    func testLoadVaultClassifiesAudioVideoAndSkipsHiddenFiles() throws {
+        let sandbox = try TemporaryVault()
+        defer { sandbox.cleanup() }
+
+        try sandbox.write("Visible.md", contents: "# Visible")
+        try sandbox.write(".Hidden.md", contents: "# Hidden")
+        try sandbox.writeData("media/audio.m4a", data: Data("audio".utf8))
+        try sandbox.writeData("media/video.mp4", data: Data("video".utf8))
+        try sandbox.writeData("media/archive.bin", data: Data("other".utf8))
+        try sandbox.writeData(".secret.png", data: Data([0x89, 0x50, 0x4E, 0x47]))
+
+        let snapshot = try VaultReader().loadVault(at: sandbox.rootURL)
+
+        XCTAssertEqual(snapshot.notes.map(\.id), ["Visible.md"])
+        XCTAssertEqual(snapshot.attachments.count, 3)
+        XCTAssertEqual(snapshot.attachment(for: "media/audio.m4a")?.kind, .audio)
+        XCTAssertEqual(snapshot.attachment(for: "media/video.mp4")?.kind, .video)
+        XCTAssertEqual(snapshot.attachment(for: "media/archive.bin")?.kind, .other)
+        XCTAssertNil(snapshot.attachment(for: ".secret.png"))
+    }
+
     func testLoadLargeGeneratedVaultExercisesRealObsidianFeatures() throws {
         let fixture = try TemporaryDemoVault(profile: .integration)
         defer { fixture.cleanup() }
 
-        var events = [VaultLoadingProgress]()
+        let recorder = ProgressRecorder()
         let snapshot = try VaultReader().loadVault(at: fixture.rootURL) { progress in
-            events.append(progress)
+            recorder.append(progress)
         }
+        let events = recorder.values
 
         let manifest = fixture.manifest
         XCTAssertEqual(snapshot.notes.count, manifest.noteCount)
@@ -102,7 +125,7 @@ final class VaultReaderTests: XCTestCase {
         let alphaOverview = try XCTUnwrap(snapshot.note(withID: manifest.alphaOverviewNoteID))
         XCTAssertTrue(alphaOverview.tags.contains("alpha"))
         XCTAssertTrue(alphaOverview.blocks.contains(where: isTableBlock))
-        XCTAssertTrue(alphaOverview.blocks.contains(where: containsLink(destination: .attachment("cover.png"))))
+        XCTAssertTrue(alphaOverview.blocks.contains(where: containsInlineImage(path: "cover.png")))
         XCTAssertTrue(
             alphaOverview.blocks.contains(
                 where: containsLink(destination: .note(target: "Knowledge/Architecture/Index.md", anchor: "patterns"))
@@ -114,6 +137,23 @@ final class VaultReaderTests: XCTestCase {
         XCTAssertEqual(events.last?.noteCount, manifest.noteCount)
         XCTAssertEqual(events.last?.attachmentCount, manifest.attachmentCount)
         XCTAssertNil(events.last?.currentPath)
+    }
+}
+
+private final class ProgressRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var events = [VaultLoadingProgress]()
+
+    func append(_ progress: VaultLoadingProgress) {
+        lock.lock()
+        events.append(progress)
+        lock.unlock()
+    }
+
+    var values: [VaultLoadingProgress] {
+        lock.lock()
+        defer { lock.unlock() }
+        return events
     }
 }
 
@@ -178,6 +218,35 @@ private func containsLink(destination expected: LinkDestination) -> (RenderBlock
             richText.runs.contains { run in
                 if case .link(_, let destination) = run {
                     return destination == expected
+                }
+                return false
+            }
+        }
+    }
+}
+
+private func containsInlineImage(
+    path expectedPath: String,
+    alt expectedAlt: String? = nil,
+    sizeHint expectedSizeHint: ImageSizeHint? = nil
+) -> (RenderBlock) -> Bool {
+    { block in
+        richTexts(in: block).contains { richText in
+            richText.runs.contains { run in
+                if case .image(let path, let alt, let sizeHint) = run {
+                    guard path == expectedPath else {
+                        return false
+                    }
+
+                    if let expectedAlt, alt != expectedAlt {
+                        return false
+                    }
+
+                    if let expectedSizeHint, sizeHint != expectedSizeHint {
+                        return false
+                    }
+
+                    return true
                 }
                 return false
             }

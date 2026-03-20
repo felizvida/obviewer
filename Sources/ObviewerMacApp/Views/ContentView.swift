@@ -17,6 +17,17 @@ public struct ContentView: View {
         .navigationSplitViewStyle(.balanced)
         .background(backgroundGradient)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Picker("View", selection: $model.detailMode) {
+                    ForEach(DetailMode.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 180)
+                .disabled(model.snapshot == nil || model.isLoading)
+            }
+
             ToolbarItemGroup(placement: .primaryAction) {
                 Button("Open Vault") {
                     Task {
@@ -74,19 +85,43 @@ public struct ContentView: View {
 
             if model.isLoading {
                 LoadingVaultState(progress: model.loadingProgress)
-            } else if let snapshot = model.snapshot, let note = model.selectedNote {
-                ReaderView(
-                    note: note,
-                    snapshot: snapshot,
-                    onNavigate: { target, anchor in
-                        model.navigate(to: target, anchor: anchor, from: note.id)
-                    },
-                    onSelectTag: model.select(tag:),
-                    pendingAnchorID: model.pendingAnchor(for: note.id),
-                    onConsumePendingAnchor: {
-                        model.clearPendingAnchor(for: note.id)
+            } else if let snapshot = model.snapshot {
+                switch model.detailMode {
+                case .reader:
+                    if let note = model.selectedNote {
+                        ReaderView(
+                            note: note,
+                            snapshot: snapshot,
+                            onNavigate: { target, anchor in
+                                model.navigate(to: target, anchor: anchor, from: note.id)
+                            },
+                            onSelectTag: model.select(tag:),
+                            pendingAnchorID: model.pendingAnchor(for: note.id),
+                            onConsumePendingAnchor: {
+                                model.clearPendingAnchor(for: note.id)
+                            }
+                        )
+                    } else {
+                        EmptyReaderState {
+                            Task {
+                                await model.chooseVault()
+                            }
+                        }
                     }
-                )
+
+                case .graph:
+                    GraphWorkspaceView(
+                        snapshot: snapshot,
+                        subgraph: model.graphSubgraph,
+                        selectedNoteID: model.selectedNoteID,
+                        selectedNode: model.selectedGraphNode,
+                        graphScope: model.graphScope,
+                        searchText: model.searchText,
+                        onChangeScope: { model.graphScope = $0 },
+                        onSelectNote: { model.selectedNoteID = $0 },
+                        onOpenReader: { model.detailMode = .reader }
+                    )
+                }
             } else {
                 EmptyReaderState {
                     Task {

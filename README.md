@@ -13,12 +13,15 @@ This repository includes a full handoff-oriented documentation set for future ma
 Start here:
 
 - [`QUICKSTART.md`](./QUICKSTART.md)
+- [`docs/VISUAL_TOUR.md`](./docs/VISUAL_TOUR.md)
 - [`docs/README.md`](./docs/README.md)
 - [`docs/HANDOFF.md`](./docs/HANDOFF.md)
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
 - [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md)
 - [`docs/PRODUCT.md`](./docs/PRODUCT.md)
 - [`docs/STATUS.md`](./docs/STATUS.md)
+
+[![Obviewer visual tour](./docs/images/visual-tour-library-home.png)](./docs/VISUAL_TOUR.md)
 
 ## Product Direction
 
@@ -85,6 +88,12 @@ make demo-vault
 ```
 
 That creates a large sample vault at `build/SampleVault` with many notes, folders, duplicate filenames, images, documents, and cross-links.
+
+To regenerate the documentation screenshots used in the visual tour:
+
+```bash
+make docs-screenshots
+```
 
 That command will:
 

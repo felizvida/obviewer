@@ -9,6 +9,7 @@ struct ReaderView: View {
     let onSelectTag: (String) -> Void
     let pendingAnchorID: String?
     let onConsumePendingAnchor: () -> Void
+    @State private var presentedImage: PresentedAttachmentImage?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -42,6 +43,9 @@ struct ReaderView: View {
             .onChange(of: pendingAnchorID) {
                 handlePendingAnchor(using: proxy)
             }
+        }
+        .sheet(item: $presentedImage) { presentedImage in
+            ImageLightboxView(presentedImage: presentedImage)
         }
     }
 
@@ -89,7 +93,9 @@ struct ReaderView: View {
                 onNavigate: onNavigate,
                 onOpenAttachment: openAttachment(path:),
                 onOpenAnchor: { scroll(to: $0, using: proxy) },
-                onSelectTag: onSelectTag
+                onSelectTag: onSelectTag,
+                inlineImageResolver: resolveInlineImage(path:alt:sizeHint:),
+                onOpenInlineImage: presentInlineImage(path:alt:sizeHint:)
             )
             .padding(.top, level == 1 ? 8 : 12)
             .id(anchor)
@@ -104,7 +110,9 @@ struct ReaderView: View {
                 onNavigate: onNavigate,
                 onOpenAttachment: openAttachment(path:),
                 onOpenAnchor: { scroll(to: $0, using: proxy) },
-                onSelectTag: onSelectTag
+                onSelectTag: onSelectTag,
+                inlineImageResolver: resolveInlineImage(path:alt:sizeHint:),
+                onOpenInlineImage: presentInlineImage(path:alt:sizeHint:)
             )
             .lineSpacing(7)
 
@@ -125,7 +133,9 @@ struct ReaderView: View {
                             onNavigate: onNavigate,
                             onOpenAttachment: openAttachment(path:),
                             onOpenAnchor: { scroll(to: $0, using: proxy) },
-                            onSelectTag: onSelectTag
+                            onSelectTag: onSelectTag,
+                            inlineImageResolver: resolveInlineImage(path:alt:sizeHint:),
+                            onOpenInlineImage: presentInlineImage(path:alt:sizeHint:)
                         )
                         .lineSpacing(6)
                     }
@@ -147,7 +157,9 @@ struct ReaderView: View {
                     onNavigate: onNavigate,
                     onOpenAttachment: openAttachment(path:),
                     onOpenAnchor: { scroll(to: $0, using: proxy) },
-                    onSelectTag: onSelectTag
+                    onSelectTag: onSelectTag,
+                    inlineImageResolver: resolveInlineImage(path:alt:sizeHint:),
+                    onOpenInlineImage: presentInlineImage(path:alt:sizeHint:)
                 )
                 .lineSpacing(6)
             }
@@ -165,7 +177,9 @@ struct ReaderView: View {
                         onNavigate: onNavigate,
                         onOpenAttachment: openAttachment(path:),
                         onOpenAnchor: { scroll(to: $0, using: proxy) },
-                        onSelectTag: onSelectTag
+                        onSelectTag: onSelectTag,
+                        inlineImageResolver: resolveInlineImage(path:alt:sizeHint:),
+                        onOpenInlineImage: presentInlineImage(path:alt:sizeHint:)
                     )
                 }
 
@@ -177,7 +191,9 @@ struct ReaderView: View {
                     onNavigate: onNavigate,
                     onOpenAttachment: openAttachment(path:),
                     onOpenAnchor: { scroll(to: $0, using: proxy) },
-                    onSelectTag: onSelectTag
+                    onSelectTag: onSelectTag,
+                    inlineImageResolver: resolveInlineImage(path:alt:sizeHint:),
+                    onOpenInlineImage: presentInlineImage(path:alt:sizeHint:)
                 )
                 .lineSpacing(6)
             }
@@ -221,36 +237,100 @@ struct ReaderView: View {
                 onNavigate: onNavigate,
                 onOpenAttachment: openAttachment(path:),
                 onOpenAnchor: { scroll(to: $0, using: proxy) },
-                onSelectTag: onSelectTag
+                onSelectTag: onSelectTag,
+                inlineImageResolver: resolveInlineImage(path:alt:sizeHint:),
+                onOpenInlineImage: presentInlineImage(path:alt:sizeHint:)
             )
 
-        case .image(let path, let alt):
-            if let attachment = snapshot.attachment(for: path, from: note.id), attachment.kind == .image {
-                if let image = NSImage(contentsOf: attachment.url) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Image(nsImage: image)
+        case .image(let path, let alt, let sizeHint):
+            imageBlock(path: path, alt: alt, sizeHint: sizeHint)
+
+        case .divider:
+            Divider()
+                .padding(.vertical, 4)
+        }
+    }
+
+    @ViewBuilder
+    private func imageBlock(path: String, alt: String?, sizeHint: ImageSizeHint?) -> some View {
+        if let presentedImage = makePresentedImage(path: path, alt: alt, sizeHint: sizeHint) {
+            Button {
+                self.presentedImage = presentedImage
+            } label: {
+                VStack(alignment: .leading, spacing: 12) {
+                    ZStack(alignment: .topTrailing) {
+                        Image(nsImage: presentedImage.image)
                             .resizable()
+                            .interpolation(.high)
                             .aspectRatio(contentMode: .fit)
+                            .frame(
+                                maxWidth: resolvedImageWidth(
+                                    sizeHint: presentedImage.sizeHint,
+                                    imageSize: presentedImage.image.size
+                                ),
+                                maxHeight: resolvedImageHeight(
+                                    sizeHint: presentedImage.sizeHint,
+                                    imageSize: presentedImage.image.size
+                                ),
+                                alignment: .leading
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 26, style: .continuous)
                                     .stroke(Color.black.opacity(0.06), lineWidth: 1)
                             )
+                            .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 6)
 
-                        Text(alt ?? path)
+                        Label("Expand", systemImage: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(Color.white.opacity(0.88))
+                            )
+                            .padding(16)
+                    }
+
+                    HStack(spacing: 10) {
+                        Text(presentedImage.caption)
                             .font(.system(size: 12, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
+
+                        if let sizeSummary = imageSizeSummary(sizeHint: presentedImage.sizeHint) {
+                            Text(sizeSummary)
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color.black.opacity(0.66))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(
+                                    Capsule(style: .continuous)
+                                        .fill(Color.white.opacity(0.74))
+                                )
+                        }
                     }
                 }
-            } else {
-                Label(path, systemImage: "photo")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+            }
+            .buttonStyle(.plain)
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Unable to render image", systemImage: "photo.badge.exclamationmark")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                Text(path)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
             }
-
-        case .divider:
-            Divider()
-                .padding(.vertical, 4)
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.white.opacity(0.54))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+            )
         }
     }
 
@@ -259,7 +339,103 @@ struct ReaderView: View {
             return
         }
 
+        if attachment.kind == .image, let presentedImage = makePresentedImage(path: path, alt: nil, sizeHint: nil) {
+            self.presentedImage = presentedImage
+            return
+        }
+
         NSWorkspace.shared.open(attachment.url)
+    }
+
+    private func resolveInlineImage(
+        path: String,
+        alt: String?,
+        sizeHint: ImageSizeHint?
+    ) -> ResolvedInlineImage? {
+        guard let presentedImage = makePresentedImage(path: path, alt: alt, sizeHint: sizeHint) else {
+            return nil
+        }
+
+        return ResolvedInlineImage(
+            path: presentedImage.attachment.relativePath,
+            image: presentedImage.image,
+            caption: presentedImage.caption,
+            sizeHint: presentedImage.sizeHint
+        )
+    }
+
+    private func presentInlineImage(
+        path: String,
+        alt: String?,
+        sizeHint: ImageSizeHint?
+    ) {
+        guard let presentedImage = makePresentedImage(path: path, alt: alt, sizeHint: sizeHint) else {
+            openAttachment(path: path)
+            return
+        }
+
+        self.presentedImage = presentedImage
+    }
+
+    private func makePresentedImage(
+        path: String,
+        alt: String?,
+        sizeHint: ImageSizeHint?
+    ) -> PresentedAttachmentImage? {
+        guard let attachment = snapshot.attachment(for: path, from: note.id), attachment.kind == .image else {
+            return nil
+        }
+        guard let image = NSImage(contentsOf: attachment.url) else {
+            return nil
+        }
+
+        let trimmedAlt = alt?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let caption = trimmedAlt.isEmpty ? attachment.relativePath : trimmedAlt
+        return PresentedAttachmentImage(
+            id: note.id + "::" + attachment.relativePath,
+            attachment: attachment,
+            image: image,
+            caption: caption,
+            sizeHint: sizeHint
+        )
+    }
+
+    private func resolvedImageWidth(sizeHint: ImageSizeHint?, imageSize: NSSize) -> CGFloat {
+        if let width = sizeHint?.width {
+            return min(CGFloat(width), 780)
+        }
+
+        let naturalWidth = imageSize.width > 0 ? imageSize.width : 680
+        return min(max(naturalWidth, 260), 780)
+    }
+
+    private func resolvedImageHeight(sizeHint: ImageSizeHint?, imageSize: NSSize) -> CGFloat? {
+        if let height = sizeHint?.height {
+            return min(CGFloat(height), 640)
+        }
+
+        if imageSize.height > 0 {
+            return min(max(imageSize.height, 180), 560)
+        }
+
+        return nil
+    }
+
+    private func imageSizeSummary(sizeHint: ImageSizeHint?) -> String? {
+        guard let sizeHint, sizeHint.hasExplicitDimensions else {
+            return nil
+        }
+
+        if let width = sizeHint.width, let height = sizeHint.height {
+            return "\(Int(width)) x \(Int(height))"
+        }
+        if let width = sizeHint.width {
+            return "\(Int(width)) wide"
+        }
+        if let height = sizeHint.height {
+            return "\(Int(height)) tall"
+        }
+        return nil
     }
 
     private func handlePendingAnchor(using proxy: ScrollViewProxy) {
@@ -333,6 +509,99 @@ struct ReaderView: View {
         default:
             return .semibold
         }
+    }
+}
+
+private struct PresentedAttachmentImage: Identifiable {
+    let id: String
+    let attachment: VaultAttachment
+    let image: NSImage
+    let caption: String
+    let sizeHint: ImageSizeHint?
+}
+
+private struct ImageLightboxView: View {
+    let presentedImage: PresentedAttachmentImage
+    @Environment(\.dismiss) private var dismiss
+    @State private var zoom: Double = 1
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 18) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(presentedImage.caption)
+                        .font(.system(size: 24, weight: .bold, design: .serif))
+                    Text(presentedImage.attachment.relativePath)
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 20)
+
+                VStack(alignment: .trailing, spacing: 10) {
+                    HStack(spacing: 12) {
+                        Text("Zoom")
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundStyle(.secondary)
+
+                        Slider(value: $zoom, in: 0.75 ... 4, step: 0.25)
+                            .frame(width: 180)
+
+                        Text("\(zoom.formatted(.number.precision(.fractionLength(2))))x")
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .frame(width: 50, alignment: .trailing)
+                    }
+
+                    HStack(spacing: 10) {
+                        Button("Open Original") {
+                            NSWorkspace.shared.open(presentedImage.attachment.url)
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button("Reveal File") {
+                            NSWorkspace.shared.activateFileViewerSelecting([presentedImage.attachment.url])
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button("Close") {
+                            dismiss()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+            }
+            .padding(.horizontal, 28)
+            .padding(.top, 24)
+            .padding(.bottom, 20)
+
+            Divider()
+
+            ZStack {
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.09, green: 0.10, blue: 0.12),
+                        Color(red: 0.13, green: 0.14, blue: 0.17),
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
+                ScrollView([.horizontal, .vertical]) {
+                    Image(nsImage: presentedImage.image)
+                        .resizable()
+                        .interpolation(.high)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: baseWidth * zoom)
+                        .padding(48)
+                }
+            }
+        }
+        .frame(minWidth: 900, minHeight: 700)
+    }
+
+    private var baseWidth: CGFloat {
+        let naturalWidth = presentedImage.image.size.width > 0 ? presentedImage.image.size.width : 900
+        return min(max(naturalWidth, 360), 1_280)
     }
 }
 
@@ -411,6 +680,8 @@ private struct TableBlockView: View {
     let onOpenAttachment: (String) -> Void
     let onOpenAnchor: (String) -> Void
     let onSelectTag: (String) -> Void
+    let inlineImageResolver: (String, String?, ImageSizeHint?) -> ResolvedInlineImage?
+    let onOpenInlineImage: (String, String?, ImageSizeHint?) -> Void
 
     var body: some View {
         Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 12) {
@@ -424,7 +695,9 @@ private struct TableBlockView: View {
                         onNavigate: onNavigate,
                         onOpenAttachment: onOpenAttachment,
                         onOpenAnchor: onOpenAnchor,
-                        onSelectTag: onSelectTag
+                        onSelectTag: onSelectTag,
+                        inlineImageResolver: inlineImageResolver,
+                        onOpenInlineImage: onOpenInlineImage
                     )
                     .padding(.bottom, 6)
                 }
@@ -441,7 +714,9 @@ private struct TableBlockView: View {
                             onNavigate: onNavigate,
                             onOpenAttachment: onOpenAttachment,
                             onOpenAnchor: onOpenAnchor,
-                            onSelectTag: onSelectTag
+                            onSelectTag: onSelectTag,
+                            inlineImageResolver: inlineImageResolver,
+                            onOpenInlineImage: onOpenInlineImage
                         )
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }

@@ -10,6 +10,8 @@ public final class AppModel: ObservableObject {
     @Published public private(set) var vaultURL: URL?
     @Published private(set) var errorMessage: String?
     @Published private(set) var pendingAnchor = PendingAnchor.none
+    @Published var detailMode: DetailMode = .reader
+    @Published var graphScope: GraphScope = .local
     @Published var selectedNoteID: String?
     @Published var searchText = ""
 
@@ -85,6 +87,54 @@ public final class AppModel: ObservableObject {
         guard let snapshot else { return nil }
         guard let selectedNoteID else { return snapshot.notes.first }
         return snapshot.note(withID: selectedNoteID) ?? snapshot.notes.first
+    }
+
+    var selectedGraphNode: NoteGraphNode? {
+        guard let snapshot, let selectedNoteID else { return nil }
+        return snapshot.noteGraph.node(withID: selectedNoteID)
+    }
+
+    var graphHighlightedNoteIDs: Set<String> {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.isEmpty {
+            return selectedNoteID.map { [$0] } ?? []
+        }
+        return Set(filteredNotes.map(\.id))
+    }
+
+    var graphSubgraph: NoteGraphSubgraph? {
+        guard let snapshot else { return nil }
+
+        switch graphScope {
+        case .local:
+            if let selectedNoteID {
+                return snapshot.noteGraph.localSubgraph(
+                    around: selectedNoteID,
+                    highlightedIDs: graphHighlightedNoteIDs
+                )
+            }
+
+            return snapshot.noteGraph.globalSubgraph(
+                visibleNoteIDs: Set(snapshot.notes.map(\.id)),
+                highlightedIDs: graphHighlightedNoteIDs,
+                centerNodeID: nil
+            )
+
+        case .global:
+            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            var visibleNoteIDs = query.isEmpty
+                ? Set(snapshot.notes.map(\.id))
+                : Set(filteredNotes.map(\.id))
+            if let selectedNoteID {
+                visibleNoteIDs.insert(selectedNoteID)
+            }
+
+            return snapshot.noteGraph.globalSubgraph(
+                visibleNoteIDs: visibleNoteIDs,
+                highlightedIDs: graphHighlightedNoteIDs,
+                centerNodeID: selectedNoteID
+            )
+        }
     }
 
     public func restoreVaultIfNeeded() async {
@@ -215,4 +265,18 @@ struct PendingAnchor: Equatable {
     let anchor: String?
 
     static let none = PendingAnchor(noteID: nil, anchor: nil)
+}
+
+enum DetailMode: String, CaseIterable, Identifiable {
+    case reader = "Reader"
+    case graph = "Graph"
+
+    var id: Self { self }
+}
+
+enum GraphScope: String, CaseIterable, Identifiable {
+    case local = "Local"
+    case global = "Global"
+
+    var id: Self { self }
 }

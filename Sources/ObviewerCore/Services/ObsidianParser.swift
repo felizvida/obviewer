@@ -141,7 +141,7 @@ public struct ObsidianParser: Sendable {
             if let image = parseStandaloneImage(from: trimmed) {
                 flushParagraph()
                 flushList()
-                blocks.append(.image(path: image.path, alt: image.alt))
+                blocks.append(.image(path: image.path, alt: image.alt, sizeHint: image.sizeHint))
                 index += 1
                 continue
             }
@@ -221,11 +221,11 @@ public struct ObsidianParser: Sendable {
         return nil
     }
 
-    private func parseStandaloneImage(from line: String) -> (path: String, alt: String?)? {
+    private func parseStandaloneImage(from line: String) -> (path: String, alt: String?, sizeHint: ImageSizeHint?)? {
         if let target = matchFirst(in: line, pattern: #"^!\[\[([^\]]+)\]\]$"#) {
             let parsed = parseObsidianEmbedTarget(target)
             guard isImagePath(parsed.path) else { return nil }
-            return (path: parsed.path, alt: parsed.alt)
+            return (path: parsed.path, alt: parsed.alt, sizeHint: parsed.sizeHint)
         }
 
         let groups = matchGroups(in: line, pattern: #"^!\[([^\]]*)\]\(([^)]+)\)$"#)
@@ -233,7 +233,7 @@ public struct ObsidianParser: Sendable {
         let path = groups[1].trimmingCharacters(in: .whitespacesAndNewlines)
         guard isImagePath(path) else { return nil }
         let alt = groups[0].trimmingCharacters(in: .whitespacesAndNewlines)
-        return (path: path, alt: alt.isEmpty ? nil : alt)
+        return (path: path, alt: alt.isEmpty ? nil : alt, sizeHint: nil)
     }
 
     private func parseCallout(from lines: [String], startIndex: Int) -> (kind: CalloutKind, title: String, body: String, nextIndex: Int)? {
@@ -353,16 +353,20 @@ public struct ObsidianParser: Sendable {
                 let embedded = parseObsidianEmbedTarget(rawTarget)
                 let destination = classifyLinkDestination(embedded.path)
                 recordOutboundLink(destination, outboundLinks: &outboundLinks)
-                runs.append(
-                    .link(
-                        label: inlineEmbedLabel(
-                            for: embedded.path,
-                            display: embedded.alt,
+                if case .attachment(let attachmentPath) = destination, isImagePath(attachmentPath) {
+                    runs.append(.image(path: embedded.path, alt: embedded.alt, sizeHint: embedded.sizeHint))
+                } else {
+                    runs.append(
+                        .link(
+                            label: inlineEmbedLabel(
+                                for: embedded.path,
+                                display: embedded.alt,
+                                destination: destination
+                            ),
                             destination: destination
-                        ),
-                        destination: destination
+                        )
                     )
-                )
+                }
                 index = close.upperBound
                 continue
             }
@@ -390,16 +394,27 @@ public struct ObsidianParser: Sendable {
                         let destinationValue = String(normalized[destinationStart..<destinationEnd])
                         let destination = classifyLinkDestination(destinationValue)
                         recordOutboundLink(destination, outboundLinks: &outboundLinks)
-                        runs.append(
-                            .link(
-                                label: inlineEmbedLabel(
-                                    for: destinationValue,
-                                    display: alt,
-                                    destination: destination
-                                ),
-                                destination: destination
+                        if case .attachment(let attachmentPath) = destination, isImagePath(attachmentPath) {
+                            let trimmedAlt = alt.trimmingCharacters(in: .whitespacesAndNewlines)
+                            runs.append(
+                                .image(
+                                    path: destinationValue.trimmingCharacters(in: .whitespacesAndNewlines),
+                                    alt: trimmedAlt.isEmpty ? nil : trimmedAlt,
+                                    sizeHint: nil
+                                )
                             )
-                        )
+                        } else {
+                            runs.append(
+                                .link(
+                                    label: inlineEmbedLabel(
+                                        for: destinationValue,
+                                        display: alt,
+                                        destination: destination
+                                    ),
+                                    destination: destination
+                                )
+                            )
+                        }
                         index = normalized.index(after: destinationEnd)
                         continue
                     }
@@ -507,16 +522,17 @@ public struct ObsidianParser: Sendable {
         return text[text.index(before: index)].isWhitespace
     }
 
-    private func parseObsidianEmbedTarget(_ raw: String) -> (path: String, alt: String?) {
+    private func parseObsidianEmbedTarget(_ raw: String) -> (path: String, alt: String?, sizeHint: ImageSizeHint?) {
         let parts = raw.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false).map {
             String($0).trimmingCharacters(in: .whitespacesAndNewlines)
         }
         let path = parts[0]
         let displayValue = parts.count > 1 ? parts[1] : nil
+        let sizeHint = displayValue.flatMap(parseImageSizeHint)
         let alt = displayValue.flatMap { value in
-            isDimensionSpecifier(value) ? nil : value
+            sizeHint == nil ? value : nil
         }
-        return (path: path, alt: alt)
+        return (path: path, alt: alt, sizeHint: sizeHint)
     }
 
     private func inlineEmbedLabel(
@@ -548,8 +564,14 @@ public struct ObsidianParser: Sendable {
         return basename.isEmpty ? target : basename
     }
 
-    private func isDimensionSpecifier(_ value: String) -> Bool {
-        matchFirst(in: value, pattern: #"^(\d+(?:x\d+)?)$"#) != nil
+    private func parseImageSizeHint(_ value: String) -> ImageSizeHint? {
+        let groups = matchGroups(in: value, pattern: #"^(\d+)(?:x(\d+))?$"#)
+        guard groups.isEmpty == false else { return nil }
+
+        let width = Double(groups[0])
+        let height = groups.count > 1 ? Double(groups[1]) : nil
+        guard width != nil || height != nil else { return nil }
+        return ImageSizeHint(width: width, height: height)
     }
 
     private func isImagePath(_ path: String) -> Bool {
