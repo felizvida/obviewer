@@ -74,6 +74,12 @@ targets:
       - path: Tests/ObviewerCoreTests
     dependencies:
       - target: ObviewerCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer.coretests
+        PRODUCT_NAME: ObviewerCoreTests
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
 
   ObviewerMacAppTests:
     type: bundle.unit-test
@@ -84,3 +90,9 @@ targets:
     dependencies:
       - target: ObviewerMacApp
       - target: ObviewerCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer.macapptests
+        PRODUCT_NAME: ObviewerMacAppTests
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
