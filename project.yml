@@ -48,6 +48,10 @@ targets:
       - path: Sources/Obviewer
     dependencies:
       - target: ObviewerMacApp
+    scheme:
+      testTargets:
+        - ObviewerCoreTests
+        - ObviewerMacAppTests
     info:
       path: App/Info.plist
       properties:
