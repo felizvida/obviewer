@@ -1,6 +1,9 @@
 .DS_Store
 /.build
 /Packages
+/App/Info.plist
+/Obviewer.xcodeproj
+/build
 xcuserdata/
 DerivedData/
 .swiftpm/configuration/registries.json

@@ -160,13 +160,11 @@ public final class AppModel: ObservableObject {
         securityScopeManager.activate(url: url)
 
         do {
-            var progressContinuation: AsyncStream<VaultLoadingProgress>.Continuation?
-            let progressStream = AsyncStream(VaultLoadingProgress.self) { continuation in
-                progressContinuation = continuation
-            }
+            let progressStream = AsyncStream.makeStream(of: VaultLoadingProgress.self)
+            let progressContinuation = progressStream.continuation
 
             let progressTask = Task { @MainActor [weak self] in
-                for await progress in progressStream {
+                for await progress in progressStream.stream {
                     self?.loadingProgress = progress
                 }
             }
@@ -174,13 +172,13 @@ public final class AppModel: ObservableObject {
                 progressTask.cancel()
             }
 
-            let snapshot = try await Task.detached(priority: .userInitiated) { [reader] in
+            let snapshot = try await Task.detached(priority: .userInitiated) { [reader, url, progressContinuation] in
                 defer {
-                    progressContinuation?.finish()
+                    progressContinuation.finish()
                 }
 
                 return try reader.loadVault(at: url) { progress in
-                    progressContinuation?.yield(progress)
+                    progressContinuation.yield(progress)
                 }
             }.value
 

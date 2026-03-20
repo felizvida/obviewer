@@ -78,6 +78,14 @@ cd obviewer
 make try-local
 ```
 
+If you want a realistic synthetic vault to test against instead of your own notes, generate one with:
+
+```bash
+make demo-vault
+```
+
+That creates a large sample vault at `build/SampleVault` with many notes, folders, duplicate filenames, images, documents, and cross-links.
+
 That command will:
 
 - verify that full Xcode is selected
@@ -91,6 +99,8 @@ Then:
 2. If Xcode asks about signing, choose your Personal Team.
 3. Press Run.
 4. Choose your local Obsidian vault inside the app.
+
+If you generated the sample vault, point the app at `build/SampleVault`.
 
 If you prefer the manual path, you can still open the package in Xcode or run `swift build` and `swift test` from a shell with the full Xcode toolchain selected.
 

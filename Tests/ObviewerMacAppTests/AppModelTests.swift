@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 @testable import ObviewerCore
 @testable import ObviewerMacApp
+import ObviewerFixtureSupport
 
 final class AppModelTests: XCTestCase {
     @MainActor
@@ -165,6 +166,42 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.isLoading)
         XCTAssertNil(model.loadingProgress)
         XCTAssertNotNil(model.snapshot)
+    }
+
+    @MainActor
+    func testChooseVaultLoadsRealGeneratedVaultFromDisk() async throws {
+        let fixture = try TemporaryDemoVault(profile: .smoke)
+        defer { fixture.cleanup() }
+
+        let bookmarkStore = BookmarkStoreSpy()
+        let securityScope = SecurityScopeSpy()
+        let model = AppModel(
+            bookmarkStore: bookmarkStore,
+            picker: VaultPickerStub(url: fixture.rootURL),
+            reader: VaultReader(),
+            securityScopeManager: securityScope
+        )
+
+        await model.chooseVault()
+
+        XCTAssertNil(model.errorMessage)
+        XCTAssertEqual(model.vaultURL, fixture.rootURL)
+        XCTAssertEqual(model.snapshot?.notes.count, fixture.manifest.noteCount)
+        XCTAssertEqual(model.snapshot?.attachments.count, fixture.manifest.attachmentCount)
+        XCTAssertEqual(model.selectedNoteID, fixture.manifest.homeNoteID)
+        XCTAssertEqual(bookmarkStore.savedURLs, [fixture.rootURL])
+        XCTAssertEqual(securityScope.activatedURLs, [fixture.rootURL])
+
+        model.navigate(to: "Daily", from: fixture.manifest.alphaOverviewNoteID)
+
+        XCTAssertEqual(model.selectedNoteID, fixture.manifest.alphaDailyNoteID)
+
+        model.searchText = "#alpha"
+        XCTAssertTrue(model.filteredNotes.contains(where: { $0.id == fixture.manifest.alphaOverviewNoteID }))
+
+        model.searchText = ""
+        XCTAssertTrue(model.noteSections.contains(where: { $0.title == "Vault Root" }))
+        XCTAssertTrue(model.noteSections.contains(where: { $0.title == "Projects/Alpha" }))
     }
 }
 

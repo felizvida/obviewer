@@ -40,6 +40,20 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         SKIP_INSTALL: YES
 
+  ObviewerFixtureSupport:
+    type: framework
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/ObviewerFixtureSupport
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer.fixturesupport
+        PRODUCT_NAME: ObviewerFixtureSupport
+        DEFINES_MODULE: YES
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+
   Obviewer:
     type: application
     platform: macOS
@@ -78,6 +92,7 @@ targets:
       - path: Tests/ObviewerCoreTests
     dependencies:
       - target: ObviewerCore
+      - target: ObviewerFixtureSupport
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer.coretests
@@ -94,6 +109,7 @@ targets:
     dependencies:
       - target: ObviewerMacApp
       - target: ObviewerCore
+      - target: ObviewerFixtureSupport
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer.macapptests

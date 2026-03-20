@@ -17,13 +17,21 @@ What that does:
 - Generates `Obviewer.xcodeproj`
 - Opens the project in Xcode
 
+If you want a ready-made vault for testing, generate one in a second terminal:
+
+```bash
+make demo-vault
+```
+
+That writes a large synthetic vault to `build/SampleVault`.
+
 ## In Xcode
 
 1. Select the `Obviewer` scheme.
 2. If Xcode asks about signing, choose your Personal Team under Signing & Capabilities.
 3. Press Run.
 4. In the app, choose `Open Vault...`.
-5. Select your local Obsidian vault folder.
+5. Select your local Obsidian vault folder, or choose `build/SampleVault` if you generated the demo vault.
 
 ## What You Need
 
