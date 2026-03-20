@@ -4,10 +4,14 @@ public struct VaultReader: VaultLoading, Sendable {
     private let supportedImages = Set(["png", "jpg", "jpeg", "gif", "webp", "heic"])
     private let supportedAudio = Set(["mp3", "m4a", "wav"])
     private let supportedVideo = Set(["mp4", "mov"])
+    private let progressUpdateInterval = 25
 
     public init() {}
 
-    public func loadVault(at rootURL: URL) throws -> VaultSnapshot {
+    public func loadVault(
+        at rootURL: URL,
+        progress: (@Sendable (VaultLoadingProgress) -> Void)? = nil
+    ) throws -> VaultSnapshot {
         let resourceKeys: Set<URLResourceKey> = [
             .isRegularFileKey,
             .contentModificationDateKey,
@@ -24,12 +28,28 @@ public struct VaultReader: VaultLoading, Sendable {
 
         var notes = [VaultNote]()
         var attachments = [VaultAttachment]()
+        var processedFileCount = 0
+
+        func reportProgress(currentPath: String) {
+            progress?(
+                VaultLoadingProgress(
+                    processedFileCount: processedFileCount,
+                    noteCount: notes.count,
+                    attachmentCount: attachments.count,
+                    currentPath: currentPath
+                )
+            )
+        }
 
         for case let fileURL as URL in enumerator {
             let values = try fileURL.resourceValues(forKeys: resourceKeys)
             guard values.isRegularFile == true else { continue }
 
             let relativePath = makeRelativePath(fileURL: fileURL, rootURL: rootURL)
+            processedFileCount += 1
+            if processedFileCount == 1 || processedFileCount.isMultiple(of: progressUpdateInterval) {
+                reportProgress(currentPath: relativePath)
+            }
             let modifiedAt = values.contentModificationDate ?? .distantPast
             let extensionName = fileURL.pathExtension.lowercased()
 
@@ -66,6 +86,15 @@ public struct VaultReader: VaultLoading, Sendable {
 
             attachments.append(attachment)
         }
+
+        progress?(
+            VaultLoadingProgress(
+                processedFileCount: processedFileCount,
+                noteCount: notes.count,
+                attachmentCount: attachments.count,
+                currentPath: nil
+            )
+        )
 
         return VaultSnapshot(rootURL: rootURL, notes: notes, attachments: attachments)
     }

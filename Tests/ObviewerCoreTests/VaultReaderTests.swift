@@ -37,6 +37,25 @@ final class VaultReaderTests: XCTestCase {
         XCTAssertEqual(snapshot.attachment(for: "manual.pdf")?.kind, .pdf)
         XCTAssertEqual(snapshot.attachment(for: "notes.txt")?.kind, .other)
     }
+
+    func testLoadVaultReportsProgress() throws {
+        let sandbox = try TemporaryVault()
+        defer { sandbox.cleanup() }
+
+        try sandbox.write("One.md", contents: "# One")
+        try sandbox.write("Two.md", contents: "# Two")
+        try sandbox.writeData("cover.png", data: Data([0x89, 0x50, 0x4E, 0x47]))
+
+        var events = [VaultLoadingProgress]()
+        _ = try VaultReader().loadVault(at: sandbox.rootURL) { progress in
+            events.append(progress)
+        }
+
+        XCTAssertFalse(events.isEmpty)
+        XCTAssertEqual(events.last?.processedFileCount, 3)
+        XCTAssertEqual(events.last?.noteCount, 2)
+        XCTAssertEqual(events.last?.attachmentCount, 1)
+    }
 }
 
 private struct TemporaryVault {

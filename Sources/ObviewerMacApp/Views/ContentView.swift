@@ -73,8 +73,7 @@ public struct ContentView: View {
             backgroundGradient
 
             if model.isLoading {
-                ProgressView("Indexing vault...")
-                    .controlSize(.large)
+                LoadingVaultState(progress: model.loadingProgress)
             } else if let snapshot = model.snapshot, let note = model.selectedNote {
                 ReaderView(
                     note: note,
@@ -228,6 +227,55 @@ public struct ContentView: View {
             endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
+    }
+}
+
+private struct LoadingVaultState: View {
+    let progress: VaultLoadingProgress?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            ProgressView("Indexing vault...")
+                .controlSize(.large)
+
+            Text(summaryText)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            if let currentPath = progress?.currentPath, currentPath.isEmpty == false {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Currently scanning")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(.secondary)
+
+                    Text(currentPath)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .textSelection(.enabled)
+                        .lineLimit(2)
+                }
+                .frame(maxWidth: 520, alignment: .leading)
+            }
+        }
+        .padding(32)
+        .background(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(Color.white.opacity(0.72))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(Color.black.opacity(0.06), lineWidth: 1)
+        )
+    }
+
+    private var summaryText: String {
+        guard let progress else {
+            return "Preparing vault scan..."
+        }
+
+        let fileWord = progress.processedFileCount == 1 ? "file" : "files"
+        let noteWord = progress.noteCount == 1 ? "note" : "notes"
+        let attachmentWord = progress.attachmentCount == 1 ? "attachment" : "attachments"
+        return "\(progress.processedFileCount) \(fileWord) scanned, \(progress.noteCount) \(noteWord), \(progress.attachmentCount) \(attachmentWord)"
     }
 }
 

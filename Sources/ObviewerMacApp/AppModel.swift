@@ -6,6 +6,7 @@ import SwiftUI
 public final class AppModel: ObservableObject {
     @Published private(set) var snapshot: VaultSnapshot?
     @Published private(set) var isLoading = false
+    @Published private(set) var loadingProgress: VaultLoadingProgress?
     @Published public private(set) var vaultURL: URL?
     @Published private(set) var errorMessage: String?
     @Published private(set) var pendingAnchor = PendingAnchor.none
@@ -146,6 +147,12 @@ public final class AppModel: ObservableObject {
 
     private func loadVault(from url: URL, persistBookmark: Bool) async {
         isLoading = true
+        loadingProgress = VaultLoadingProgress(
+            processedFileCount: 0,
+            noteCount: 0,
+            attachmentCount: 0,
+            currentPath: nil
+        )
         errorMessage = nil
         let previousSelection = selectedNoteID
         pendingAnchor = .none
@@ -153,8 +160,28 @@ public final class AppModel: ObservableObject {
         securityScopeManager.activate(url: url)
 
         do {
+            var progressContinuation: AsyncStream<VaultLoadingProgress>.Continuation?
+            let progressStream = AsyncStream(VaultLoadingProgress.self) { continuation in
+                progressContinuation = continuation
+            }
+
+            let progressTask = Task { @MainActor [weak self] in
+                for await progress in progressStream {
+                    self?.loadingProgress = progress
+                }
+            }
+            defer {
+                progressTask.cancel()
+            }
+
             let snapshot = try await Task.detached(priority: .userInitiated) { [reader] in
-                try reader.loadVault(at: url)
+                defer {
+                    progressContinuation?.finish()
+                }
+
+                return try reader.loadVault(at: url) { progress in
+                    progressContinuation?.yield(progress)
+                }
             }.value
 
             if persistBookmark {
@@ -173,6 +200,7 @@ public final class AppModel: ObservableObject {
         }
 
         isLoading = false
+        loadingProgress = nil
     }
 
 }

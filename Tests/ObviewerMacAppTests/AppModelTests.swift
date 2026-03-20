@@ -146,6 +146,26 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.isLoading)
         XCTAssertNil(model.snapshot)
     }
+
+    @MainActor
+    func testChooseVaultClearsLoadingProgressWhenFinished() async {
+        let progress = [
+            VaultLoadingProgress(processedFileCount: 1, noteCount: 1, attachmentCount: 0, currentPath: "Root.md"),
+            VaultLoadingProgress(processedFileCount: 2, noteCount: 1, attachmentCount: 1, currentPath: "cover.png"),
+        ]
+        let model = AppModel(
+            bookmarkStore: BookmarkStoreSpy(),
+            picker: VaultPickerStub(url: URL(fileURLWithPath: "/tmp/obviewer-tests/vault")),
+            reader: VaultLoaderSpy(result: .success(makeSnapshot()), progressEvents: progress),
+            securityScopeManager: SecurityScopeSpy()
+        )
+
+        await model.chooseVault()
+
+        XCTAssertFalse(model.isLoading)
+        XCTAssertNil(model.loadingProgress)
+        XCTAssertNotNil(model.snapshot)
+    }
 }
 
 @MainActor
@@ -194,13 +214,21 @@ private final class VaultLoaderSpy: @unchecked Sendable, VaultLoading {
     private let lock = NSLock()
     private var results: [Result<VaultSnapshot, Error>]
     private var urls = [URL]()
+    private let progressEvents: [VaultLoadingProgress]
 
     init(result: Result<VaultSnapshot, Error>) {
         self.results = [result]
+        self.progressEvents = []
     }
 
     init(results: [Result<VaultSnapshot, Error>]) {
         self.results = results
+        self.progressEvents = []
+    }
+
+    init(result: Result<VaultSnapshot, Error>, progressEvents: [VaultLoadingProgress]) {
+        self.results = [result]
+        self.progressEvents = progressEvents
     }
 
     var recordedURLs: [URL] {
@@ -209,11 +237,15 @@ private final class VaultLoaderSpy: @unchecked Sendable, VaultLoading {
         return urls
     }
 
-    func loadVault(at url: URL) throws -> VaultSnapshot {
+    func loadVault(
+        at url: URL,
+        progress: (@Sendable (VaultLoadingProgress) -> Void)?
+    ) throws -> VaultSnapshot {
         lock.lock()
         urls.append(url)
         let current = results.count > 1 ? results.removeFirst() : results[0]
         lock.unlock()
+        progressEvents.forEach { progress?($0) }
         return try current.get()
     }
 }
