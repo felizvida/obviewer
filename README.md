@@ -30,7 +30,7 @@ The project is already a working prototype, not just a sketch. It has a portable
 - Graph workspace with local and global graph views
 - Rich synthetic-vault tooling for realistic manual testing
 - Large-vault benchmark tooling with index diagnostics for cold load, warm reload, selective reload, search, and graph query profiling
-- CI smoke benchmark guardrail with a checked-in performance budget
+- CI benchmark profiling for smoke and integration fixtures, with the smoke profile enforced by a checked-in budget
 - Documentation screenshot generation from the real app
 - Green CI on `macos-14` and `macos-15`
 
@@ -77,6 +77,8 @@ For the same path that CI enforces, use:
 ```bash
 PROFILE=smoke BUDGET=Configuration/benchmark-smoke-budget.json make benchmark-vault
 ```
+
+CI also publishes an `integration` benchmark report artifact on every run so larger-profile performance trends can be watched before stricter budgets are locked in.
 
 ## Current Distribution State
 

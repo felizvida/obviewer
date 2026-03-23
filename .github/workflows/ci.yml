@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Show toolchain
         run: |
@@ -48,7 +48,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Validate entitlements
         run: plutil -lint Configuration/Obviewer.entitlements
@@ -65,29 +65,39 @@ jobs:
       - name: Confirm generated project
         run: test -d Obviewer.xcodeproj
 
-  benchmark-smoke:
-    name: Benchmark Smoke Guardrail
+  benchmark-profiles:
+    name: Benchmark ${{ matrix.profile }}
     runs-on: macos-15
     needs:
       - swift-package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: smoke
+            budget: Configuration/benchmark-smoke-budget.json
+            artifact: benchmark-smoke-report
+          - profile: integration
+            budget: ""
+            artifact: benchmark-integration-report
     permissions:
       contents: read
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Run smoke benchmark budget
+      - name: Run benchmark
         run: |
           mkdir -p build/reports
-          PROFILE=smoke \
+          PROFILE=${{ matrix.profile }} \
           FORMAT=json \
-          OUTPUT=build/reports/benchmark-smoke.json \
-          BUDGET=Configuration/benchmark-smoke-budget.json \
+          OUTPUT=build/reports/benchmark-${{ matrix.profile }}.json \
+          BUDGET='${{ matrix.budget }}' \
           make benchmark-vault
 
       - name: Upload benchmark artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: benchmark-smoke-report
-          path: build/reports/benchmark-smoke.json
+          name: ${{ matrix.artifact }}
+          path: build/reports/benchmark-${{ matrix.profile }}.json

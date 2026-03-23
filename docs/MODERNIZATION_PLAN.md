@@ -27,6 +27,7 @@ The project already has:
 - synthetic vault tooling
 - large-vault benchmark tooling and index diagnostics
 - smoke-profile benchmark budget enforcement in CI
+- integration-profile benchmark reporting in CI
 - documentation screenshot tooling
 - local and CI verification
 - tag-driven source releases

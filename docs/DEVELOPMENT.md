@@ -169,7 +169,8 @@ Notes:
 - synthetic generated-vault runs measure cold load, warm reload, selective reload, search, and graph query work
 - existing-vault runs stay read-only and skip the selective-reload mutation step
 - the smoke profile can now run as a pass/fail CI guardrail through `Configuration/benchmark-smoke-budget.json`
-- larger-profile runs are still for profiling and regression investigation, not hard CI gates yet
+- CI also runs an `integration` benchmark profile and uploads its JSON artifact without enforcing a timing budget yet
+- larger-profile runs are still primarily for profiling and regression investigation, not hard CI gates yet
 
 ## CI And Release Automation
 
