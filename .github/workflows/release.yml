@@ -15,6 +15,10 @@ permissions:
 jobs:
   release:
     runs-on: macos-15
+    env:
+      HAS_SIGNING_SECRETS: ${{ secrets.OBVIEWER_DEVELOPER_ID_CERT_P12_BASE64 != '' && secrets.OBVIEWER_DEVELOPER_ID_CERT_PASSWORD != '' && secrets.OBVIEWER_CODE_SIGN_IDENTITY != '' && secrets.OBVIEWER_DEVELOPMENT_TEAM != '' && 'true' || 'false' }}
+      HAS_NOTARY_SECRETS: ${{ secrets.OBVIEWER_NOTARY_APPLE_ID != '' && secrets.OBVIEWER_NOTARY_APP_PASSWORD != '' && secrets.OBVIEWER_DEVELOPMENT_TEAM != '' && 'true' || 'false' }}
+      NOTARY_PROFILE_NAME: obviewer-notary
 
     steps:
       - name: Checkout
@@ -32,7 +36,7 @@ jobs:
         run: plutil -lint Configuration/Obviewer.entitlements
 
       - name: Validate packaging scripts
-        run: bash -n scripts/build_app.sh scripts/generate_xcode_project.sh scripts/package_release_app.sh
+        run: bash -n scripts/build_app.sh scripts/generate_xcode_project.sh scripts/notarize_release_app.sh scripts/package_release_app.sh scripts/package_release_dmg.sh scripts/release_common.sh
 
       - name: Build
         run: swift build
@@ -55,6 +59,52 @@ jobs:
             "dist/obviewer-${GITHUB_REF_NAME}-source.tar.gz" \
             "dist/obviewer-${GITHUB_REF_NAME}-source.zip" \
             > "dist/obviewer-${GITHUB_REF_NAME}-sha256.txt"
+
+      - name: Import Developer ID certificate
+        if: env.HAS_SIGNING_SECRETS == 'true'
+        env:
+          OBVIEWER_DEVELOPER_ID_CERT_P12_BASE64: ${{ secrets.OBVIEWER_DEVELOPER_ID_CERT_P12_BASE64 }}
+          OBVIEWER_DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.OBVIEWER_DEVELOPER_ID_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/obviewer-signing.keychain-db"
+          CERT_PATH="$RUNNER_TEMP/obviewer-developer-id.p12"
+          echo "$OBVIEWER_DEVELOPER_ID_CERT_P12_BASE64" | base64 -D -i > "$CERT_PATH"
+          security create-keychain -p "" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$OBVIEWER_DEVELOPER_ID_CERT_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security \
+            -T /usr/bin/xcrun
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          security default-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" "$KEYCHAIN_PATH"
+
+      - name: Store notarization credentials
+        if: env.HAS_NOTARY_SECRETS == 'true'
+        env:
+          OBVIEWER_NOTARY_APPLE_ID: ${{ secrets.OBVIEWER_NOTARY_APPLE_ID }}
+          OBVIEWER_NOTARY_APP_PASSWORD: ${{ secrets.OBVIEWER_NOTARY_APP_PASSWORD }}
+          OBVIEWER_DEVELOPMENT_TEAM: ${{ secrets.OBVIEWER_DEVELOPMENT_TEAM }}
+        run: |
+          xcrun notarytool store-credentials "$NOTARY_PROFILE_NAME" \
+            --apple-id "$OBVIEWER_NOTARY_APPLE_ID" \
+            --team-id "$OBVIEWER_DEVELOPMENT_TEAM" \
+            --password "$OBVIEWER_NOTARY_APP_PASSWORD"
+
+      - name: Build signed release DMG
+        if: env.HAS_SIGNING_SECRETS == 'true'
+        env:
+          OBVIEWER_CODE_SIGN_IDENTITY: ${{ secrets.OBVIEWER_CODE_SIGN_IDENTITY }}
+          OBVIEWER_DEVELOPMENT_TEAM: ${{ secrets.OBVIEWER_DEVELOPMENT_TEAM }}
+          OBVIEWER_RELEASE_VERSION: ${{ github.ref_name }}
+          OBVIEWER_NOTARY_KEYCHAIN_PROFILE: ${{ env.HAS_NOTARY_SECRETS == 'true' && env.NOTARY_PROFILE_NAME || '' }}
+        run: |
+          ./scripts/package_release_dmg.sh
+          cp build/Obviewer-${GITHUB_REF_NAME}-macOS-*.dmg dist/
+          shasum -a 256 build/Obviewer-${GITHUB_REF_NAME}-macOS-*.dmg > "dist/obviewer-${GITHUB_REF_NAME}-dmg-sha256.txt"
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4

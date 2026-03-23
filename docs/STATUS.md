@@ -122,10 +122,13 @@ Present:
 - source releases
 - signing-aware build scripts
 - XcodeGen app-project generation
+- notarization-ready DMG packaging scripts
+- release workflow hooks for signed/notarized DMG publishing when secrets are configured
 
 Still incomplete:
 
-- notarized GitHub `.dmg`
+- production Apple signing secrets configured in GitHub
+- first published notarized GitHub `.dmg`
 - Mac App Store path
 - auto-update channel
 

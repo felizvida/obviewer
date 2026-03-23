@@ -161,10 +161,11 @@ Current release behavior:
 - rebuild and retest the repo
 - generate source archives and checksums
 - publish a GitHub release
+- publish a signed DMG as well when Apple signing secrets are configured
 
 Current limitation:
 
-- the release workflow does not yet publish a signed/notarized `.app` or `.dmg`
+- the release workflow needs Apple signing secrets configured before it can publish a signed/notarized `.dmg`
 
 ## Packaging And Shipping
 
@@ -173,7 +174,9 @@ The repository already contains the bones of the shipping pipeline:
 - `project.yml`
 - `scripts/generate_xcode_project.sh`
 - `scripts/build_app.sh`
+- `scripts/notarize_release_app.sh`
 - `scripts/package_release_app.sh`
+- `scripts/package_release_dmg.sh`
 
 Typical local signed build flow:
 
@@ -190,6 +193,15 @@ Important:
 
 - `make package-app` refuses unsigned packaging
 - that is intentional because the sandbox/read-only story depends on code signing carrying the entitlements
+
+Typical local notarized DMG flow:
+
+```bash
+export OBVIEWER_CODE_SIGN_IDENTITY="Developer ID Application: Example Corp (TEAMID1234)"
+export OBVIEWER_DEVELOPMENT_TEAM="TEAMID1234"
+export OBVIEWER_NOTARY_KEYCHAIN_PROFILE="obviewer-notary"
+make package-dmg
+```
 
 ## Entitlements
 

@@ -63,16 +63,18 @@ That generates `build/SampleVault`, which includes nested folders, duplicate fil
 
 ## Current Distribution State
 
-Today the GitHub release workflow publishes source archives and checksums. It does not yet publish a signed/notarized `.app` or `.dmg`.
+Today the GitHub release workflow always publishes source archives and checksums. It is now also prepared to publish a signed `.dmg` once Apple signing and notarization secrets are configured in GitHub.
 
-The repo already contains the pieces needed to finish that path:
+The Phase 1 distribution foundation now includes:
 
 - `project.yml` for XcodeGen app-project generation
 - `scripts/build_app.sh` for signed app builds
-- `scripts/package_release_app.sh` for signed release packaging
-- `.github/workflows/release.yml` for tag-driven release automation
+- `scripts/notarize_release_app.sh` for app notarization and stapling
+- `scripts/package_release_app.sh` for signed release zip packaging
+- `scripts/package_release_dmg.sh` for signed DMG packaging, with optional notarization
+- `.github/workflows/release.yml` for tag-driven release automation that can publish a signed/notarized DMG when secrets are present
 
-The next distribution milestone is a notarized GitHub `.dmg`, with Mac App Store distribution as a later option if the product warrants it.
+The next distribution milestone is to configure the Apple credentials in GitHub and validate the first fully notarized public download.
 
 ## Architecture Snapshot
 

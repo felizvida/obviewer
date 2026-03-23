@@ -54,7 +54,7 @@ jobs:
         run: plutil -lint Configuration/Obviewer.entitlements
 
       - name: Validate packaging scripts
-        run: bash -n scripts/build_app.sh scripts/generate_xcode_project.sh scripts/package_release_app.sh
+        run: bash -n scripts/build_app.sh scripts/generate_xcode_project.sh scripts/notarize_release_app.sh scripts/package_release_app.sh scripts/package_release_dmg.sh scripts/release_common.sh
 
       - name: Install XcodeGen
         run: brew install xcodegen
