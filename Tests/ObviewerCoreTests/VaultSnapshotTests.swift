@@ -17,6 +17,30 @@ final class VaultSnapshotTests: XCTestCase {
         XCTAssertEqual(snapshot.resolveNoteID(for: "Launch Plan"), "Projects/Plan.md")
     }
 
+    func testResolveNoteIDSupportsFrontmatterAliases() {
+        let snapshot = VaultSnapshot(
+            rootURL: URL(fileURLWithPath: "/tmp/obviewer-tests"),
+            notes: [
+                .fixture(
+                    relativePath: "Projects/Plan.md",
+                    title: "Launch Plan",
+                    frontmatter: NoteFrontmatter(
+                        entries: [
+                            FrontmatterEntry(
+                                key: "aliases",
+                                value: .array([.string("Control Center"), .string("Release Home")])
+                            ),
+                        ]
+                    )
+                ),
+            ],
+            attachments: []
+        )
+
+        XCTAssertEqual(snapshot.resolveNoteID(for: "Control Center"), "Projects/Plan.md")
+        XCTAssertEqual(snapshot.resolveNoteID(for: "Release Home"), "Projects/Plan.md")
+    }
+
     func testResolveNoteIDFallsBackToSourceRelativePathsForMarkdownLinks() {
         let snapshot = VaultSnapshot(
             rootURL: URL(fileURLWithPath: "/tmp/obviewer-tests"),
@@ -144,6 +168,7 @@ private extension VaultNote {
     static func fixture(
         relativePath: String,
         title: String,
+        frontmatter: NoteFrontmatter = NoteFrontmatter(),
         modifiedAt: Date = .distantPast
     ) -> VaultNote {
         VaultNote(
@@ -154,6 +179,7 @@ private extension VaultNote {
                 ? ""
                 : (relativePath as NSString).deletingLastPathComponent,
             previewText: title,
+            frontmatter: frontmatter,
             tags: [],
             outboundLinks: [],
             tableOfContents: [],

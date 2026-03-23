@@ -71,10 +71,12 @@ The main runtime flow is:
 6. markdown notes are parsed by `ObsidianParser`
 7. notes and attachments become a `VaultSnapshot`
 8. `VaultSnapshot` derives lookup tables and a `NoteGraph`
-9. `ContentView` renders the library shell
-10. `ReaderView` renders note content and attachment flows
-11. `GraphView` renders local/global graph exploration
-12. link navigation resolves back through `VaultSnapshot`
+9. `AppModel` starts a vault watcher after a successful load
+10. filesystem changes trigger debounced reloads through the same loader boundary
+11. `ContentView` renders the library shell
+12. `ReaderView` renders note content and attachment flows
+13. `GraphView` renders local/global graph exploration
+14. link navigation resolves back through `VaultSnapshot`
 
 ## Top-Level Components
 
@@ -102,6 +104,7 @@ Responsibilities:
 - track vault URL, loading state, errors, and current selection
 - manage search and graph scope state
 - orchestrate choose, restore, and reload flows
+- react to filesystem changes through a watcher service
 - bridge UI actions into core lookup/navigation behavior
 
 Important design choice:
@@ -140,6 +143,7 @@ Responsibilities:
 - classify notes and attachments
 - read note contents through read-only APIs
 - emit progress updates
+- reuse unchanged notes during reloads
 - produce the final snapshot
 
 Important design choices:
@@ -150,10 +154,9 @@ Important design choices:
 
 Pressure points:
 
-- no incremental indexing
-- no file watching
-- no cache layer
-- no structured frontmatter extraction beyond stripping
+- reload still re-enumerates the vault rather than applying a persistent index
+- no cache layer beyond in-memory reuse of unchanged notes
+- frontmatter is still intentionally shallow and does not yet model nested YAML objects
 
 ### ObsidianParser
 
@@ -170,10 +173,10 @@ Responsibilities:
 
 Supported constructs today include:
 
-- frontmatter stripping
+- frontmatter extraction for scalar values and arrays
 - headings and heading anchors
 - paragraphs
-- bullet lists
+- ordered, unordered, nested, and task lists
 - block quotes
 - Obsidian callouts
 - fenced code blocks
@@ -181,15 +184,17 @@ Supported constructs today include:
 - inline markdown links
 - inline code, emphasis, and strong emphasis
 - image embeds and size hints
+- footnotes
 - GFM-style tables
 - horizontal rules
 - inline tags
+- graceful fallback blocks for Mermaid, math-like fenced blocks, and standalone non-image embeds
 
 Pressure points:
 
 - still not full CommonMark plus full Obsidian fidelity
 - advanced nested formatting is limited
-- task lists, ordered lists, footnotes, Mermaid, math, and embedded media need deeper work
+- rendered Mermaid, rendered math, and embedded media still need deeper work even though fallback rendering now exists
 
 ### Reader Surfaces
 
@@ -241,12 +246,14 @@ Files:
 - `Sources/ObviewerMacApp/Services/BookmarkStore.swift`
 - `Sources/ObviewerMacApp/Services/SecurityScopedAccessController.swift`
 - `Sources/ObviewerMacApp/Services/VaultPicker.swift`
+- `Sources/ObviewerMacApp/Services/VaultWatcher.swift`
 
 Responsibilities:
 
 - persist and restore vault bookmarks
 - own the security-scoped access lifecycle
 - bridge to `NSOpenPanel`
+- observe vault directories and notify the app model about filesystem changes
 
 Why this matters:
 

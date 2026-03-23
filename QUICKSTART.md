@@ -80,3 +80,5 @@ open Obviewer.xcodeproj
 ```
 
 Then follow the Xcode steps above.
+
+If you pull new changes later, rerun `make xcodeproj` before reopening Xcode so the generated project picks up any added or moved source files.

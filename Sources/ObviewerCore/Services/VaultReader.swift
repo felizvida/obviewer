@@ -12,6 +12,14 @@ public struct VaultReader: VaultLoading, Sendable {
         at rootURL: URL,
         progress: (@Sendable (VaultLoadingProgress) -> Void)? = nil
     ) throws -> VaultSnapshot {
+        try reloadVault(at: rootURL, previousSnapshot: nil, progress: progress)
+    }
+
+    public func reloadVault(
+        at rootURL: URL,
+        previousSnapshot: VaultSnapshot?,
+        progress: (@Sendable (VaultLoadingProgress) -> Void)? = nil
+    ) throws -> VaultSnapshot {
         let resourceKeys: Set<URLResourceKey> = [
             .isRegularFileKey,
             .contentModificationDateKey,
@@ -29,6 +37,9 @@ public struct VaultReader: VaultLoading, Sendable {
         var notes = [VaultNote]()
         var attachments = [VaultAttachment]()
         var processedFileCount = 0
+        let previousNotesByID = Dictionary(
+            uniqueKeysWithValues: (previousSnapshot?.notes ?? []).map { ($0.id, $0) }
+        )
 
         func reportProgress(currentPath: String) {
             progress?(
@@ -54,25 +65,32 @@ public struct VaultReader: VaultLoading, Sendable {
             let extensionName = fileURL.pathExtension.lowercased()
 
             if extensionName == "md" {
-                let markdown = try readText(at: fileURL)
-                let fallbackTitle = ((relativePath as NSString).lastPathComponent as NSString).deletingPathExtension
-                let parsed = ObsidianParser().parse(markdown: markdown, fallbackTitle: fallbackTitle)
-                let note = VaultNote(
-                    id: relativePath,
-                    title: parsed.title,
-                    relativePath: relativePath,
-                    folderPath: (relativePath as NSString).deletingLastPathComponent == "."
-                        ? ""
-                        : (relativePath as NSString).deletingLastPathComponent,
-                    previewText: parsed.previewText,
-                    tags: parsed.tags,
-                    outboundLinks: parsed.outboundLinks,
-                    tableOfContents: parsed.tableOfContents,
-                    blocks: parsed.blocks,
-                    wordCount: parsed.wordCount,
-                    readingTimeMinutes: parsed.readingTimeMinutes,
-                    modifiedAt: modifiedAt
-                )
+                let note: VaultNote
+                if let previousNote = previousNotesByID[relativePath],
+                   previousNote.modifiedAt == modifiedAt {
+                    note = previousNote
+                } else {
+                    let markdown = try readText(at: fileURL)
+                    let fallbackTitle = ((relativePath as NSString).lastPathComponent as NSString).deletingPathExtension
+                    let parsed = ObsidianParser().parse(markdown: markdown, fallbackTitle: fallbackTitle)
+                    note = VaultNote(
+                        id: relativePath,
+                        title: parsed.title,
+                        relativePath: relativePath,
+                        folderPath: (relativePath as NSString).deletingLastPathComponent == "."
+                            ? ""
+                            : (relativePath as NSString).deletingLastPathComponent,
+                        previewText: parsed.previewText,
+                        frontmatter: parsed.frontmatter,
+                        tags: parsed.tags,
+                        outboundLinks: parsed.outboundLinks,
+                        tableOfContents: parsed.tableOfContents,
+                        blocks: parsed.blocks,
+                        wordCount: parsed.wordCount,
+                        readingTimeMinutes: parsed.readingTimeMinutes,
+                        modifiedAt: modifiedAt
+                    )
+                }
                 notes.append(note)
                 continue
             }

@@ -36,7 +36,8 @@ The project has moved past "scaffold only" status. It is now strong enough for r
 - markdown files are discovered
 - supported attachments are indexed
 - notes are parsed into a render model with inline runs
-- search over title, path, tags, and preview text is implemented
+- structured frontmatter is extracted and carried into the note model
+- search over title, path, tags, preview text, aliases, and frontmatter metadata is implemented
 - note links, attachment links, and heading anchors are classified
 - relative note and attachment resolution is source-aware
 - headings are collected into a table of contents
@@ -45,6 +46,7 @@ The project has moved past "scaffold only" status. It is now strong enough for r
 ### Reading UI
 
 - metadata header exists
+- frontmatter metadata summary cards render in the reader
 - paragraph, heading, list, quote, callout, code, divider, and image blocks render
 - inline images render with sizing hints
 - tables render in the reader
@@ -83,23 +85,26 @@ The project has moved past "scaffold only" status. It is now strong enough for r
 
 Present:
 
+- frontmatter extraction for scalar values and arrays
 - wiki links
+- ordered lists
+- nested list fidelity
+- task lists
+- footnotes with inline references and rendered note sections
 - tags
 - tables
 - callouts
 - headings and anchors
 - image embeds and size hints
+- graceful fallback blocks for Mermaid, math-like fenced blocks, and standalone non-image embeds
 
 Still incomplete:
 
 - full CommonMark coverage
-- ordered lists and nested list fidelity
-- task lists
-- footnotes
-- Mermaid
-- math
-- embedded PDF/audio/video rendering
-- richer frontmatter semantics
+- rendered Mermaid previews
+- rendered math
+- embedded PDF/audio/video surfaces
+- nested frontmatter objects and richer typed semantics
 
 ### Read-Only Guarantee
 
@@ -138,11 +143,13 @@ Present:
 
 - acceptable behavior on the synthetic demo vault
 - loading progress visibility
+- live vault watching on macOS
+- incremental reload that reuses unchanged note models instead of reparsing every markdown file
 
 Still incomplete:
 
-- incremental indexing
-- file watching
+- persistent indexing cache
+- truly selective directory-level or file-level reindexing
 - large-vault profiling
 - caching and smarter search ranking
 
@@ -150,7 +157,6 @@ Still incomplete:
 
 - notarized `.app` or `.dmg` release artifacts
 - App Store distribution
-- live vault refresh
 - large-vault performance instrumentation
 - UI snapshot testing
 - accessibility audit and VoiceOver tuning
@@ -171,7 +177,7 @@ The repo is release-automated, but the published artifact is still source-only. 
 
 ### Risk 3: Performance ceiling
 
-The current full-reload indexing model will eventually limit very large vaults and richer graph interactions.
+The new watcher and incremental reload path improve day-to-day edits, but the app still re-enumerates the vault and lacks a persistent cache for truly large vaults.
 
 ### Risk 4: UI verification gap
 

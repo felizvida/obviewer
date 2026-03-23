@@ -170,6 +170,7 @@ private extension VaultNote {
                 ? ""
                 : (relativePath as NSString).deletingLastPathComponent,
             previewText: title,
+            frontmatter: NoteFrontmatter(),
             tags: [],
             outboundLinks: outboundLinks,
             tableOfContents: [],

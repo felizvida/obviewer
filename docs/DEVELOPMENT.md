@@ -71,6 +71,11 @@ Recommended for day-to-day product work.
 3. run the `Obviewer` scheme
 4. use `Product -> Test` for the app and package test targets
 
+Important:
+
+- after pulling source changes, rerun `make xcodeproj` before reopening Xcode
+- the generated project is disposable; `project.yml` is the source of truth
+
 ### Option 2: Terminal
 
 Recommended for quick local verification and CI parity.
@@ -131,6 +136,7 @@ Current coverage is strongest around:
 - note and attachment resolution
 - graph derivation
 - vault enumeration against real temporary directories
+- live watching and incremental reload orchestration
 - app-model orchestration
 - selected view-support utilities
 

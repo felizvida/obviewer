@@ -203,6 +203,43 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
+    func testSearchMatchesFrontmatterValuesAndAliases() async {
+        let snapshot = VaultSnapshot(
+            rootURL: URL(fileURLWithPath: "/tmp/obviewer-tests/vault"),
+            notes: [
+                .fixture(
+                    relativePath: "Projects/Plan.md",
+                    title: "Launch Plan",
+                    tags: ["roadmap"],
+                    frontmatter: NoteFrontmatter(
+                        entries: [
+                            FrontmatterEntry(key: "aliases", value: .array([.string("Control Center")])),
+                            FrontmatterEntry(key: "status", value: .string("active")),
+                            FrontmatterEntry(key: "owner", value: .string("Platform Experience")),
+                        ]
+                    ),
+                    modifiedAt: .distantPast
+                ),
+            ],
+            attachments: []
+        )
+        let model = AppModel(
+            bookmarkStore: BookmarkStoreSpy(),
+            picker: VaultPickerStub(url: URL(fileURLWithPath: "/tmp/obviewer-tests/vault")),
+            reader: VaultLoaderSpy(result: .success(snapshot)),
+            securityScopeManager: SecurityScopeSpy()
+        )
+
+        await model.chooseVault()
+
+        model.searchText = "control center"
+        XCTAssertEqual(model.filteredNotes.map(\.id), ["Projects/Plan.md"])
+
+        model.searchText = "platform experience"
+        XCTAssertEqual(model.filteredNotes.map(\.id), ["Projects/Plan.md"])
+    }
+
+    @MainActor
     func testGraphSubgraphTracksLocalAndGlobalModes() async throws {
         let snapshot = makeSnapshot()
         let model = AppModel(
@@ -424,6 +461,40 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.noteSections.contains(where: { $0.title == "Vault Root" }))
         XCTAssertTrue(model.noteSections.contains(where: { $0.title == "Projects/Alpha" }))
     }
+
+    @MainActor
+    func testChooseVaultStartsWatcherAndFilesystemChangeTriggersIncrementalReload() async {
+        let vaultURL = URL(fileURLWithPath: "/tmp/obviewer-tests/vault")
+        let firstSnapshot = makeSnapshot()
+        let secondSnapshot = makeSnapshot(modifiedAt: Date(timeIntervalSince1970: 9_999))
+        let watcher = VaultWatcherSpy()
+        let loader = VaultLoaderSpy(results: [
+            .success(firstSnapshot),
+            .success(secondSnapshot),
+        ])
+        let model = AppModel(
+            bookmarkStore: BookmarkStoreSpy(),
+            picker: VaultPickerStub(url: vaultURL),
+            reader: loader,
+            securityScopeManager: SecurityScopeSpy(),
+            watcher: watcher
+        )
+
+        await model.chooseVault()
+
+        XCTAssertEqual(watcher.startedURLs, [vaultURL])
+        XCTAssertTrue(model.isLiveReloadEnabled)
+
+        watcher.emitChange()
+        try? await Task.sleep(for: .milliseconds(80))
+
+        XCTAssertEqual(loader.recordedURLs, [vaultURL, vaultURL])
+        XCTAssertEqual(loader.reloadPreviousSnapshotIDs.count, 1)
+        XCTAssertEqual(
+            Set(loader.reloadPreviousSnapshotIDs[0]),
+            ["Root.md", "Journal/Today.md", "Projects/Plan.md"]
+        )
+    }
 }
 
 @MainActor
@@ -472,6 +543,7 @@ private final class VaultLoaderSpy: @unchecked Sendable, VaultLoading {
     private let lock = NSLock()
     private var results: [Result<VaultSnapshot, Error>]
     private var urls = [URL]()
+    private var reloadSnapshots = [[String]]()
     private let progressEvents: [VaultLoadingProgress]
 
     init(result: Result<VaultSnapshot, Error>) {
@@ -495,12 +567,29 @@ private final class VaultLoaderSpy: @unchecked Sendable, VaultLoading {
         return urls
     }
 
+    var reloadPreviousSnapshotIDs: [[String]] {
+        lock.lock()
+        defer { lock.unlock() }
+        return reloadSnapshots
+    }
+
     func loadVault(
         at url: URL,
         progress: (@Sendable (VaultLoadingProgress) -> Void)?
     ) throws -> VaultSnapshot {
+        try reloadVault(at: url, previousSnapshot: nil, progress: progress)
+    }
+
+    func reloadVault(
+        at url: URL,
+        previousSnapshot: VaultSnapshot?,
+        progress: (@Sendable (VaultLoadingProgress) -> Void)?
+    ) throws -> VaultSnapshot {
         lock.lock()
         urls.append(url)
+        if let previousSnapshot {
+            reloadSnapshots.append(previousSnapshot.notes.map(\.id))
+        }
         let current = results.count > 1 ? results.removeFirst() : results[0]
         lock.unlock()
         progressEvents.forEach { progress?($0) }
@@ -513,6 +602,40 @@ private enum FixtureError: LocalizedError {
 
     var errorDescription: String? {
         "Fixture failure."
+    }
+}
+
+@MainActor
+private final class VaultWatcherSpy: VaultWatching {
+    private(set) var startedURLs = [URL]()
+    private var sessions = [VaultWatchSessionSpy]()
+
+    func beginWatching(url: URL, onChange: @escaping @Sendable () -> Void) -> any VaultWatchSession {
+        startedURLs.append(url)
+        let session = VaultWatchSessionSpy(onChange: onChange)
+        sessions.append(session)
+        return session
+    }
+
+    func emitChange() {
+        sessions.last?.emitChange()
+    }
+}
+
+private final class VaultWatchSessionSpy: VaultWatchSession {
+    private let onChange: @Sendable () -> Void
+    private(set) var invalidationCount = 0
+
+    init(onChange: @escaping @Sendable () -> Void) {
+        self.onChange = onChange
+    }
+
+    func invalidate() {
+        invalidationCount += 1
+    }
+
+    func emitChange() {
+        onChange()
     }
 }
 
@@ -555,6 +678,7 @@ private extension VaultNote {
         tags: [String],
         outboundLinks: [String] = [],
         previewText: String? = nil,
+        frontmatter: NoteFrontmatter = NoteFrontmatter(),
         modifiedAt: Date
     ) -> VaultNote {
         VaultNote(
@@ -565,6 +689,7 @@ private extension VaultNote {
                 ? ""
                 : (relativePath as NSString).deletingLastPathComponent,
             previewText: previewText ?? title,
+            frontmatter: frontmatter,
             tags: tags,
             outboundLinks: outboundLinks,
             tableOfContents: [

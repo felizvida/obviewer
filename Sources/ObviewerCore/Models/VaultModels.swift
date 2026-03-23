@@ -297,12 +297,145 @@ public struct NoteGraphSubgraph: Sendable {
     }
 }
 
+public struct NoteFrontmatter: Hashable, Sendable {
+    public let entries: [FrontmatterEntry]
+
+    public init(entries: [FrontmatterEntry] = []) {
+        self.entries = entries
+    }
+
+    public var isEmpty: Bool {
+        entries.isEmpty
+    }
+
+    public func value(for key: String) -> FrontmatterValue? {
+        let normalizedKey = normalizeFrontmatterKey(key)
+        return entries.first { entry in
+            normalizeFrontmatterKey(entry.key) == normalizedKey
+        }?.value
+    }
+
+    public var aliases: [String] {
+        value(for: "aliases")?.stringValues.filter { $0.isEmpty == false } ?? []
+    }
+
+    public var tags: [String] {
+        normalizedTags(from: value(for: "tags"))
+    }
+
+    public var searchableValues: [String] {
+        entries.flatMap { entry in
+            [entry.key] + entry.value.searchableTextComponents
+        }
+    }
+
+    public func displayEntries(limit: Int? = nil) -> [FrontmatterEntry] {
+        let prioritizedKeys = ["status", "aliases", "project", "owner", "created", "updated", "date", "category"]
+        let excludedKeys = Set(["title", "tags"])
+
+        let prioritized = entries.filter { entry in
+            let normalizedKey = normalizeFrontmatterKey(entry.key)
+            return excludedKeys.contains(normalizedKey) == false
+                && prioritizedKeys.contains(normalizedKey)
+        }.sorted { lhs, rhs in
+            let lhsIndex = prioritizedKeys.firstIndex(of: normalizeFrontmatterKey(lhs.key)) ?? prioritizedKeys.count
+            let rhsIndex = prioritizedKeys.firstIndex(of: normalizeFrontmatterKey(rhs.key)) ?? prioritizedKeys.count
+            if lhsIndex != rhsIndex {
+                return lhsIndex < rhsIndex
+            }
+            return lhs.key.localizedCaseInsensitiveCompare(rhs.key) == .orderedAscending
+        }
+
+        let remaining = entries.filter { entry in
+            let normalizedKey = normalizeFrontmatterKey(entry.key)
+            return excludedKeys.contains(normalizedKey) == false
+                && prioritizedKeys.contains(normalizedKey) == false
+        }
+
+        let combined = prioritized + remaining
+        if let limit {
+            return Array(combined.prefix(limit))
+        }
+        return combined
+    }
+}
+
+public struct FrontmatterEntry: Hashable, Sendable {
+    public let key: String
+    public let value: FrontmatterValue
+
+    public init(key: String, value: FrontmatterValue) {
+        self.key = key
+        self.value = value
+    }
+}
+
+public enum FrontmatterValue: Hashable, Sendable {
+    case string(String)
+    case number(Double)
+    case bool(Bool)
+    case array([FrontmatterValue])
+
+    public var stringValue: String? {
+        switch self {
+        case .string(let value):
+            return value
+        case .number(let value):
+            return formatFrontmatterNumber(value)
+        case .bool(let value):
+            return value ? "true" : "false"
+        case .array:
+            return nil
+        }
+    }
+
+    public var stringValues: [String] {
+        switch self {
+        case .string(let value):
+            return [value]
+        case .number(let value):
+            return [formatFrontmatterNumber(value)]
+        case .bool(let value):
+            return [value ? "true" : "false"]
+        case .array(let values):
+            return values.flatMap(\.stringValues)
+        }
+    }
+
+    public var displayText: String {
+        switch self {
+        case .string(let value):
+            return value
+        case .number(let value):
+            return formatFrontmatterNumber(value)
+        case .bool(let value):
+            return value ? "True" : "False"
+        case .array(let values):
+            return values.map(\.displayText).joined(separator: ", ")
+        }
+    }
+
+    fileprivate var searchableTextComponents: [String] {
+        switch self {
+        case .string(let value):
+            return [value]
+        case .number(let value):
+            return [formatFrontmatterNumber(value)]
+        case .bool(let value):
+            return [value ? "true" : "false"]
+        case .array(let values):
+            return values.flatMap(\.searchableTextComponents)
+        }
+    }
+}
+
 public struct VaultNote: Identifiable, Hashable, Sendable {
     public let id: String
     public let title: String
     public let relativePath: String
     public let folderPath: String
     public let previewText: String
+    public let frontmatter: NoteFrontmatter
     public let tags: [String]
     public let outboundLinks: [String]
     public let tableOfContents: [TableOfContentsItem]
@@ -317,6 +450,7 @@ public struct VaultNote: Identifiable, Hashable, Sendable {
         relativePath: String,
         folderPath: String,
         previewText: String,
+        frontmatter: NoteFrontmatter = NoteFrontmatter(),
         tags: [String],
         outboundLinks: [String],
         tableOfContents: [TableOfContentsItem],
@@ -330,6 +464,7 @@ public struct VaultNote: Identifiable, Hashable, Sendable {
         self.relativePath = relativePath
         self.folderPath = folderPath
         self.previewText = previewText
+        self.frontmatter = frontmatter
         self.tags = tags
         self.outboundLinks = outboundLinks
         self.tableOfContents = tableOfContents
@@ -348,7 +483,7 @@ public struct VaultNote: Identifiable, Hashable, Sendable {
                 normalizeVaultReference(pathWithoutExtension),
                 normalizeVaultReference(lastPathComponent),
                 normalizeVaultReference(title),
-            ])
+            ] + frontmatter.aliases.map(normalizeVaultReference))
         )
     }
 }
@@ -376,13 +511,57 @@ public struct VaultAttachment: Hashable, Sendable {
 public enum RenderBlock: Hashable, Sendable {
     case heading(level: Int, text: RichText, anchor: String)
     case paragraph(text: RichText)
-    case bulletList(items: [RichText])
+    case list(items: [RenderListItem])
     case quote(text: RichText)
     case callout(kind: CalloutKind, title: RichText, body: RichText)
     case table(headers: [RichText], rows: [[RichText]])
     case code(language: String?, code: String)
     case image(path: String, alt: String?, sizeHint: ImageSizeHint?)
+    case unsupported(UnsupportedBlock)
+    case footnotes(items: [FootnoteItem])
     case divider
+}
+
+public struct UnsupportedBlock: Hashable, Sendable {
+    public let title: String
+    public let body: String
+    public let attachmentPath: String?
+
+    public init(title: String, body: String, attachmentPath: String? = nil) {
+        self.title = title
+        self.body = body
+        self.attachmentPath = attachmentPath
+    }
+}
+
+public struct FootnoteItem: Identifiable, Hashable, Sendable {
+    public let id: String
+    public let label: String
+    public let text: RichText
+
+    public init(id: String, label: String, text: RichText) {
+        self.id = id
+        self.label = label
+        self.text = text
+    }
+}
+
+public struct RenderListItem: Hashable, Sendable {
+    public let marker: RenderListMarker
+    public let text: RichText
+    public let children: [RenderListItem]
+
+    public init(marker: RenderListMarker, text: RichText, children: [RenderListItem] = []) {
+        self.marker = marker
+        self.text = text
+        self.children = children
+    }
+}
+
+public enum RenderListMarker: Hashable, Sendable {
+    case unordered
+    case ordered(Int)
+    case task(isCompleted: Bool)
 }
 
 public struct ImageSizeHint: Hashable, Sendable {
@@ -477,6 +656,12 @@ public enum CalloutKind: String, Hashable, Sendable {
     public var label: String {
         rawValue.capitalized
     }
+}
+
+public func normalizeFrontmatterKey(_ key: String) -> String {
+    key
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .lowercased()
 }
 
 public func normalizeVaultReference(_ reference: String) -> String {
@@ -598,6 +783,44 @@ private func folderPath(for relativePath: String) -> String {
     let folder = (relativePath as NSString).deletingLastPathComponent
     guard folder != "." else { return "" }
     return normalizeVaultReference(folder)
+}
+
+private func normalizedTags(from value: FrontmatterValue?) -> [String] {
+    guard let value else {
+        return []
+    }
+
+    var seen = Set<String>()
+    var ordered = [String]()
+
+    for rawValue in value.stringValues {
+        let parts = rawValue.contains(",")
+            ? rawValue.split(separator: ",").map(String.init)
+            : [rawValue]
+
+        for part in parts {
+            let normalized = part
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: #"^#+"#, with: "", options: .regularExpression)
+
+            guard normalized.isEmpty == false else {
+                continue
+            }
+
+            if seen.insert(normalized).inserted {
+                ordered.append(normalized)
+            }
+        }
+    }
+
+    return ordered
+}
+
+private func formatFrontmatterNumber(_ value: Double) -> String {
+    if value.rounded(.towardZero) == value {
+        return String(Int(value))
+    }
+    return value.formatted(.number.precision(.fractionLength(0 ... 3)))
 }
 
 private func referenceLookupKeys(for target: String, sourceRelativePath: String?) -> [String] {

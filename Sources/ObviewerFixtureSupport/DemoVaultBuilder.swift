@@ -281,6 +281,14 @@ private func homeNote() -> String {
     """
     ---
     title: Obviewer Demo Vault
+    aliases: ["Demo Home", "Vault Landing"]
+    tags:
+      - reader
+      - demo
+      - qa
+    status: curated
+    owner: Platform Experience
+    updated: 2026-03-23
     ---
     # Obviewer Demo Vault
 
@@ -343,6 +351,12 @@ private func styleGuideNote() -> String {
 
 private func readerPlaygroundNote() -> String {
     """
+    ---
+    aliases: [Reader Sandbox]
+    status: active
+    tags: [playground, reader]
+    owner: Design Systems
+    ---
     # Reader Playground
 
     Test inline links like [[Projects/Alpha/Overview]], attachment links such as [Reader Notes](Assets/Documents/reader-notes.txt), and tags like #playground.
@@ -353,6 +367,9 @@ private func readerPlaygroundNote() -> String {
     ## Embedded Media
 
     Here is an inline project image ![[Projects/Alpha/cover.png|Alpha board]].
+    The manual also appears as an unsupported inline fallback block below.
+
+    ![[Assets/Documents/operations-manual.pdf]]
 
     ## Comparison Table
 
@@ -361,6 +378,27 @@ private func readerPlaygroundNote() -> String {
     | Sidebar | Folder grouping |
     | Reader | Rich markdown blocks |
     | Navigation | Anchor and note jumps |
+
+    ## List Fidelity
+
+    1. Validate ordered list markers
+    2. Confirm nested list indentation
+       - Capture a screenshot of the reader
+       - Check spacing against the callout and table sections
+    - [ ] Verify unfinished checklist styling
+    - [x] Confirm completed checklist styling
+
+    ## Footnotes And Fallbacks
+
+    Reader polish should include graceful degradation for diagrams[^diagram].
+
+    ```mermaid
+    graph TD
+      Reader --> Vault
+      Vault --> Graph
+    ```
+
+    [^diagram]: Mermaid and other advanced blocks should stay visible even before full rendering exists.
     """
 }
 
@@ -410,6 +448,12 @@ private func projectOverviewNote(project: String, slug: String) -> String {
     """
     ---
     project: \(project)
+    aliases:
+      - \(project) Summary
+      - \(project) Launch Brief
+    status: active
+    tags: [\(slug), launch]
+    owner: \(project) Team
     ---
     # \(project) Overview
 

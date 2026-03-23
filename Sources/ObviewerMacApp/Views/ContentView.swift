@@ -142,14 +142,31 @@ public struct ContentView: View {
                 .foregroundStyle(.secondary)
 
             if let vaultURL = model.vaultURL {
-                Label(vaultURL.lastPathComponent, systemImage: "books.vertical")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(Color.black.opacity(0.06))
-                    )
+                HStack(spacing: 10) {
+                    Label(vaultURL.lastPathComponent, systemImage: "books.vertical")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Color.black.opacity(0.06))
+                        )
+
+                    if model.isLiveReloadEnabled {
+                        Label("Live Sync On", systemImage: "wave.3.right")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(Color.white.opacity(0.78))
+                            )
+                            .overlay(
+                                Capsule(style: .continuous)
+                                    .stroke(Color.black.opacity(0.05), lineWidth: 1)
+                            )
+                    }
+                }
             }
         }
     }

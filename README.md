@@ -21,9 +21,9 @@ The project is already a working prototype, not just a sketch. It has a portable
 - Native SwiftUI macOS app shell with `NavigationSplitView`
 - Portable `ObviewerCore` module for parsing, lookup, vault indexing, and graph construction
 - macOS-specific `ObviewerMacApp` module for security-scoped access, bookmarks, app state, and UI
-- Local vault loading with progress reporting
-- Search by title, path, tags, and preview text
-- Obsidian-aware parsing for links, callouts, tables, headings, tags, and image embeds
+- Local vault loading with progress reporting, live vault watching, and incremental note reuse on reload
+- Search by title, path, tags, preview text, aliases, and frontmatter metadata
+- Obsidian-aware parsing for frontmatter, links, tables, headings, ordered/task/nested lists, footnotes, tags, callouts, image embeds, and graceful fallback blocks for Mermaid/math/media embeds
 - Inline image rendering with size hints plus a lightbox for image attachments
 - Reader workspace with metadata, linked-note navigation, and a contents rail
 - Graph workspace with local and global graph views
@@ -95,7 +95,7 @@ The project should modernize in this order:
 
 1. Ship the production-grade app container and distribution path
 2. Upgrade markdown and Obsidian fidelity without weakening the read-only boundary
-3. Improve large-vault performance and live refresh behavior
+3. Deepen live refresh into truly change-aware indexing, caching, and large-vault performance work
 4. Deepen navigation, graph, media, and accessibility polish
 5. Add observability and maintenance workflows that keep the project healthy over time
 

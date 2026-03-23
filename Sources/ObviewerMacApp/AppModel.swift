@@ -6,6 +6,7 @@ import SwiftUI
 public final class AppModel: ObservableObject {
     @Published private(set) var snapshot: VaultSnapshot?
     @Published private(set) var isLoading = false
+    @Published private(set) var isLiveReloadEnabled = false
     @Published private(set) var loadingProgress: VaultLoadingProgress?
     @Published public private(set) var vaultURL: URL?
     @Published private(set) var errorMessage: String?
@@ -19,15 +20,19 @@ public final class AppModel: ObservableObject {
     private let picker: any VaultChoosing
     private let reader: any VaultLoading
     private let securityScopeManager: any SecurityScopeManaging
+    private let watcher: any VaultWatching
 
     private var didAttemptRestore = false
+    private var watchSession: (any VaultWatchSession)?
+    private var pendingWatchedReload = false
 
     public convenience init() {
         self.init(
             bookmarkStore: BookmarkStore(),
             picker: VaultPicker(),
             reader: VaultReader(),
-            securityScopeManager: SecurityScopedAccessController()
+            securityScopeManager: SecurityScopedAccessController(),
+            watcher: VaultWatcher()
         )
     }
 
@@ -35,12 +40,14 @@ public final class AppModel: ObservableObject {
         bookmarkStore: any VaultBookmarkStoring,
         picker: any VaultChoosing,
         reader: any VaultLoading,
-        securityScopeManager: any SecurityScopeManaging
+        securityScopeManager: any SecurityScopeManaging,
+        watcher: (any VaultWatching)? = nil
     ) {
         self.bookmarkStore = bookmarkStore
         self.picker = picker
         self.reader = reader
         self.securityScopeManager = securityScopeManager
+        self.watcher = watcher ?? VaultWatcher()
     }
 
     var filteredNotes: [VaultNote] {
@@ -57,6 +64,9 @@ public final class AppModel: ObservableObject {
                 || note.relativePath.lowercased().contains(normalizedQuery)
                 || note.tags.contains(where: { $0.localizedCaseInsensitiveContains(normalizedTagQuery) })
                 || note.previewText.lowercased().contains(normalizedQuery)
+                || note.frontmatter.searchableValues.contains(where: {
+                    $0.localizedCaseInsensitiveContains(normalizedQuery)
+                })
         }
     }
 
@@ -146,24 +156,40 @@ public final class AppModel: ObservableObject {
                 return
             }
 
-            await loadVault(from: restoredURL, persistBookmark: false)
+            await loadVault(
+                from: restoredURL,
+                persistBookmark: false,
+                previousSnapshot: snapshot,
+                restartWatcher: true
+            )
         } catch {
             errorMessage = error.localizedDescription
             snapshot = nil
             vaultURL = nil
             selectedNoteID = nil
+            stopWatchingVault()
             return
         }
     }
 
     public func chooseVault() async {
         guard let url = picker.chooseVault() else { return }
-        await loadVault(from: url, persistBookmark: true)
+        await loadVault(
+            from: url,
+            persistBookmark: true,
+            previousSnapshot: snapshot?.rootURL == url ? snapshot : nil,
+            restartWatcher: true
+        )
     }
 
     public func reloadVault() async {
         guard let vaultURL else { return }
-        await loadVault(from: vaultURL, persistBookmark: false)
+        await loadVault(
+            from: vaultURL,
+            persistBookmark: false,
+            previousSnapshot: snapshot,
+            restartWatcher: false
+        )
     }
 
     func dismissError() {
@@ -195,7 +221,12 @@ public final class AppModel: ObservableObject {
         }
     }
 
-    private func loadVault(from url: URL, persistBookmark: Bool) async {
+    private func loadVault(
+        from url: URL,
+        persistBookmark: Bool,
+        previousSnapshot: VaultSnapshot?,
+        restartWatcher: Bool
+    ) async {
         isLoading = true
         loadingProgress = VaultLoadingProgress(
             processedFileCount: 0,
@@ -222,12 +253,12 @@ public final class AppModel: ObservableObject {
                 progressTask.cancel()
             }
 
-            let snapshot = try await Task.detached(priority: .userInitiated) { [reader, url, progressContinuation] in
+            let snapshot = try await Task.detached(priority: .userInitiated) { [reader, url, progressContinuation, previousSnapshot] in
                 defer {
                     progressContinuation.finish()
                 }
 
-                return try reader.loadVault(at: url) { progress in
+                return try reader.reloadVault(at: url, previousSnapshot: previousSnapshot) { progress in
                     progressContinuation.yield(progress)
                 }
             }.value
@@ -243,12 +274,53 @@ public final class AppModel: ObservableObject {
             } else {
                 selectedNoteID = snapshot.notes.first?.id
             }
+
+            if restartWatcher || watchSession == nil {
+                startWatchingVault(at: url)
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
 
         isLoading = false
         loadingProgress = nil
+
+        if pendingWatchedReload, let vaultURL {
+            pendingWatchedReload = false
+            await loadVault(
+                from: vaultURL,
+                persistBookmark: false,
+                previousSnapshot: snapshot,
+                restartWatcher: false
+            )
+        }
+    }
+
+    private func startWatchingVault(at url: URL) {
+        watchSession?.invalidate()
+        watchSession = watcher.beginWatching(url: url) { [weak self] in
+            Task { @MainActor [weak self] in
+                await self?.handleWatchedVaultChange()
+            }
+        }
+        isLiveReloadEnabled = true
+    }
+
+    private func stopWatchingVault() {
+        watchSession?.invalidate()
+        watchSession = nil
+        isLiveReloadEnabled = false
+        pendingWatchedReload = false
+    }
+
+    private func handleWatchedVaultChange() async {
+        guard vaultURL != nil else { return }
+        guard isLoading == false else {
+            pendingWatchedReload = true
+            return
+        }
+
+        await reloadVault()
     }
 
 }

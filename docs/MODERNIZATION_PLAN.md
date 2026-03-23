@@ -21,6 +21,7 @@ The project already has:
 
 - a split core/macOS architecture
 - note parsing, lookup, search, and graph derivation
+- live vault watching and incremental reload foundations
 - reader and graph workspaces
 - synthetic vault tooling
 - documentation screenshot tooling
@@ -31,7 +32,7 @@ The project still lacks:
 
 - signed/notarized end-user distribution
 - full markdown and Obsidian fidelity
-- incremental indexing and live refresh
+- deeper incremental indexing and caching
 - accessibility hardening
 - UI regression coverage
 - operational polish for real public distribution
@@ -78,8 +79,8 @@ Work items:
 
 - formalize the render pipeline so parser output is easier to extend safely
 - decide whether to continue evolving the in-house parser or adopt a stronger markdown engine
-- add ordered lists, nested lists, task lists, and footnotes
-- improve frontmatter handling beyond stripping
+- add the next missing structural constructs beyond the new footnote support
+- deepen frontmatter handling beyond the current scalar and array extraction layer
 - improve advanced inline formatting combinations
 - add predictable fallback rendering for unsupported constructs
 
@@ -97,8 +98,8 @@ Primary outcome:
 
 Work items:
 
-- add file watching for vault changes
-- introduce incremental indexing instead of full rescans for small edits
+- deepen the new watcher flow into more selective change handling
+- introduce more granular incremental indexing instead of full rescans for small edits
 - add lightweight caching where it reduces repeated parse/index cost
 - profile startup, reload, and graph generation on large fixture vaults
 - improve search ranking and large-result navigation
@@ -162,12 +163,12 @@ If one maintainer is driving the next serious push, this is the recommended orde
 ### Days 31-60
 
 - choose the parser/renderer evolution strategy
-- land the first fidelity wave: ordered lists, task lists, nested lists, better frontmatter handling
+- land the first fidelity wave: ordered lists, task lists, nested lists, structured frontmatter
 - add regression fixtures that cover those constructs
 
 ### Days 61-90
 
-- add file watching or incremental reload foundations
+- deepen the new file-watching and incremental reload foundations
 - improve graph interaction and layout quality
 - begin accessibility and UI-regression work
 

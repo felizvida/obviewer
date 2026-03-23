@@ -67,6 +67,10 @@ struct ReaderView: View {
                     metricPill(systemImage: "tag", text: tag)
                 }
             }
+
+            if note.frontmatter.isEmpty == false {
+                FrontmatterSummaryCard(frontmatter: note.frontmatter)
+            }
         }
     }
 
@@ -116,31 +120,16 @@ struct ReaderView: View {
             )
             .lineSpacing(7)
 
-        case .bulletList(let items):
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                    HStack(alignment: .top, spacing: 12) {
-                        Circle()
-                            .fill(Color.black.opacity(0.72))
-                            .frame(width: 6, height: 6)
-                            .padding(.top, 11)
-
-                        RichTextView(
-                            text: item,
-                            size: 20,
-                            weight: .regular,
-                            design: .serif,
-                            onNavigate: onNavigate,
-                            onOpenAttachment: openAttachment(path:),
-                            onOpenAnchor: { scroll(to: $0, using: proxy) },
-                            onSelectTag: onSelectTag,
-                            inlineImageResolver: resolveInlineImage(path:alt:sizeHint:),
-                            onOpenInlineImage: presentInlineImage(path:alt:sizeHint:)
-                        )
-                        .lineSpacing(6)
-                    }
-                }
-            }
+        case .list(let items):
+            ListBlockView(
+                items: items,
+                onNavigate: onNavigate,
+                onOpenAttachment: openAttachment(path:),
+                onOpenAnchor: { scroll(to: $0, using: proxy) },
+                onSelectTag: onSelectTag,
+                inlineImageResolver: resolveInlineImage(path:alt:sizeHint:),
+                onOpenInlineImage: presentInlineImage(path:alt:sizeHint:)
+            )
 
         case .quote(let text):
             HStack(alignment: .top, spacing: 16) {
@@ -244,6 +233,23 @@ struct ReaderView: View {
 
         case .image(let path, let alt, let sizeHint):
             imageBlock(path: path, alt: alt, sizeHint: sizeHint)
+
+        case .unsupported(let block):
+            UnsupportedBlockView(
+                block: block,
+                onOpenAttachment: openAttachment(path:)
+            )
+
+        case .footnotes(let items):
+            FootnotesBlockView(
+                items: items,
+                onNavigate: onNavigate,
+                onOpenAttachment: openAttachment(path:),
+                onOpenAnchor: { scroll(to: $0, using: proxy) },
+                onSelectTag: onSelectTag,
+                inlineImageResolver: resolveInlineImage(path:alt:sizeHint:),
+                onOpenInlineImage: presentInlineImage(path:alt:sizeHint:)
+            )
 
         case .divider:
             Divider()
@@ -512,6 +518,165 @@ struct ReaderView: View {
     }
 }
 
+private struct FrontmatterSummaryCard: View {
+    let frontmatter: NoteFrontmatter
+
+    private let columns = [
+        GridItem(.flexible(minimum: 180), spacing: 14, alignment: .topLeading),
+        GridItem(.flexible(minimum: 180), spacing: 14, alignment: .topLeading),
+    ]
+
+    private var displayEntries: [FrontmatterEntry] {
+        frontmatter.displayEntries(limit: 6)
+    }
+
+    var body: some View {
+        if displayEntries.isEmpty == false {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Metadata")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
+
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+                    ForEach(displayEntries, id: \.key) { entry in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(entry.key.uppercased())
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color.black.opacity(0.46))
+
+                            Text(entry.value.displayText)
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .foregroundStyle(Color.black.opacity(0.78))
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(Color.white.opacity(0.62))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(Color.black.opacity(0.05), lineWidth: 1)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct ListBlockView: View {
+    let items: [RenderListItem]
+    let onNavigate: (String, String?) -> Void
+    let onOpenAttachment: (String) -> Void
+    let onOpenAnchor: (String) -> Void
+    let onSelectTag: (String) -> Void
+    let inlineImageResolver: (String, String?, ImageSizeHint?) -> ResolvedInlineImage?
+    let onOpenInlineImage: (String, String?, ImageSizeHint?) -> Void
+
+    var body: some View {
+        ListItemsGroupView(
+            items: items,
+            level: 0,
+            onNavigate: onNavigate,
+            onOpenAttachment: onOpenAttachment,
+            onOpenAnchor: onOpenAnchor,
+            onSelectTag: onSelectTag,
+            inlineImageResolver: inlineImageResolver,
+            onOpenInlineImage: onOpenInlineImage
+        )
+    }
+}
+
+private struct ListItemsGroupView: View {
+    let items: [RenderListItem]
+    let level: Int
+    let onNavigate: (String, String?) -> Void
+    let onOpenAttachment: (String) -> Void
+    let onOpenAnchor: (String) -> Void
+    let onSelectTag: (String) -> Void
+    let inlineImageResolver: (String, String?, ImageSizeHint?) -> ResolvedInlineImage?
+    let onOpenInlineImage: (String, String?, ImageSizeHint?) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .top, spacing: 12) {
+                        markerView(for: item.marker)
+                            .frame(width: 28, alignment: .trailing)
+                            .padding(.top, markerTopPadding(for: item.marker))
+
+                        RichTextView(
+                            text: item.text,
+                            size: 20,
+                            weight: .regular,
+                            design: .serif,
+                            onNavigate: onNavigate,
+                            onOpenAttachment: onOpenAttachment,
+                            onOpenAnchor: onOpenAnchor,
+                            onSelectTag: onSelectTag,
+                            inlineImageResolver: inlineImageResolver,
+                            onOpenInlineImage: onOpenInlineImage
+                        )
+                        .lineSpacing(6)
+                    }
+
+                    if item.children.isEmpty == false {
+                        ListItemsGroupView(
+                            items: item.children,
+                            level: level + 1,
+                            onNavigate: onNavigate,
+                            onOpenAttachment: onOpenAttachment,
+                            onOpenAnchor: onOpenAnchor,
+                            onSelectTag: onSelectTag,
+                            inlineImageResolver: inlineImageResolver,
+                            onOpenInlineImage: onOpenInlineImage
+                        )
+                        .padding(.leading, 30)
+                    }
+                }
+            }
+        }
+        .padding(.leading, CGFloat(level) * 6)
+    }
+
+    @ViewBuilder
+    private func markerView(for marker: RenderListMarker) -> some View {
+        switch marker {
+        case .unordered:
+            Circle()
+                .fill(Color.black.opacity(0.72))
+                .frame(width: 6, height: 6)
+        case .ordered(let number):
+            Text("\(number).")
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(Color.black.opacity(0.72))
+        case .task(let isCompleted):
+            Image(systemName: isCompleted ? "checkmark.square.fill" : "square")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(
+                    isCompleted
+                        ? Color(red: 0.21, green: 0.58, blue: 0.37)
+                        : Color.black.opacity(0.55)
+                )
+        }
+    }
+
+    private func markerTopPadding(for marker: RenderListMarker) -> CGFloat {
+        switch marker {
+        case .unordered:
+            return 11
+        case .ordered:
+            return 4
+        case .task:
+            return 5
+        }
+    }
+}
+
 private struct PresentedAttachmentImage: Identifiable {
     let id: String
     let attachment: VaultAttachment
@@ -728,6 +893,96 @@ private struct TableBlockView: View {
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(Color.white.opacity(0.64))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.black.opacity(0.06), lineWidth: 1)
+        )
+    }
+}
+
+private struct UnsupportedBlockView: View {
+    let block: UnsupportedBlock
+    let onOpenAttachment: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label(block.title, systemImage: "sparkles.rectangle.stack")
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(Color.black.opacity(0.76))
+
+            Text(block.body)
+                .font(.system(size: 16, weight: .medium, design: .serif))
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            if let attachmentPath = block.attachmentPath {
+                Button {
+                    onOpenAttachment(attachmentPath)
+                } label: {
+                    Label("Open Attachment", systemImage: "paperclip")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color(red: 0.96, green: 0.92, blue: 0.82).opacity(0.92))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color(red: 0.55, green: 0.43, blue: 0.19).opacity(0.18), lineWidth: 1)
+        )
+    }
+}
+
+private struct FootnotesBlockView: View {
+    let items: [FootnoteItem]
+    let onNavigate: (String, String?) -> Void
+    let onOpenAttachment: (String) -> Void
+    let onOpenAnchor: (String) -> Void
+    let onSelectTag: (String) -> Void
+    let inlineImageResolver: (String, String?, ImageSizeHint?) -> ResolvedInlineImage?
+    let onOpenInlineImage: (String, String?, ImageSizeHint?) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Footnotes")
+                .font(.system(size: 22, weight: .bold, design: .serif))
+
+            ForEach(items) { item in
+                HStack(alignment: .top, spacing: 14) {
+                    Text("[\(item.label)]")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 38, alignment: .trailing)
+                        .padding(.top, 5)
+
+                    RichTextView(
+                        text: item.text,
+                        size: 17,
+                        weight: .regular,
+                        design: .serif,
+                        color: Color.black.opacity(0.78),
+                        onNavigate: onNavigate,
+                        onOpenAttachment: onOpenAttachment,
+                        onOpenAnchor: onOpenAnchor,
+                        onSelectTag: onSelectTag,
+                        inlineImageResolver: inlineImageResolver,
+                        onOpenInlineImage: onOpenInlineImage
+                    )
+                    .id(item.id)
+                }
+            }
+        }
+        .padding(22)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white.opacity(0.6))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)

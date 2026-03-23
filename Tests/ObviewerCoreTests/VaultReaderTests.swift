@@ -80,6 +80,62 @@ final class VaultReaderTests: XCTestCase {
         XCTAssertNil(snapshot.attachment(for: ".secret.png"))
     }
 
+    func testReloadVaultReusesUnchangedNotesFromPreviousSnapshot() throws {
+        let sandbox = try TemporaryVault()
+        defer { sandbox.cleanup() }
+
+        try sandbox.write(
+            "Projects/Plan.md",
+            contents: """
+            # Plan
+
+            Original disk content.
+            """
+        )
+
+        let fileURL = sandbox.rootURL.appending(path: "Projects/Plan.md")
+        let modifiedAt = try XCTUnwrap(
+            fileURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        )
+
+        let previousSnapshot = VaultSnapshot(
+            rootURL: sandbox.rootURL,
+            notes: [
+                VaultNote(
+                    id: "Projects/Plan.md",
+                    title: "Reused Snapshot Title",
+                    relativePath: "Projects/Plan.md",
+                    folderPath: "Projects",
+                    previewText: "Reused snapshot preview",
+                    frontmatter: NoteFrontmatter(
+                        entries: [
+                            FrontmatterEntry(key: "status", value: .string("cached")),
+                        ]
+                    ),
+                    tags: ["cached"],
+                    outboundLinks: [],
+                    tableOfContents: [],
+                    blocks: [.paragraph(text: .plain("Reused snapshot body"))],
+                    wordCount: 3,
+                    readingTimeMinutes: 1,
+                    modifiedAt: modifiedAt
+                ),
+            ],
+            attachments: []
+        )
+
+        let snapshot = try VaultReader().reloadVault(
+            at: sandbox.rootURL,
+            previousSnapshot: previousSnapshot
+        )
+
+        let note = try XCTUnwrap(snapshot.note(withID: "Projects/Plan.md"))
+        XCTAssertEqual(note.title, "Reused Snapshot Title")
+        XCTAssertEqual(note.previewText, "Reused snapshot preview")
+        XCTAssertEqual(note.tags, ["cached"])
+        XCTAssertEqual(note.frontmatter.value(for: "status"), .string("cached"))
+    }
+
     func testLoadLargeGeneratedVaultExercisesRealObsidianFeatures() throws {
         let fixture = try TemporaryDemoVault(profile: .integration)
         defer { fixture.cleanup() }
@@ -260,15 +316,23 @@ private func richTexts(in block: RenderBlock) -> [RichText] {
         return [text]
     case .paragraph(let text):
         return [text]
-    case .bulletList(let items):
-        return items
+    case .list(let items):
+        return listRichTexts(in: items)
     case .quote(let text):
         return [text]
     case .callout(_, let title, let body):
         return [title, body]
     case .table(let headers, let rows):
         return headers + rows.flatMap { $0 }
-    case .code, .image, .divider:
+    case .footnotes(let items):
+        return items.map(\.text)
+    case .code, .image, .unsupported, .divider:
         return []
+    }
+}
+
+private func listRichTexts(in items: [RenderListItem]) -> [RichText] {
+    items.flatMap { item in
+        [item.text] + listRichTexts(in: item.children)
     }
 }

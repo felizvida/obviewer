@@ -30,6 +30,48 @@ final class ObsidianParserTests: XCTestCase {
         )
     }
 
+    func testParserExtractsStructuredFrontmatterAndMergesFrontmatterTags() {
+        let markdown = """
+        ---
+        title: Launch Dashboard
+        aliases:
+          - Control Center
+          - Release Home
+        tags: [reader, launch]
+        status: active
+        priority: 3
+        featured: true
+        owner: "Platform Experience"
+        ---
+
+        Body with #beta.
+        """
+
+        let result = ObsidianParser().parse(markdown: markdown, fallbackTitle: "Fallback")
+
+        XCTAssertEqual(result.title, "Launch Dashboard")
+        XCTAssertEqual(result.frontmatter.aliases, ["Control Center", "Release Home"])
+        XCTAssertEqual(result.frontmatter.value(for: "status"), .string("active"))
+        XCTAssertEqual(result.frontmatter.value(for: "priority"), .number(3))
+        XCTAssertEqual(result.frontmatter.value(for: "featured"), .bool(true))
+        XCTAssertEqual(result.frontmatter.value(for: "owner"), .string("Platform Experience"))
+        XCTAssertEqual(result.tags, ["reader", "launch", "beta"])
+    }
+
+    func testParserUsesFrontmatterTitleForPreviewWhenBodyIsEmpty() {
+        let markdown = """
+        ---
+        title: Metadata Only Note
+        status: archived
+        ---
+        """
+
+        let result = ObsidianParser().parse(markdown: markdown, fallbackTitle: "Fallback")
+
+        XCTAssertEqual(result.title, "Metadata Only Note")
+        XCTAssertEqual(result.previewText, "Metadata Only Note")
+    }
+
     func testParserExtractsTitleLinksAndTags() {
         let markdown = """
         ---
@@ -51,6 +93,12 @@ final class ObsidianParserTests: XCTestCase {
         XCTAssertEqual(result.tags, ["research"])
         XCTAssertEqual(result.blocks.count, 3)
         XCTAssertEqual(result.tableOfContents.map(\.title), ["Reader Note"])
+        XCTAssertTrue(result.blocks.contains { block in
+            guard case .list(let items) = block else { return false }
+            return items.count == 2
+                && items.allSatisfy { if case .unordered = $0.marker { return true } else { return false } }
+                && items.map(\.text.plainText) == ["First bullet", "Second bullet"]
+        })
     }
 
     func testParserRecognizesCalloutsAndStandaloneImagesWithSizingHints() {
@@ -231,5 +279,118 @@ final class ObsidianParserTests: XCTestCase {
         let result = ObsidianParser().parse(markdown: markdown, fallbackTitle: "Fallback")
 
         XCTAssertEqual(result.outboundLinks, ["Daily", "Note.md"])
+    }
+
+    func testParserBuildsOrderedTaskAndNestedLists() {
+        let markdown = """
+        3. Ship beta
+        4. Verify rollout
+           - Capture screenshots
+           - Update notes
+        - [ ] Follow up with design
+        - [x] Confirm read-only guarantee
+        """
+
+        let result = ObsidianParser().parse(markdown: markdown, fallbackTitle: "Fallback")
+
+        guard case .list(let items)? = result.blocks.first else {
+            return XCTFail("Expected first block to be a list")
+        }
+
+        XCTAssertEqual(items.count, 4)
+
+        XCTAssertEqual(items[0].marker, .ordered(3))
+        XCTAssertEqual(items[0].text.plainText, "Ship beta")
+        XCTAssertTrue(items[0].children.isEmpty)
+
+        XCTAssertEqual(items[1].marker, .ordered(4))
+        XCTAssertEqual(items[1].text.plainText, "Verify rollout")
+        XCTAssertEqual(items[1].children.count, 2)
+        XCTAssertEqual(items[1].children.map(\.marker), [.unordered, .unordered])
+        XCTAssertEqual(items[1].children.map(\.text.plainText), ["Capture screenshots", "Update notes"])
+
+        XCTAssertEqual(items[2].marker, .task(isCompleted: false))
+        XCTAssertEqual(items[2].text.plainText, "Follow up with design")
+
+        XCTAssertEqual(items[3].marker, .task(isCompleted: true))
+        XCTAssertEqual(items[3].text.plainText, "Confirm read-only guarantee")
+    }
+
+    func testParserTreatsIndentedContinuationLinesAsPartOfSameListItem() {
+        let markdown = """
+        - Reader baseline
+          Includes follow-up detail on the next line.
+          And one more continuation sentence.
+        """
+
+        let result = ObsidianParser().parse(markdown: markdown, fallbackTitle: "Fallback")
+
+        guard case .list(let items)? = result.blocks.first else {
+            return XCTFail("Expected first block to be a list")
+        }
+
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(
+            items[0].text.plainText,
+            "Reader baseline Includes follow-up detail on the next line. And one more continuation sentence."
+        )
+    }
+
+    func testParserBuildsFootnoteReferencesAndSection() {
+        let markdown = """
+        Reader note with a footnote[^alpha].
+
+        [^alpha]: Footnote detail with [[Plan]] and #research.
+        """
+
+        let result = ObsidianParser().parse(markdown: markdown, fallbackTitle: "Fallback")
+
+        XCTAssertEqual(result.outboundLinks, ["Plan"])
+        XCTAssertEqual(result.tags, ["research"])
+
+        XCTAssertTrue(result.blocks.contains { block in
+            guard case .paragraph(let text) = block else { return false }
+            return text.runs.contains { run in
+                if case .link(let label, let destination) = run {
+                    return label == "[alpha]" && destination == .anchor("footnote-alpha")
+                }
+                return false
+            }
+        })
+
+        XCTAssertTrue(result.blocks.contains { block in
+            guard case .footnotes(let items) = block else { return false }
+            return items.count == 1
+                && items[0].id == "footnote-alpha"
+                && items[0].label == "alpha"
+                && items[0].text.plainText == "Footnote detail with Plan and #research."
+        })
+    }
+
+    func testParserCreatesUnsupportedFallbackBlocksForMermaidAndStandaloneMediaEmbeds() {
+        let markdown = """
+        ```mermaid
+        graph TD
+          A --> B
+        ```
+
+        ![[manual.pdf]]
+        """
+
+        let result = ObsidianParser().parse(markdown: markdown, fallbackTitle: "Fallback")
+
+        XCTAssertTrue(result.blocks.contains { block in
+            guard case .unsupported(let unsupported) = block else { return false }
+            return unsupported.title == "Mermaid Diagram Preview Unavailable"
+                && unsupported.body.contains("graph TD")
+                && unsupported.attachmentPath == nil
+        })
+
+        XCTAssertTrue(result.blocks.contains { block in
+            guard case .unsupported(let unsupported) = block else { return false }
+            return unsupported.title == "Embedded PDF Preview Unavailable"
+                && unsupported.body == "manual.pdf"
+                && unsupported.attachmentPath == "manual.pdf"
+        })
     }
 }

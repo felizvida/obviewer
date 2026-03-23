@@ -24,10 +24,24 @@ public protocol VaultLoading: Sendable {
         at url: URL,
         progress: (@Sendable (VaultLoadingProgress) -> Void)?
     ) throws -> VaultSnapshot
+
+    func reloadVault(
+        at url: URL,
+        previousSnapshot: VaultSnapshot?,
+        progress: (@Sendable (VaultLoadingProgress) -> Void)?
+    ) throws -> VaultSnapshot
 }
 
 public extension VaultLoading {
     func loadVault(at url: URL) throws -> VaultSnapshot {
         try loadVault(at: url, progress: nil)
+    }
+
+    func reloadVault(
+        at url: URL,
+        previousSnapshot: VaultSnapshot?,
+        progress: (@Sendable (VaultLoadingProgress) -> Void)? = nil
+    ) throws -> VaultSnapshot {
+        try loadVault(at: url, progress: progress)
     }
 }
