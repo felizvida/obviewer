@@ -64,3 +64,30 @@ jobs:
 
       - name: Confirm generated project
         run: test -d Obviewer.xcodeproj
+
+  benchmark-smoke:
+    name: Benchmark Smoke Guardrail
+    runs-on: macos-15
+    needs:
+      - swift-package
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run smoke benchmark budget
+        run: |
+          mkdir -p build/reports
+          PROFILE=smoke \
+          FORMAT=json \
+          OUTPUT=build/reports/benchmark-smoke.json \
+          BUDGET=Configuration/benchmark-smoke-budget.json \
+          make benchmark-vault
+
+      - name: Upload benchmark artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-smoke-report
+          path: build/reports/benchmark-smoke.json

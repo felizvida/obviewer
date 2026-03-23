@@ -82,6 +82,8 @@ private struct CLIOptions {
             return .showcase
         case "integration":
             return .integration
+        case "benchmark":
+            return .benchmark
         default:
             throw CLIError.unknownProfile(value)
         }
@@ -100,7 +102,7 @@ private enum CLIError: LocalizedError {
         case .unsupportedArgument(let argument):
             return "Unsupported argument: \(argument)"
         case .unknownProfile(let value):
-            return "Unknown profile '\(value)'. Use smoke, showcase, or integration."
+            return "Unknown profile '\(value)'. Use smoke, showcase, integration, or benchmark."
         }
     }
 }

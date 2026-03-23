@@ -63,6 +63,17 @@ public struct DemoVaultProfile: Hashable, Sendable {
         meetingWeekCount: 8,
         galleryImageCount: 6
     )
+
+    public static let benchmark = DemoVaultProfile(
+        name: "benchmark",
+        sprintCountPerProject: 40,
+        decisionCountPerProject: 24,
+        architectureNoteCount: 48,
+        swiftNoteCount: 48,
+        journalEntryCount: 180,
+        meetingWeekCount: 20,
+        galleryImageCount: 12
+    )
 }
 
 public struct DemoVaultManifest: Hashable, Sendable {

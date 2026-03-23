@@ -146,8 +146,30 @@ Coverage is still weak around:
 
 - UI snapshots
 - accessibility behavior
-- performance benchmarks
+- enforced performance thresholds in CI
 - end-to-end signed distribution validation
+
+The repo now does include a manual benchmark path for large-vault profiling:
+
+```bash
+make benchmark-vault
+```
+
+Useful variants:
+
+```bash
+PROFILE=integration make benchmark-vault
+VAULT=/absolute/path/to/YourVault make benchmark-vault
+FORMAT=json make benchmark-vault
+PROFILE=smoke BUDGET=Configuration/benchmark-smoke-budget.json make benchmark-vault
+```
+
+Notes:
+
+- synthetic generated-vault runs measure cold load, warm reload, selective reload, search, and graph query work
+- existing-vault runs stay read-only and skip the selective-reload mutation step
+- the smoke profile can now run as a pass/fail CI guardrail through `Configuration/benchmark-smoke-budget.json`
+- larger-profile runs are still for profiling and regression investigation, not hard CI gates yet
 
 ## CI And Release Automation
 

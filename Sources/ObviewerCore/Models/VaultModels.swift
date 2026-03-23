@@ -94,6 +94,134 @@ public struct VaultSnapshot: Sendable {
             note.searchCorpus.contains(normalizedQuery)
         }
     }
+
+    public func indexDiagnostics(topFolderCount: Int = 8) -> VaultIndexDiagnostics {
+        var folderCounts = [String: (notes: Int, attachments: Int)]()
+        for note in notes {
+            folderCounts[note.folderPath, default: (0, 0)].notes += 1
+        }
+        for attachment in attachments {
+            let folder = displayFolderPath(for: attachment.relativePath)
+            folderCounts[folder, default: (0, 0)].attachments += 1
+        }
+
+        let attachmentKindCounts = Dictionary(grouping: attachments, by: \.kind)
+            .map { kind, matches in
+                VaultAttachmentKindSummary(kind: kind, count: matches.count)
+            }
+            .sorted { lhs, rhs in
+                if lhs.count != rhs.count {
+                    return lhs.count > rhs.count
+                }
+                return lhs.kind.rawValue.localizedCaseInsensitiveCompare(rhs.kind.rawValue) == .orderedAscending
+            }
+
+        let largestFolders = folderCounts.map { folderPath, counts in
+            VaultFolderIndexSummary(
+                folderPath: folderPath,
+                noteCount: counts.notes,
+                attachmentCount: counts.attachments
+            )
+        }.sorted { lhs, rhs in
+            if lhs.totalFileCount != rhs.totalFileCount {
+                return lhs.totalFileCount > rhs.totalFileCount
+            }
+            return lhs.folderPath.localizedCaseInsensitiveCompare(rhs.folderPath) == .orderedAscending
+        }
+
+        let uniqueTags = Set(notes.flatMap(\.tags))
+        let totalWordCount = notes.reduce(0) { $0 + $1.wordCount }
+        let totalOutboundLinkCount = notes.reduce(0) { $0 + $1.outboundLinks.count }
+        let noteCount = notes.count
+
+        return VaultIndexDiagnostics(
+            totalFileCount: notes.count + attachments.count,
+            noteCount: notes.count,
+            attachmentCount: attachments.count,
+            folderCount: Set(folderCounts.keys.filter { $0.isEmpty == false }).count,
+            uniqueTagCount: uniqueTags.count,
+            graphNodeCount: noteGraph.nodes.count,
+            graphEdgeCount: noteGraph.edges.count,
+            totalWordCount: totalWordCount,
+            averageWordsPerNote: noteCount == 0 ? 0 : Double(totalWordCount) / Double(noteCount),
+            averageOutboundLinksPerNote: noteCount == 0 ? 0 : Double(totalOutboundLinkCount) / Double(noteCount),
+            attachmentKindCounts: attachmentKindCounts,
+            largestFolders: Array(largestFolders.prefix(max(topFolderCount, 0)))
+        )
+    }
+}
+
+public struct VaultIndexDiagnostics: Hashable, Sendable, Codable {
+    public let totalFileCount: Int
+    public let noteCount: Int
+    public let attachmentCount: Int
+    public let folderCount: Int
+    public let uniqueTagCount: Int
+    public let graphNodeCount: Int
+    public let graphEdgeCount: Int
+    public let totalWordCount: Int
+    public let averageWordsPerNote: Double
+    public let averageOutboundLinksPerNote: Double
+    public let attachmentKindCounts: [VaultAttachmentKindSummary]
+    public let largestFolders: [VaultFolderIndexSummary]
+
+    public init(
+        totalFileCount: Int,
+        noteCount: Int,
+        attachmentCount: Int,
+        folderCount: Int,
+        uniqueTagCount: Int,
+        graphNodeCount: Int,
+        graphEdgeCount: Int,
+        totalWordCount: Int,
+        averageWordsPerNote: Double,
+        averageOutboundLinksPerNote: Double,
+        attachmentKindCounts: [VaultAttachmentKindSummary],
+        largestFolders: [VaultFolderIndexSummary]
+    ) {
+        self.totalFileCount = totalFileCount
+        self.noteCount = noteCount
+        self.attachmentCount = attachmentCount
+        self.folderCount = folderCount
+        self.uniqueTagCount = uniqueTagCount
+        self.graphNodeCount = graphNodeCount
+        self.graphEdgeCount = graphEdgeCount
+        self.totalWordCount = totalWordCount
+        self.averageWordsPerNote = averageWordsPerNote
+        self.averageOutboundLinksPerNote = averageOutboundLinksPerNote
+        self.attachmentKindCounts = attachmentKindCounts
+        self.largestFolders = largestFolders
+    }
+}
+
+public struct VaultAttachmentKindSummary: Hashable, Sendable, Codable {
+    public let kind: VaultAttachment.Kind
+    public let count: Int
+
+    public init(kind: VaultAttachment.Kind, count: Int) {
+        self.kind = kind
+        self.count = count
+    }
+}
+
+public struct VaultFolderIndexSummary: Hashable, Sendable, Codable {
+    public let folderPath: String
+    public let noteCount: Int
+    public let attachmentCount: Int
+
+    public init(folderPath: String, noteCount: Int, attachmentCount: Int) {
+        self.folderPath = folderPath
+        self.noteCount = noteCount
+        self.attachmentCount = attachmentCount
+    }
+
+    public var totalFileCount: Int {
+        noteCount + attachmentCount
+    }
+
+    public var displayName: String {
+        folderPath.isEmpty ? "Vault Root" : folderPath
+    }
 }
 
 public struct NoteGraph: Sendable {
@@ -806,6 +934,12 @@ private func folderPath(for relativePath: String) -> String {
     let folder = (relativePath as NSString).deletingLastPathComponent
     guard folder != "." else { return "" }
     return normalizeVaultReference(folder)
+}
+
+private func displayFolderPath(for relativePath: String) -> String {
+    let folder = (relativePath as NSString).deletingLastPathComponent
+    guard folder != "." else { return "" }
+    return folder
 }
 
 private func normalizedTags(from value: FrontmatterValue?) -> [String] {

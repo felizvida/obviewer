@@ -21,7 +21,7 @@ enum FixtureToolError: LocalizedError {
         case .missingValue(let flag):
             return "Missing value for \(flag)."
         case .unknownProfile(let profile):
-            return "Unknown profile '\(profile)'. Use smoke, showcase, or integration."
+            return "Unknown profile '\(profile)'. Use smoke, showcase, integration, or benchmark."
         }
     }
 }
@@ -82,6 +82,8 @@ private func profileValue(for value: String) throws -> DemoVaultProfile {
         return .showcase
     case "integration":
         return .integration
+    case "benchmark":
+        return .benchmark
     default:
         throw FixtureToolError.unknownProfile(value)
     }

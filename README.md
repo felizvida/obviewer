@@ -29,6 +29,8 @@ The project is already a working prototype, not just a sketch. It has a portable
 - Reader workspace with metadata, linked-note navigation, and a contents rail
 - Graph workspace with local and global graph views
 - Rich synthetic-vault tooling for realistic manual testing
+- Large-vault benchmark tooling with index diagnostics for cold load, warm reload, selective reload, search, and graph query profiling
+- CI smoke benchmark guardrail with a checked-in performance budget
 - Documentation screenshot generation from the real app
 - Green CI on `macos-14` and `macos-15`
 
@@ -61,6 +63,20 @@ make demo-vault
 ```
 
 That generates `build/SampleVault`, which includes nested folders, duplicate filenames, shared and local attachments, tags, tables, links, images, and graph-friendly note relationships.
+
+If you want a repeatable performance read on the synthetic large-vault path:
+
+```bash
+make benchmark-vault
+```
+
+That runs the benchmark fixture profile and prints index diagnostics plus timings for cold load, warm reload, selective reload, search, and graph queries.
+
+For the same path that CI enforces, use:
+
+```bash
+PROFILE=smoke BUDGET=Configuration/benchmark-smoke-budget.json make benchmark-vault
+```
 
 ## Current Distribution State
 

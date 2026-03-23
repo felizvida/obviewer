@@ -1,0 +1,15 @@
+{
+  "name": "smoke",
+  "minimumNoteCount": 60,
+  "minimumAttachmentCount": 10,
+  "minimumGraphNodeCount": 60,
+  "minimumGraphEdgeCount": 100,
+  "maximumTimingsMilliseconds": {
+    "cold-load": 2500,
+    "warm-reload": 1200,
+    "search-pass": 250,
+    "graph-global-subgraph": 250,
+    "graph-local-subgraph": 100,
+    "selective-reload": 1200
+  }
+}

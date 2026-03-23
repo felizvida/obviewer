@@ -147,19 +147,21 @@ Present:
 - selective incremental reload that applies changed, added, and removed file paths while reusing untouched note models
 - persistent warm-start snapshot cache that reuses parsed notes and attachment metadata across relaunches when files are unchanged
 - precomputed core search corpus for title/path/tag/preview/frontmatter matching
+- large-vault benchmark tooling with index diagnostics for cold load, warm reload, selective reload, search, and graph queries
+- smoke-profile benchmark budget enforcement in CI with a published JSON report artifact
 
 Still incomplete:
 
 - truly selective directory-level or file-level reindexing
 - persistent state beyond the current snapshot cache, such as larger indexed stores, ranking data, or richer file metadata
-- large-vault profiling
+- broader performance budgets beyond the smoke profile and historical benchmark tracking
 - caching and smarter search ranking
 
 ## Not Implemented Yet
 
 - notarized `.app` or `.dmg` release artifacts
 - App Store distribution
-- large-vault performance instrumentation
+- automated large-vault performance guardrails
 - UI snapshot testing
 - accessibility audit and VoiceOver tuning
 - PDF/audio/video reader surfaces
@@ -179,7 +181,7 @@ The repo is release-automated, but the published artifact is still source-only. 
 
 ### Risk 3: Performance ceiling
 
-The new watcher, selective reload path, warm-start snapshot cache, and precomputed search corpus improve both edits and cold launches, but the app still lacks deeper persistent indexing and more advanced scaling work for truly large vaults.
+The new watcher, selective reload path, warm-start snapshot cache, precomputed search corpus, and benchmark tooling improve both visibility and behavior, but the app still lacks deeper persistent indexing and automated performance guardrails for truly large vaults.
 
 ### Risk 4: UI verification gap
 

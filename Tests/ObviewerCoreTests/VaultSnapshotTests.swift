@@ -216,6 +216,66 @@ final class VaultSnapshotTests: XCTestCase {
         XCTAssertEqual(snapshot.searchNotes(matching: "").map(\.id), ["One.md", "Two.md"])
         XCTAssertEqual(snapshot.searchNotes(matching: "   ").map(\.id), ["One.md", "Two.md"])
     }
+
+    func testIndexDiagnosticsSummarizesVaultShape() {
+        let snapshot = VaultSnapshot(
+            rootURL: URL(fileURLWithPath: "/tmp/obviewer-tests"),
+            notes: [
+                .fixture(
+                    relativePath: "Projects/Plan.md",
+                    title: "Launch Plan",
+                    tags: ["roadmap", "alpha"],
+                    outboundLinks: ["Projects/Today"],
+                    wordCount: 120
+                ),
+                .fixture(
+                    relativePath: "Projects/Today.md",
+                    title: "Today",
+                    tags: ["alpha"],
+                    wordCount: 80
+                ),
+                .fixture(
+                    relativePath: "Journal/Today.md",
+                    title: "Journal Today",
+                    tags: ["journal"],
+                    wordCount: 40
+                ),
+                .fixture(
+                    relativePath: "Root.md",
+                    title: "Root",
+                    wordCount: 10
+                ),
+            ],
+            attachments: [
+                .fixture(relativePath: "Projects/cover.png", kind: .image),
+                .fixture(relativePath: "Assets/manual.pdf", kind: .pdf),
+            ]
+        )
+
+        let diagnostics = snapshot.indexDiagnostics(topFolderCount: 3)
+
+        XCTAssertEqual(diagnostics.totalFileCount, 6)
+        XCTAssertEqual(diagnostics.noteCount, 4)
+        XCTAssertEqual(diagnostics.attachmentCount, 2)
+        XCTAssertEqual(diagnostics.folderCount, 3)
+        XCTAssertEqual(diagnostics.uniqueTagCount, 3)
+        XCTAssertEqual(diagnostics.graphNodeCount, 4)
+        XCTAssertEqual(diagnostics.graphEdgeCount, 1)
+        XCTAssertEqual(diagnostics.totalWordCount, 250)
+        XCTAssertEqual(diagnostics.averageWordsPerNote, 62.5, accuracy: 0.001)
+        XCTAssertEqual(diagnostics.averageOutboundLinksPerNote, 0.25, accuracy: 0.001)
+        XCTAssertEqual(
+            diagnostics.attachmentKindCounts,
+            [
+                VaultAttachmentKindSummary(kind: .image, count: 1),
+                VaultAttachmentKindSummary(kind: .pdf, count: 1),
+            ]
+        )
+        XCTAssertEqual(diagnostics.largestFolders.first?.folderPath, "Projects")
+        XCTAssertEqual(diagnostics.largestFolders.first?.totalFileCount, 3)
+        XCTAssertEqual(diagnostics.largestFolders.first?.noteCount, 2)
+        XCTAssertEqual(diagnostics.largestFolders.first?.attachmentCount, 1)
+    }
 }
 
 private extension VaultNote {
@@ -225,6 +285,8 @@ private extension VaultNote {
         previewText: String? = nil,
         tags: [String] = [],
         frontmatter: NoteFrontmatter = NoteFrontmatter(),
+        outboundLinks: [String] = [],
+        wordCount: Int = 0,
         modifiedAt: Date = .distantPast
     ) -> VaultNote {
         VaultNote(
@@ -237,10 +299,10 @@ private extension VaultNote {
             previewText: previewText ?? title,
             frontmatter: frontmatter,
             tags: tags,
-            outboundLinks: [],
+            outboundLinks: outboundLinks,
             tableOfContents: [],
             blocks: [],
-            wordCount: 0,
+            wordCount: wordCount,
             readingTimeMinutes: 1,
             modifiedAt: modifiedAt
         )

@@ -29,6 +29,10 @@ let package = Package(
             targets: ["ObviewerDocsTool"]
         ),
         .executable(
+            name: "ObviewerBenchmarkTool",
+            targets: ["ObviewerBenchmarkTool"]
+        ),
+        .executable(
             name: "Obviewer",
             targets: ["Obviewer"]
         ),
@@ -51,6 +55,10 @@ let package = Package(
         .executableTarget(
             name: "ObviewerDocsTool",
             dependencies: ["ObviewerMacApp", "ObviewerFixtureSupport"]
+        ),
+        .executableTarget(
+            name: "ObviewerBenchmarkTool",
+            dependencies: ["ObviewerCore", "ObviewerFixtureSupport"]
         ),
         .executableTarget(
             name: "Obviewer",

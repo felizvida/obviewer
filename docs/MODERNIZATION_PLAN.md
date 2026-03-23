@@ -25,6 +25,8 @@ The project already has:
 - persistent warm-start snapshot caching for unchanged parsed notes and attachment metadata
 - reader and graph workspaces
 - synthetic vault tooling
+- large-vault benchmark tooling and index diagnostics
+- smoke-profile benchmark budget enforcement in CI
 - documentation screenshot tooling
 - local and CI verification
 - tag-driven source releases
@@ -102,14 +104,15 @@ Work items:
 - deepen the new watcher flow into broader change coverage and recovery behavior
 - introduce more granular incremental indexing and caching beyond the current path-aware selective reloads
 - add lightweight caching where it reduces repeated parse/index cost
-- profile startup, reload, and graph generation on large fixture vaults
+- deepen the new benchmark tooling into tracked startup, reload, and graph baselines on large fixture vaults
 - improve search ranking and large-result navigation
 
 Exit criteria:
 
 - vault reloads are perceptibly faster on large fixture vaults
 - file changes can refresh the UI without a full reopen flow
-- the app exposes enough profiling signals to reason about regressions
+- the app exposes enough profiling signals to reason about regressions and future budgets
+- at least one benchmark profile is enforced automatically in CI
 
 ## Phase 4: Reader, Graph, And Media Polish
 
