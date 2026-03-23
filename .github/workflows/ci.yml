@@ -87,7 +87,7 @@ jobs:
           make benchmark-vault
 
       - name: Upload benchmark artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-smoke-report
           path: build/reports/benchmark-smoke.json
