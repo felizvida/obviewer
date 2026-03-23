@@ -1,28 +1,29 @@
 # Visual Tour
 
-This page is the fastest way to understand what Obviewer is trying to feel like before you run the app yourself.
+This page is the fastest way to understand how Obviewer feels before you run it yourself.
 
-The screenshots on this page are generated from the current SwiftUI app against the synthetic showcase vault created by the repository tooling. They are not hand-made mockups.
+The screenshots below are generated from the real SwiftUI app against the synthetic showcase vault produced by the repo tooling. They are not hand-made mockups.
 
 ## What You Are Looking At
 
-Obviewer is trying to combine three ideas in one surface:
+Obviewer is trying to combine four ideas in one product:
 
-- A trustworthy read-only vault browser
-- A calmer, more editorial reading experience than raw markdown files
+- a trustworthy read-only vault browser
+- a calmer, more editorial reading experience than raw markdown files
 - Obsidian-aware navigation for real local note structures
+- a visual system that feels deliberate and macOS-native rather than generic
 
 ## Library Overview
 
 ![Library overview](./images/visual-tour-library-home.png)
 
-The main window combines a folder-grouped library sidebar with a wide reading surface. The home note shows the current design language clearly: warm backgrounds, rounded chrome, serif-led note typography, and metadata that stays secondary to the note body.
+The main window combines a folder-grouped library sidebar with a wide reading surface. The opening note shows the current design language clearly: warm backgrounds, rounded chrome, serif-led note typography, and metadata that stays secondary to the note body.
 
 ## Project Reading View
 
 ![Project overview note](./images/visual-tour-project-overview.png)
 
-A project note demonstrates the richer Obsidian-aware rendering path: callouts, tables, inline links, attachment links, image embeds, and the right-side contents rail for long-form reading. This is the core “reading room” experience the product is aiming for.
+The project note shows the more ambitious reading path: callouts, tables, inline links, attachment links, image embeds, and the right-side contents rail. This is the core reading-room experience the project is aiming to mature.
 
 ## Tag-Focused Search
 
@@ -30,17 +31,27 @@ A project note demonstrates the richer Obsidian-aware rendering path: callouts, 
 
 Search narrows the sidebar without collapsing the reading flow. In this example, a tag query focuses the library on `#alpha` notes while keeping the selected note open in the detail pane.
 
+## What The Tour Does Not Fully Capture Yet
+
+The current screenshots emphasize the most mature reader-first surfaces. The app also includes:
+
+- a local/global graph workspace
+- inline image sizing and lightbox behavior
+- generated demo-vault content with duplicate names and attachment-heavy flows
+
+Those areas should be part of future visual refreshes as the product modernizes.
+
 ## Why The Screenshots Use A Synthetic Vault
 
 The demo vault is intentional. It gives the project a stable way to validate:
 
-- Large folder structures
-- Duplicate filenames like `Daily.md` and `Index.md`
-- Folder-local versus shared attachments
-- Tables, callouts, tags, anchors, and image embeds
-- A more realistic note count than tiny unit-test fixtures
+- large folder structures
+- duplicate filenames such as `Daily.md` and `Index.md`
+- folder-local versus shared attachments
+- tables, callouts, tags, anchors, and image embeds
+- more realistic note counts than tiny unit-test fixtures
 
-That makes the screenshots useful for both documentation and regression checking.
+That makes the screenshots useful for both documentation and regression discussion.
 
 ## Regenerating The Visuals
 

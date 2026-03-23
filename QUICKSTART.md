@@ -1,8 +1,8 @@
 # Quick Start
 
-This is the fastest way to try Obviewer on your Mac.
+This is the fastest way to try Obviewer on a Mac with full Xcode installed.
 
-## One-Command Start
+## Fastest Path
 
 ```bash
 git clone https://github.com/felizvida/obviewer.git
@@ -10,52 +10,66 @@ cd obviewer
 make try-local
 ```
 
-What that does:
+That command:
 
-- Checks that full Xcode is selected instead of Command Line Tools
-- Installs `xcodegen` with Homebrew if it is missing
-- Generates `Obviewer.xcodeproj`
-- Opens the project in Xcode
+- verifies that full Xcode is selected instead of Command Line Tools
+- installs `xcodegen` with Homebrew if needed
+- generates `Obviewer.xcodeproj`
+- opens the project in Xcode
 
-If you want a ready-made vault for testing, generate one in a second terminal:
+## Optional Demo Vault
+
+If you want a realistic vault without using your own notes, open a second terminal and run:
 
 ```bash
 make demo-vault
 ```
 
-That writes a large synthetic vault to `build/SampleVault`.
+That creates `build/SampleVault`, a synthetic Obsidian-style vault with:
+
+- nested folders
+- duplicate note names
+- images and documents
+- tables, callouts, tags, and anchors
+- graph-friendly cross-links
 
 ## In Xcode
 
 1. Select the `Obviewer` scheme.
-2. If Xcode asks about signing, choose your Personal Team under Signing & Capabilities.
+2. If Xcode asks for signing, choose your Personal Team under Signing & Capabilities.
 3. Press Run.
 4. In the app, choose `Open Vault...`.
-5. Select your local Obsidian vault folder, or choose `build/SampleVault` if you generated the demo vault.
+5. Pick your real Obsidian vault or `build/SampleVault`.
 
-## What You Need
+## What To Expect
 
-- A Mac
-- Full Xcode installed
+The current app gives you:
+
+- a searchable note library
+- a reader-first detail pane
+- inline links, images, tables, and callouts
+- a note graph workspace
+- a read-only vault loading flow built around user-selected folder access
+
+The current GitHub releases still publish source archives rather than a ready-made signed `.app`, so local Xcode run is the easiest way to try the app today.
+
+## Requirements
+
+- a Mac
+- full Xcode
 - Homebrew
 
-If Homebrew is not installed, install it first and then rerun:
+## If `make try-local` Stops Early
+
+If the script says Command Line Tools are selected, run the `xcode-select` command it prints and then retry:
 
 ```bash
 make try-local
 ```
 
-## If It Stops Early
+If the script says no full Xcode app could be found, install Xcode from the App Store, open it once, and rerun the same command.
 
-If `make try-local` says Command Line Tools are selected, it will print the exact `xcode-select` command you should run.
-
-If it says that no full Xcode app could be found, install Xcode from the App Store, open it once, and then rerun:
-
-```bash
-make try-local
-```
-
-## Manual Fallback
+## Manual Path
 
 If you want to do the steps yourself:
 

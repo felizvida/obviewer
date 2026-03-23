@@ -1,164 +1,180 @@
 # Product Brief
 
-This document explains what the product is supposed to be.
-
-It exists so that future contributors do not have to reverse-engineer product intent from code alone.
+This document captures the product intent so future contributors do not need to reverse-engineer it from code alone.
 
 ## One-Sentence Product Definition
 
-Obviewer is a native macOS reading app for local Obsidian vaults whose central promise is beautiful, trustworthy, read-only access to personal notes.
+Obviewer is a native macOS reading app for local Obsidian vaults whose defining promise is trustworthy, beautiful, read-only access to personal notes.
 
 ## Primary User Promise
 
 The user should feel confident about two things:
 
-1. The app will not modify the vault
-2. Reading inside the app feels better than reading raw markdown files in a generic tool
+1. the app will not modify the vault
+2. reading in the app feels better than reading raw markdown in generic tools
 
-If a future decision improves one of those dimensions while damaging the other, preserving trust should win.
+If a future change improves one dimension while damaging the other, protecting trust should win.
 
 ## Non-Negotiable Requirement
 
 The only truly critical requirement is:
 
-**The product must be absolutely read-only from the user's perspective and from the operating system's enforcement model.**
+**The product must be read-only from the user's perspective and from the operating system's enforcement model.**
 
-This requirement is not optional, and it is not just a preference.
+This is not optional and not just a UI preference.
 
 ## Product Priorities
 
-The product priorities, in order, are:
+In order:
 
-1. Trustworthy read-only behavior
-2. Excellent reading experience
-3. Native macOS quality
-4. Useful Obsidian compatibility
-5. Performance on real local vaults
+1. trustworthy read-only behavior
+2. excellent reading experience
+3. native macOS quality
+4. strong Obsidian compatibility for common note shapes
+5. good performance on real local vaults
 
 ## What The Product Is Not Trying To Do
 
-To keep the project coherent, it should not drift toward:
+To stay coherent, the product should not drift into:
 
-- Editing notes
-- Syncing files
-- Becoming a task manager
-- Becoming a second Obsidian implementation
-- Replicating plugin ecosystems
-- Maximizing feature breadth at the expense of clarity and design quality
+- editing notes
+- sync or collaboration
+- task management
+- plugin ecosystem emulation
+- broad file-management behavior
+- feature sprawl that weakens trust or design quality
+
+## Current Product Pillars
+
+### Reader-First Experience
+
+The reader is the center of gravity. The note body should always feel more important than the surrounding chrome.
+
+### Trustworthy Local Access
+
+The app should feel safe to point at a personal vault because it is local-only and read-only by design.
+
+### Obsidian-Aware Navigation
+
+Wiki links, tags, tables, callouts, attachments, and graph relationships matter because real Obsidian vaults rely on them.
+
+### Calm Native Design
+
+The app should feel editorial, warm, and intentionally macOS-native rather than generic utility software.
 
 ## User Experience Direction
 
-The current visual direction is intentional:
+The current direction is intentional:
 
-- Warm, paper-like backgrounds rather than flat sterile white
-- Serif-forward reading surfaces
-- Rounded macOS chrome
-- Spacious composition
-- Metadata that stays secondary to the note body
+- warm paper-like backgrounds instead of flat white
+- serif-forward reading surfaces
+- rounded native chrome
+- spacious composition
+- metadata that stays secondary to the body
 
-The ideal emotional tone is:
+The emotional tone should be:
 
-- Calm
-- Premium
-- Trustworthy
-- Focused
-- Editorial rather than dashboard-like
+- calm
+- premium
+- trustworthy
+- focused
+- editorial rather than dashboard-like
 
 ## Functional Scope
 
 ### In Scope
 
-- Selecting a local vault directory
-- Persisting access to that vault safely
-- Browsing notes
-- Searching notes by title, path, tag, and preview text
-- Reading markdown notes
-- Navigating through linked notes
-- Displaying common attachments where appropriate
+- selecting a local vault directory
+- reopening the last vault safely
+- browsing notes and folders
+- searching by title, path, tags, and preview text
+- reading markdown notes with common Obsidian constructs
+- navigating linked notes and graph relationships
+- viewing common attachments and images where appropriate
 
 ### Out Of Scope For The Product Identity
 
-- Editing files
-- Batch refactoring notes
-- Reorganizing folders
-- Sync conflict handling
-- Remote collaboration features
+- editing files
+- batch refactoring notes
+- reorganizing folders
+- remote sync
+- collaboration features
 
-These could technically be built, but they would pull the product away from its defining idea.
+Those could be built technically, but they would pull the product away from its core idea.
 
 ## Reading Experience Standards
 
-A future maintainer should judge new features against these standards:
+Future contributors should judge changes against these standards.
 
 ### Typography
 
-- Text should feel comfortable for long reading sessions
-- Hierarchy should be obvious without being noisy
-- Serif body typography is a strong default unless a better editorial solution emerges
+- text should feel good during long reading sessions
+- hierarchy should be legible without noise
+- serif body typography remains a strong default unless a better editorial direction clearly wins
 
 ### Layout
 
-- The interface should prioritize the content column
-- Sidebars should help orientation without becoming visually heavy
-- Wide screens should still preserve a readable measure
+- the content column should stay primary
+- sidebars should orient, not dominate
+- wide screens should still preserve a readable measure
 
 ### Interaction
 
-- Interactions should feel native to macOS
-- Motion, if added, should feel intentional and quiet
-- The reading experience should stay interruption-light
+- interactions should feel native to macOS
+- motion should be quiet and purposeful
+- the experience should stay interruption-light
 
 ### Visual Restraint
 
-- Avoid trendy but disposable visual gimmicks
-- Avoid generic productivity-app blandness
-- Aim for a look that feels designed rather than auto-generated
+- avoid disposable visual gimmicks
+- avoid generic productivity-app blandness
+- aim for a look that feels authored rather than auto-generated
 
 ## Product Risks
 
-The main product risks are:
-
-### Risk 1: Weakening the read-only trust story
+### Risk 1: weakening the read-only trust story
 
 Even a small write capability undermines the product's defining promise.
 
-### Risk 2: Over-building features before parser fidelity
+### Risk 2: outrunning parser fidelity
 
-If notes are rendered incorrectly, the reader experience will feel broken no matter how polished the chrome is.
+If the notes render incorrectly, chrome polish will not save the experience.
 
-### Risk 3: Letting the interface drift toward "note management"
+### Risk 3: letting navigation become management
 
-The product should remain a reading app first.
+The product should remain a reading app first, even when graph and search become richer.
 
-### Risk 4: Accepting average UI
+### Risk 4: accepting average UI
 
-The original goal explicitly asked for a fashionable, first-class reading experience. A merely functional interface does not satisfy that goal.
+The original goal called for a first-class, fashionable reading experience. Merely functional UI is not enough.
 
 ## Success Criteria
 
-The project is moving in the right direction if a new user can:
+The product is moving in the right direction if a new user can:
 
-1. Open a local vault in seconds
-2. Trust that nothing will be modified
-3. Read notes more comfortably than in Finder, Quick Look, or a generic text editor
-4. Navigate common Obsidian note structures without friction
+1. open a local vault quickly
+2. trust that nothing will be modified
+3. read notes more comfortably than in Finder, Quick Look, or a generic text editor
+4. follow common Obsidian structures without friction
+5. understand note relationships through search, links, and graph views
 
-## Product Decisions That Deserve Extra Scrutiny
+## Decisions That Deserve Extra Scrutiny
 
-These decisions should not be made casually:
+These choices should not be made casually:
 
-- Any change that adds broader file permissions
-- Any change that enables note mutation
-- Any change that trades the native macOS feel for easier cross-platform reuse
-- Any change that makes the app feel like a utility shell instead of a premium reader
+- any broader file permissions
+- any feature that enables note mutation
+- any change that weakens the native macOS feel
+- any change that makes the app feel like a utility shell instead of a premium reader
+- any parser shortcut that would make real vaults look untrustworthy
 
 ## Near-Term Product Roadmap
 
-Recommended next product milestones:
+The next product milestones should be:
 
-1. Establish the real sandboxed app shell
-2. Improve markdown and Obsidian fidelity
-3. Improve inline navigation and media support
-4. Add polish around large-vault browsing and live updates
+1. ship the production distribution path without weakening the sandbox model
+2. improve markdown and Obsidian fidelity
+3. improve performance and live refresh on real vaults
+4. deepen graph, media, accessibility, and polish
 
-The app should become trustworthy before it becomes ambitious.
+The detailed plan lives in [`MODERNIZATION_PLAN.md`](./MODERNIZATION_PLAN.md).

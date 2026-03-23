@@ -1,50 +1,60 @@
 # Documentation Index
 
-This repository is intentionally documented for zero-memory handoff.
+This repository is documented for zero-memory handoff.
 
-That means the documentation assumes the reader:
+Assume the reader:
 
-- Has never seen the project before
-- Does not know what was discussed elsewhere
-- Does not know the original motivation unless it is written down here
-- Needs enough context to continue the work safely without asking the previous maintainer for missing details
+- has never seen the project before
+- does not know the original conversation history
+- should not need to ask the previous maintainer for missing context
 
 If you are new to the project, read the documents in this order:
 
 1. [`../QUICKSTART.md`](../QUICKSTART.md) to run the app locally with the fewest steps
-2. [`VISUAL_TOUR.md`](./VISUAL_TOUR.md) to see the current experience and design intent quickly
-3. [`HANDOFF.md`](./HANDOFF.md) for the current state, critical context, and immediate next steps
-4. [`PRODUCT.md`](./PRODUCT.md) for the project goals, constraints, and UX direction
-5. [`ARCHITECTURE.md`](./ARCHITECTURE.md) for how the current codebase is structured
-6. [`DEVELOPMENT.md`](./DEVELOPMENT.md) for setup, build, test, and shipping workflow
-7. [`STATUS.md`](./STATUS.md) for the current implementation status, known gaps, and recommended roadmap
+2. [`VISUAL_TOUR.md`](./VISUAL_TOUR.md) to understand the current product feel quickly
+3. [`HANDOFF.md`](./HANDOFF.md) for the current project state, invariants, and takeover guidance
+4. [`STATUS.md`](./STATUS.md) for the current implementation baseline and known gaps
+5. [`PRODUCT.md`](./PRODUCT.md) for product scope and design intent
+6. [`ARCHITECTURE.md`](./ARCHITECTURE.md) for module boundaries and runtime flow
+7. [`DEVELOPMENT.md`](./DEVELOPMENT.md) for setup, test, and release workflow
+8. [`MODERNIZATION_PLAN.md`](./MODERNIZATION_PLAN.md) for the phased roadmap from prototype to modern shipping app
 
 ## Quick Facts
 
 - Project name: `Obviewer`
 - Repository URL: `https://github.com/felizvida/obviewer`
-- Platform target: macOS
+- Platform target: macOS 14+
 - Language: Swift
-- UI framework: SwiftUI with light AppKit interop
-- Package format today: Swift package
-- Intended shipping format: sandboxed macOS `.app`
-- Non-negotiable product requirement: the app must be read-only with respect to the user's Obsidian vault
+- Primary UI technology: SwiftUI with focused AppKit interop
+- Package layout: Swift package plus XcodeGen app-project spec
+- Current release line: `v0.2.5`
+- Shipping artifact today: source archives on GitHub releases
+- Intended next artifact: signed and notarized sandboxed macOS app distribution
+- Non-negotiable requirement: the app must remain read-only with respect to the user's Obsidian vault
 
 ## Repo Map
 
 - `Sources/Obviewer/ObviewerApp.swift`
-  Application entry point
+  Thin app entry point
 - `Sources/ObviewerCore/`
-  Portable domain models, parser, lookup, and vault indexing logic
+  Portable models and services for notes, parsing, graph construction, and vault indexing
 - `Sources/ObviewerMacApp/`
-  macOS app state, platform services, and SwiftUI reader UI
+  macOS app state, platform services, documentation rendering, and SwiftUI/AppKit UI
+- `Sources/ObviewerFixtureSupport/`
+  Synthetic vault generator used by tests and demo tooling
+- `Sources/ObviewerFixtureTool/`
+  CLI entry point for generating demo vaults
+- `Sources/ObviewerDocsTool/`
+  CLI entry point for generating documentation screenshots
 - `Tests/ObviewerCoreTests/`
-  Core parser, normalization, snapshot, and vault-reader tests
+  Parser, lookup, graph, and vault-reader tests
 - `Tests/ObviewerMacAppTests/`
-  AppModel orchestration and state tests
+  AppModel and view-support tests
+- `.github/workflows/`
+  CI and tag-driven release automation
 - `Configuration/Obviewer.entitlements`
-  Minimum sandbox entitlements required for the shipping app target
+  Minimum sandbox entitlements for the shipping app
 
 ## Important Note
 
-The codebase currently contains a strong architectural read-only intent, but the strongest guarantee only exists once the code is wrapped in a real sandboxed macOS app target using the entitlements described in this repository. The Swift package by itself is not the final shipping artifact.
+The architectural read-only model is already strong, but the strongest guarantee only exists when the app is shipped as a signed sandboxed macOS app with the entitlements in this repo. The Swift package itself is a development shape, not the final trust boundary.

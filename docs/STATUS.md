@@ -1,177 +1,228 @@
 # Current Status
 
-This document records the current implementation status so a future maintainer can orient quickly without diff archaeology.
+This document records the implementation baseline so a future maintainer can orient quickly without diff archaeology.
 
 ## Summary
 
-The repository is in an early but coherent state.
+The repository is best described as:
 
-It is best described as:
+- a working prototype with real product behavior
+- a healthy codebase for continued iteration
+- not yet a finished shipping app
 
-- A serious prototype scaffold
-- A clear product and architecture direction
-- Not yet a production-ready app
+The project has moved past "scaffold only" status. It is now strong enough for real product work, but it still needs distribution, fidelity, performance, and accessibility modernization.
 
 ## Implemented Today
 
 ### Application Shell
 
 - SwiftUI app entry point exists
-- Core and macOS shell logic are split into separate package targets
-- Split-view layout exists
-- Toolbar actions exist for opening and reloading a vault
-- Empty state and loading state are present
+- core and macOS shell logic are split into separate targets
+- split-view library and reader workspace exists
+- graph workspace exists
+- toolbar and command actions exist for opening and reloading a vault
+- empty, loading, and error states exist
 
 ### Vault Access
 
-- Vault selection uses `NSOpenPanel`
-- Security-scoped bookmark persistence exists
-- Security-scoped access is started when a vault is loaded
-- Vault enumeration is read-oriented and centralized
+- vault selection uses `NSOpenPanel`
+- security-scoped bookmark persistence exists
+- security-scoped access is started and swapped through dedicated services
+- vault enumeration is centralized and read-oriented
+- live loading progress is surfaced to the UI
 
 ### Note Processing
 
-- Markdown files are discovered
-- Supported attachments are indexed
-- Notes are parsed into a simple render model
-- Search over title, path, tags, and preview text is implemented
-- Inline note links and external links are parsed
-- GFM-style tables are parsed
-- Note headings are collected into a table of contents
+- markdown files are discovered
+- supported attachments are indexed
+- notes are parsed into a render model with inline runs
+- search over title, path, tags, and preview text is implemented
+- note links, attachment links, and heading anchors are classified
+- relative note and attachment resolution is source-aware
+- headings are collected into a table of contents
+- a note graph is derived from outbound links
 
 ### Reading UI
 
-- Large title and metadata header exists
-- Paragraph, heading, list, quote, callout, code, divider, and image blocks render
-- Tables render in the reader
-- Inline links render inside note content
-- Linked-note chips are shown for outbound links
-- A right-side contents rail exists for long-note navigation
+- metadata header exists
+- paragraph, heading, list, quote, callout, code, divider, and image blocks render
+- inline images render with sizing hints
+- tables render in the reader
+- inline note and attachment links render inside note content
+- linked-note navigation exists
+- a right-side contents rail exists for long notes
+- local image lightbox behavior exists
 
-### Tests
+### Graph UI
 
-- Core parser, normalization, snapshot, and reader tests exist
-- `AppModel` orchestration tests exist
+- local and global graph views exist
+- graph inspector exists
+- search-aware graph filtering exists
+- folder grouping contributes to visual identity
+
+### Quality Tooling
+
+- synthetic demo vault generation exists
+- documentation screenshot generation exists
+- core and app-model regression tests exist
+- view-support tests exist
 
 ### Repository Operations
 
-- GitHub repository exists and is configured
-- CI exists
-- Tag-driven GitHub release automation exists
-- Issue templates and contributor docs exist
-- XcodeGen project scaffolding and signing-aware packaging scripts exist
+- GitHub repository is configured
+- CI is green on `macos-14` and `macos-15`
+- tag-driven GitHub release automation exists
+- issue templates and contributor docs exist
+- XcodeGen project generation exists
+- signing-aware packaging scripts exist
+- Apache 2.0 licensing is in place
 
 ## Partially Implemented
 
 ### Obsidian Compatibility
 
-Partially present:
+Present:
 
-- Wiki links
-- Tags
-- Callouts
-- Standalone image embeds
+- wiki links
+- tags
+- tables
+- callouts
+- headings and anchors
+- image embeds and size hints
 
-Missing or incomplete:
+Still incomplete:
 
-- Rich inline formatting
-- Full markdown coverage
-- Many Obsidian-specific syntaxes
+- full CommonMark coverage
+- ordered lists and nested list fidelity
+- task lists
+- footnotes
+- Mermaid
+- math
+- embedded PDF/audio/video rendering
+- richer frontmatter semantics
 
 ### Read-Only Guarantee
 
 Architecturally present:
 
-- No write API
-- Reader-only file path in current code
-- Intended sandbox entitlement file exists
+- no write API
+- reader-only file access path
+- read-only entitlement baseline exists
+- unsigned release packaging is blocked
 
-Not yet complete:
+Still incomplete:
 
-- A real shipping app target with sandbox configuration has not yet been built in this repository
+- no published signed/notarized app artifact yet
+- no end-user distribution path that fully demonstrates the trust story
+
+### Distribution
+
+Present:
+
+- source releases
+- signing-aware build scripts
+- XcodeGen app-project generation
+
+Still incomplete:
+
+- notarized GitHub `.dmg`
+- Mac App Store path
+- auto-update channel
+
+### Performance
+
+Present:
+
+- acceptable behavior on the synthetic demo vault
+- loading progress visibility
+
+Still incomplete:
+
+- incremental indexing
+- file watching
+- large-vault profiling
+- caching and smarter search ranking
 
 ## Not Implemented Yet
 
-- Full Xcode app project or app target setup
-- Notarization
-- File watching
-- Large-vault performance tuning
-- PDF/audio/video rendering
-- Nested lists
-- Ordered lists
-- Task lists
-- Footnotes
-- Mermaid block previews
-- Search ranking sophistication
-- Accessibility review
-- Screenshot assets
-- Formal license selection
+- notarized `.app` or `.dmg` release artifacts
+- App Store distribution
+- live vault refresh
+- large-vault performance instrumentation
+- UI snapshot testing
+- accessibility audit and VoiceOver tuning
+- PDF/audio/video reader surfaces
+- Mermaid rendering or preview
+- crash/reporting or telemetry strategy
+- in-app onboarding for first-run distribution builds
 
 ## Known Risks
 
-### Risk 1: Toolchain confusion
+### Risk 1: Parser fidelity gap
 
-The repo can appear broken on a machine that only has Command Line Tools active. This is an environment issue that can mask the real health of the codebase.
+The parser is increasingly capable, but still incomplete enough that unsupported syntax can look like a rendering bug.
 
-### Risk 2: Parser fidelity gap
+### Risk 2: Distribution gap
 
-The current parser is intentionally lightweight. Unsupported note constructs may be mistaken for rendering bugs.
+The repo is release-automated, but the published artifact is still source-only. That keeps the strongest user-facing trust story incomplete.
 
-### Risk 3: Incomplete shipping container
+### Risk 3: Performance ceiling
 
-The current repository expresses the correct sandbox direction, but the final safety story is not complete until the app target itself is configured and tested.
+The current full-reload indexing model will eventually limit very large vaults and richer graph interactions.
+
+### Risk 4: UI verification gap
+
+Most confidence comes from core and orchestration tests, not visual regression or accessibility validation.
 
 ## Recommended Next Milestones
 
-### Milestone 1: Shipping Container
+### Milestone 1: Shipping Distribution
 
 Goal:
 
-- Turn the package scaffold into a real sandboxed macOS app target
+- publish a signed, notarized macOS app distribution without broadening file permissions
 
-Why this first:
+Why first:
 
-- It validates the non-negotiable read-only requirement
+- it completes the trust story for real users
 
-### Milestone 2: Parser Fidelity
+### Milestone 2: Content Fidelity
 
 Goal:
 
-- Improve markdown and Obsidian feature coverage beyond the current inline links and table support
+- improve markdown and Obsidian support enough that real vaults render predictably
 
 Why next:
 
-- The reading experience is only as good as the content fidelity
+- reader quality depends on faithful content rendering
 
-### Milestone 3: Reading Navigation
-
-Goal:
-
-- Add richer inline navigation and better handling of large note graphs
-
-Why after parser work:
-
-- Good navigation is much more valuable once content rendering is trustworthy
-
-### Milestone 4: Media And Polish
+### Milestone 3: Scale And Live Refresh
 
 Goal:
 
-- Add better attachment handling, polish, and release quality
+- improve indexing, caching, and change observation for larger vaults
+
+### Milestone 4: Polish And Accessibility
+
+Goal:
+
+- refine graph UX, media handling, visual consistency, and accessibility
+
+The detailed execution plan is in [`MODERNIZATION_PLAN.md`](./MODERNIZATION_PLAN.md).
 
 ## What A New Maintainer Should Verify First
 
-1. The project builds with full Xcode
-2. The app can open a real vault
-3. The bookmark restore path behaves correctly after relaunch
-4. The entitlements are correctly attached in the eventual app target
-5. The parser behaves acceptably on representative vault content
+1. the project builds and tests with full Xcode
+2. the app can open a real vault and the synthetic demo vault
+3. bookmark restore works after relaunch
+4. the entitlement baseline stays read-only
+5. current docs still match the real release and runtime behavior
 
 ## When To Update This Document
 
-Update this file whenever one of these changes happens:
+Update this file whenever:
 
-- The shipping readiness level changes
-- A major feature becomes complete
-- A major technical risk is removed or discovered
-- The next recommended milestone changes
+- shipping readiness changes
+- a major feature becomes solid
+- a major risk is removed or discovered
+- the recommended modernization sequence changes

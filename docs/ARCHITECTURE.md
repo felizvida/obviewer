@@ -1,50 +1,80 @@
 # Architecture
 
-This document explains how the current repository is structured and why it is structured that way.
+This document explains how the repository is structured today, why it is structured that way, and where the current pressure points are.
 
 ## Architectural Goals
 
-The architecture is optimized for four things:
+The architecture is optimized for five things:
 
-1. Enforcing a read-only mental model
-2. Keeping vault access logic separate from UI logic
-3. Making the reader experience feel native and premium on macOS
-4. Making core logic portable and testable outside the macOS shell
+1. preserving a read-only vault access model
+2. keeping vault access and parsing separate from UI rendering
+3. making the reader experience feel native and premium on macOS
+4. keeping the core logic portable and testable
+5. supporting future modernization without rewriting the entire app
 
 ## Module Layout
 
-The package is now split into three targets:
+The package is split into these primary products:
 
 1. `ObviewerCore`
-2. `ObviewerMacApp`
-3. `Obviewer`
+2. `ObviewerFixtureSupport`
+3. `ObviewerMacApp`
+4. `ObviewerFixtureTool`
+5. `ObviewerDocsTool`
+6. `Obviewer`
 
-`ObviewerCore` contains the domain types and logic that should remain portable across future platforms.
+### `ObviewerCore`
 
-`ObviewerMacApp` contains the platform shell for macOS only:
+Portable models and services:
+
+- vault models and snapshot lookup
+- note graph generation
+- markdown parsing
+- vault indexing and progress reporting
+
+### `ObviewerFixtureSupport`
+
+Shared tooling for synthetic vault generation. This is intentionally separate so tests, manual smoke runs, and documentation tooling can all use the same fixtures.
+
+### `ObviewerMacApp`
+
+macOS shell and UI:
 
 - `AppModel`
-- bookmark persistence
-- vault picking
 - security-scoped access lifecycle
-- SwiftUI and AppKit rendering
+- bookmark persistence
+- vault picker integration
+- SwiftUI/AppKit views
+- documentation screenshot renderer
 
-`Obviewer` is intentionally thin and only launches the app.
+### `ObviewerFixtureTool`
+
+CLI for generating rich sample vaults.
+
+### `ObviewerDocsTool`
+
+CLI for generating the screenshots used by the docs.
+
+### `Obviewer`
+
+Thin executable that launches the macOS app.
 
 ## High-Level Data Flow
 
-The current flow looks like this:
+The main runtime flow is:
 
-1. The app launches.
-2. `ContentView` asks `AppModel` to restore the last vault if a bookmark exists.
-3. If the user chooses a vault, `VaultPicker` returns a directory URL.
-4. `AppModel` starts security-scoped access for that URL.
-5. `VaultReader` enumerates the vault folder.
-6. Markdown files are parsed by `ObsidianParser`.
-7. Parsed notes and attachment metadata are assembled into a `VaultSnapshot`.
-8. `ContentView` shows the note list.
-9. `ReaderView` renders the selected note.
-10. Outbound links are resolved back into note IDs through `VaultSnapshot`.
+1. the app launches and creates `AppModel`
+2. `AppModel` attempts bookmark restore if applicable
+3. the user chooses a vault through `VaultPicker`
+4. security-scoped access starts
+5. `VaultReader` enumerates files and emits loading progress
+6. markdown notes are parsed by `ObsidianParser`
+7. notes and attachments become a `VaultSnapshot`
+8. `VaultSnapshot` derives lookup tables and a `NoteGraph`
+9. `ContentView` renders the library shell
+10. `ReaderView` renders note content and attachment flows
+11. `GraphView` renders local/global graph exploration
+12. link navigation resolves back through `VaultSnapshot`
 
 ## Top-Level Components
 
@@ -54,15 +84,11 @@ File:
 
 - `Sources/Obviewer/ObviewerApp.swift`
 
-Responsibility:
+Responsibilities:
 
-- Creates the shared `AppModel`
-- Defines the main window
-- Adds command menu items for opening and reloading the vault
-
-Why it matters:
-
-- This is where app-level behavior should stay centralized instead of leaking into random views.
+- create the shared `AppModel`
+- define the main window
+- expose command/menu actions for opening and reloading a vault
 
 ### AppModel
 
@@ -70,83 +96,37 @@ File:
 
 - `Sources/ObviewerMacApp/AppModel.swift`
 
-Responsibility:
+Responsibilities:
 
-- Owns the current `VaultSnapshot`
-- Tracks the current vault URL
-- Tracks loading and error state
-- Holds search state and selected note state
-- Loads the vault asynchronously
-- Restores persisted bookmark access
-- Starts and swaps security-scoped access
-- Resolves navigation from outbound links
-
-Why it matters:
-
-- `AppModel` is the current orchestration layer.
-- If future contributors are unsure where a behavior belongs, this is usually the first place to inspect.
+- own the current `VaultSnapshot`
+- track vault URL, loading state, errors, and current selection
+- manage search and graph scope state
+- orchestrate choose, restore, and reload flows
+- bridge UI actions into core lookup/navigation behavior
 
 Important design choice:
 
-- The UI does not read the file system directly.
-- All vault loading flows through the model and the reader service.
-- `AppModel` now receives its platform services through injected protocols, which keeps orchestration testable without `NSOpenPanel`, `UserDefaults`, or live security-scoped URLs.
+- the UI never reads the filesystem directly
+- platform services are injected through protocols, which keeps orchestration testable without `NSOpenPanel`, `UserDefaults`, or live security-scoped URLs
 
-### Vault Models
+### VaultSnapshot And Models
 
 File:
 
 - `Sources/ObviewerCore/Models/VaultModels.swift`
 
-Responsibility:
+Responsibilities:
 
-- Defines `VaultSnapshot`, `VaultNote`, `VaultAttachment`, `RenderBlock`, and `CalloutKind`
-- Provides link normalization and lookup logic
+- define `VaultSnapshot`, `VaultNote`, `VaultAttachment`, render models, and graph models
+- normalize note and attachment references
+- resolve links source-relatively
+- build the note graph and graph subgraphs
 
-Why it matters:
+Important design choices:
 
-- These types are the contract between the parser, the file reader, and the UI.
-- Any rendering feature usually starts with a model change here.
-
-Important design choice:
-
-- `RenderBlock` is intentionally simplified.
-- It is not a complete markdown AST.
-- It is a presentation-friendly intermediate format for the current UI.
-
-### BookmarkStore
-
-File:
-
-- `Sources/ObviewerMacApp/Services/BookmarkStore.swift`
-
-Responsibility:
-
-- Saves and restores a security-scoped bookmark to the chosen vault
-
-Why it matters:
-
-- This gives the app a smooth reopen experience without widening file access permissions.
-
-Important design choice:
-
-- Bookmark storage goes through `UserDefaults` for simplicity.
-- If bookmark management gets more complex later, this service is the right place to evolve it.
-
-### VaultPicker
-
-File:
-
-- `Sources/ObviewerMacApp/Services/VaultPicker.swift`
-
-Responsibility:
-
-- Presents `NSOpenPanel` configured for directory selection only
-
-Why it matters:
-
-- User-selected access is part of the security story.
-- The project should not silently assume access to arbitrary filesystem locations.
+- the render model is intentionally presentation-oriented rather than a full markdown AST
+- note and attachment lookup prefer source-relative resolution to handle duplicate filenames sanely
+- graph data is derived and stored with the snapshot instead of being recomputed in the UI
 
 ### VaultReader
 
@@ -154,31 +134,26 @@ File:
 
 - `Sources/ObviewerCore/Services/VaultReader.swift`
 
-Responsibility:
+Responsibilities:
 
-- Enumerates the vault directory
-- Distinguishes notes from supported attachments
-- Reads markdown file contents
-- Parses notes via `ObsidianParser`
-- Produces a `VaultSnapshot`
-
-Why it matters:
-
-- This is the main read-only filesystem boundary.
+- enumerate vault contents
+- classify notes and attachments
+- read note contents through read-only APIs
+- emit progress updates
+- produce the final snapshot
 
 Important design choices:
 
-- Hidden files and package descendants are skipped.
-- Attachments are indexed broadly, but only some kinds currently receive richer reader treatment.
-- File reading uses `FileHandle(forReadingFrom:)`, which reinforces the read-only intent.
+- hidden files and package descendants are skipped
+- attachments are indexed broadly even if only some kinds get rich rendering today
+- file access stays in one service boundary, which is important for the read-only guarantee
 
-What it does not do yet:
+Pressure points:
 
-- No file watching
-- No incremental indexing
-- No caching
-- No frontmatter field extraction beyond stripping the frontmatter block
-- No embedded PDF/audio/video rendering
+- no incremental indexing
+- no file watching
+- no cache layer
+- no structured frontmatter extraction beyond stripping
 
 ### ObsidianParser
 
@@ -186,146 +161,159 @@ File:
 
 - `Sources/ObviewerCore/Services/ObsidianParser.swift`
 
-Responsibility:
+Responsibilities:
 
-- Converts markdown text into simplified render blocks
-- Extracts a display title
-- Extracts preview text
-- Extracts outbound wiki links
-- Extracts inline tags
-- Estimates reading time
+- convert markdown into render blocks and inline runs
+- extract title, preview text, tags, headings, and outbound links
+- classify note links, attachment links, and heading anchors
+- parse image embeds and sizing hints
 
-Supported constructs today:
+Supported constructs today include:
 
-- YAML frontmatter stripping
-- ATX headings
-- Paragraphs
-- Bullet lists
-- Inline wiki links
-- Inline markdown links
-- Inline emphasis and strong emphasis
-- Inline code spans
-- Block quotes
+- frontmatter stripping
+- headings and heading anchors
+- paragraphs
+- bullet lists
+- block quotes
 - Obsidian callouts
-- Fenced code blocks
-- Standalone image embeds
+- fenced code blocks
+- inline wiki links
+- inline markdown links
+- inline code, emphasis, and strong emphasis
+- image embeds and size hints
 - GFM-style tables
-- Horizontal dividers
-- Inline tags like `#research`
+- horizontal rules
+- inline tags
+
+Pressure points:
+
+- still not full CommonMark plus full Obsidian fidelity
+- advanced nested formatting is limited
+- task lists, ordered lists, footnotes, Mermaid, math, and embedded media need deeper work
+
+### Reader Surfaces
+
+Files:
+
+- `Sources/ObviewerMacApp/Views/ContentView.swift`
+- `Sources/ObviewerMacApp/Views/ReaderView.swift`
+- `Sources/ObviewerMacApp/Views/RichTextView.swift`
+
+Responsibilities:
+
+- render the split-view shell
+- render note metadata and block content
+- handle inline navigation
+- render inline images and richer attachment actions
+- provide table-of-contents navigation and image lightbox behavior
+
+Design intent:
+
+- the UI should feel editorial and calm rather than utilitarian
+- the reading surface should stay primary even when the graph and sidebar are visible
+
+### Graph Workspace
+
+File:
+
+- `Sources/ObviewerMacApp/Views/GraphView.swift`
+
+Responsibilities:
+
+- render local and global graph views
+- provide graph inspector details
+- compute view positions from graph data
+- reflect search scope and current note context
+
+Important design choice:
+
+- graph rendering is intentionally derived from `NoteGraphSubgraph`, not from ad hoc UI-only graph calculations
+
+Pressure points:
+
+- the graph is useful today but still early in UX maturity
+- large-graph performance, layout polish, filtering, and interaction depth still need work
+
+### Platform Services
+
+Files:
+
+- `Sources/ObviewerMacApp/Services/BookmarkStore.swift`
+- `Sources/ObviewerMacApp/Services/SecurityScopedAccessController.swift`
+- `Sources/ObviewerMacApp/Services/VaultPicker.swift`
+
+Responsibilities:
+
+- persist and restore vault bookmarks
+- own the security-scoped access lifecycle
+- bridge to `NSOpenPanel`
+
+Why this matters:
+
+- these services are part of the actual safety story, not just convenience code
+
+### Documentation And Fixture Tooling
+
+Files:
+
+- `Sources/ObviewerFixtureSupport/DemoVaultBuilder.swift`
+- `Sources/ObviewerFixtureTool/main.swift`
+- `Sources/ObviewerMacApp/Documentation/DocumentationScreenshotRenderer.swift`
+- `Sources/ObviewerDocsTool/main.swift`
+
+Responsibilities:
+
+- generate realistic vaults for manual and automated testing
+- render documentation screenshots from the actual app
 
 Why it matters:
 
-- This is the largest current gap between "starter" and "polished product."
-- The UI quality will quickly hit a ceiling unless parser fidelity improves.
+- this tooling keeps docs, testing, and product discussion anchored to real UI and real data shapes
 
-What it does not do yet:
+## Testing Strategy
 
-- Ordered lists
-- Nested lists
-- Task lists
-- Footnotes
-- Nested emphasis handling
-- Mermaid blocks
-- Embedded PDFs/audio/video
- - More advanced inline formatting combinations
+Test targets:
 
-### ContentView
+- `Tests/ObviewerCoreTests`
+- `Tests/ObviewerMacAppTests`
 
-File:
+What is covered well:
 
-- `Sources/ObviewerMacApp/Views/ContentView.swift`
+- parser behavior
+- note and attachment resolution
+- note graph behavior
+- vault enumeration against real temporary directories
+- app-model orchestration and state transitions
+- selected view-support utilities
 
-Responsibility:
+What is not covered enough yet:
 
-- Builds the split-view shell
-- Hosts the sidebar
-- Drives the open/reload UI
-- Displays the empty state and loading state
-- Connects current app state to the reader surface
+- SwiftUI snapshot or visual regression tests
+- accessibility behavior
+- performance benchmarks for very large vaults
+- signed distribution validation
 
-Design intent:
+## Architectural Strengths
 
-- The sidebar should feel lighter and more atmospheric than a typical productivity app.
-- The app should open into a calm library-plus-reading-room layout.
+- clear separation between core domain logic and macOS shell concerns
+- strong testability for non-UI logic
+- read-only mental model is reinforced in the structure, not just the marketing
+- fixture and docs tooling reduce hand-wavy product discussion
 
-### ReaderView
+## Architectural Pressure Points
 
-File:
+- parser and render model are becoming feature-rich enough to deserve a more formal structure
+- large-vault performance will need incremental indexing, caching, and observation
+- the graph stack needs clearer layout and interaction abstractions as it matures
+- shipping distribution is still adjacent to the codebase rather than fully integrated into product delivery
 
-- `Sources/ObviewerMacApp/Views/ReaderView.swift`
+## Modernization Direction
 
-Responsibility:
+The next architectural moves should be:
 
-- Renders the selected note
-- Styles headings, paragraphs, quotes, code, callouts, and images
-- Shows metadata pills
-- Displays linked-note navigation
+1. strengthen the shipping app container and distribution path
+2. formalize parser/renderer boundaries before content fidelity expands too far
+3. add indexing and observation infrastructure for scale
+4. harden UI quality with accessibility and snapshot-style regression coverage
 
-Design intent:
-
-- Reading should feel more like a designed article than a note database.
-- Large serif typography and warm surfaces are intentional.
-- A right-side outline rail should make long notes easier to navigate without overwhelming the main reading column.
-
-## Security Model
-
-The current security model has two layers:
-
-### Layer 1: Architectural Intent
-
-- The codebase has no vault write API.
-- Vault access is concentrated in `VaultReader`.
-- The picker grants scoped access to a user-chosen folder.
-
-### Layer 2: Platform Enforcement
-
-- The shipping app target must be sandboxed.
-- The app target must include only `com.apple.security.files.user-selected.read-only`.
-
-This second layer is mandatory.
-
-Without it, the product goal of "absolute read only" is only partially satisfied.
-
-## Why The App Is Not Yet Finished Architecturally
-
-The current architecture is appropriate for a scaffold, but not yet the final form.
-
-There are at least three likely future evolutions:
-
-1. Replace `RenderBlock` with a richer render tree or markdown AST bridge
-2. Introduce a dedicated navigation and indexing layer when the vault gets large
-3. Move from package bootstrap to a full Xcode app target with shipping settings
-
-## Extension Guidelines
-
-If you need to extend the app, prefer these patterns:
-
-### When adding new markdown features
-
-- Start with parser output shape
-- Then update the render model
-- Then add `ReaderView` support
-- Finally add regression tests
-
-### When adding new vault behaviors
-
-- Keep filesystem access inside services
-- Do not read files directly from views
-- Do not introduce write code paths casually
-
-### When adding new UI features
-
-- Prefer premium readability over feature density
-- Preserve the calm split-view structure unless there is a strong reason to change it
-- Keep metadata secondary to the content body
-
-## Architecture Summary
-
-The current codebase is small on purpose:
-
-- One model/orchestrator
-- A few focused services
-- A simple render model
-- A premium reader UI
-
-That small size is a feature. It should stay understandable even after the next maintainer has been away from it for months.
+Those steps are sequenced in [`MODERNIZATION_PLAN.md`](./MODERNIZATION_PLAN.md).

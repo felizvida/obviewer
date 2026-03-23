@@ -1,161 +1,167 @@
 # Project Handoff
 
-This file is the single best starting point for a new maintainer.
+This is the best starting point for a new maintainer.
 
-It is written with an explicit zero-memory assumption: if previous context is not written here or in the linked documentation, it should be treated as unknown.
+It is written with an explicit zero-memory assumption: if something is not documented here or in the linked docs, treat it as unknown.
 
 ## What This Project Is
 
-`Obviewer` is intended to become a native macOS reader for local Obsidian vaults.
+`Obviewer` is a native macOS reader for local Obsidian vaults.
 
-The project is not trying to become:
+It is intentionally not:
 
-- A note editor
-- A sync client
-- A generic markdown viewer with arbitrary write access
-- A web app or cross-platform Electron wrapper
+- a note editor
+- a sync client
+- a second Obsidian implementation
+- a web app or Electron wrapper
+- a general-purpose file browser with broad write access
 
-The core promise is simple and strict:
+The central promise is simple:
 
-> Open a local Obsidian vault and present it beautifully, while making vault mutation impossible in the shipping product.
+> Open a local Obsidian vault, render it beautifully, and keep the vault read-only by design and by OS enforcement.
 
 ## Why This Exists
 
-The design goal is a first-class reading experience rather than a productivity dashboard.
+The product idea is a reading room, not a productivity cockpit.
 
-The user requirement that shaped everything else was:
+The original requirement set that shaped the project was:
 
-- Native macOS only
-- Local files only
-- Absolute read-only behavior
-- Premium, contemporary, editorial-quality reading experience
+- macOS native
+- local files only
+- absolute read-only behavior
+- premium, editorial-quality reading experience
 
-In other words, safety is more important than feature count, and the reading experience is more important than editing power.
+Trust outranks feature count. Reading quality outranks management features.
 
-## Current Project State
+## Current State As Of March 23, 2026
 
-The repository currently contains an initial scaffold, not a finished application.
+The repository is a working prototype with a healthy development foundation.
 
 What exists today:
 
-- A Swift package for macOS
-- A split package architecture with `ObviewerCore`, `ObviewerMacApp`, and `Obviewer`
-- A SwiftUI application entry point
-- A split-view UI with searchable, folder-grouped note navigation and a reading surface
-- A local vault reader that enumerates markdown notes and vault attachments
-- Security-scoped bookmark support to reopen the last selected vault
-- An Obsidian-aware parser that now supports inline links, tables, headings, callouts, tags, and image embeds
-- A table-of-contents rail in the reader for scalable in-note navigation
-- XcodeGen-based app-project scaffolding plus scripts for building a signed release bundle
-- Core and app-state regression tests
-- GitHub repository metadata, CI, issue templates, and contributor docs
+- split package architecture: `ObviewerCore`, `ObviewerMacApp`, and `Obviewer`
+- SwiftUI app shell with note library, reader workspace, and graph workspace
+- vault loading with progress reporting
+- security-scoped bookmark restore flow
+- Obsidian-aware parsing for links, callouts, tables, tags, headings, and image embeds
+- inline image rendering with size hints and image lightbox behavior
+- note graph construction with local/global graph exploration
+- synthetic-vault generation for realistic manual and integration testing
+- documentation screenshot generation from the real app
+- local Xcode validation with a working full-Xcode setup
+- green GitHub CI and tag-driven source release automation
+- Apache 2.0 licensing and standard repo governance files
 
 What does not exist yet:
 
-- A full Xcode app project configured for shipping as a notarized `.app`
-- A fully compliant CommonMark plus Obsidian parser
-- Rich rendering for footnotes, Mermaid, PDFs, audio, or video
-- File watching for live vault refresh
-- A selected open-source license
+- a published signed/notarized `.app` or `.dmg`
+- App Store distribution
+- full CommonMark plus Obsidian fidelity
+- live file watching or incremental indexing
+- accessibility audit and VoiceOver hardening
+- UI snapshot testing
+- performance instrumentation for very large vaults
 
 ## Most Important Invariant
 
-The single most important invariant in the project is:
+The most important invariant is:
 
 **The app must never write to the user's vault.**
 
-This is not just a UI requirement. It is a platform, architecture, and testing requirement.
+That is not just a UI rule. It is a product, architecture, platform, and release requirement.
 
-The current strategy is:
+The current protection strategy is:
 
-1. Use App Sandbox.
-2. Grant only `com.apple.security.files.user-selected.read-only`.
-3. Acquire vault access via `NSOpenPanel`.
-4. Persist access using a security-scoped bookmark.
-5. Centralize vault I/O behind a reader-only service with no write API.
+1. keep the shipping app sandboxed
+2. request only `com.apple.security.files.user-selected.read-only`
+3. acquire vault access through user choice
+4. persist access via security-scoped bookmarks
+5. funnel vault I/O through reader-only services with no write surface
+6. refuse unsigned release packaging that would drop the entitlements story
 
-If any future change weakens this chain, that change should be treated as a high-risk regression.
+Any change that weakens this chain should be treated as a high-risk regression.
 
 ## Current Architecture In One Paragraph
 
-`AppModel` is the control center. It asks the user to choose a vault, starts security-scoped access, invokes `VaultReader` to scan the directory and parse markdown files, stores the resulting `VaultSnapshot`, and feeds that data into SwiftUI views. `ContentView` presents the note list and shell chrome. `ReaderView` renders parsed note blocks into a premium reading surface. `BookmarkStore` persists the last chosen vault. `ObsidianParser` converts markdown text into simplified render blocks and extracts links and tags.
+`AppModel` orchestrates vault loading, bookmark restore, search state, graph state, and navigation. `VaultReader` scans the vault and hands markdown text to `ObsidianParser`, which produces simplified render blocks plus outbound links, tags, headings, and metadata. `VaultSnapshot` stores notes, attachments, lookup tables, and the derived `NoteGraph`. `ContentView` hosts the split-view shell, `ReaderView` renders notes into the reading surface, `RichTextView` handles inline content, and `GraphView` renders the graph workspace. Supporting tools generate demo vaults and documentation screenshots from the same real UI stack.
 
-For details, read [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+For the full breakdown, read [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
-## Current Verification Status
+## Verification Status
 
-Parser tests exist, but full local verification was blocked on the machine used to bootstrap this repo because it had Command Line Tools active instead of a fully matched Xcode toolchain.
+Current verification is in a much better place than the original bootstrap period:
 
-Practically, that means:
+- local `swift test` works with full Xcode selected
+- local `xcodebuild ... test` works
+- GitHub CI is green on `macos-14` and `macos-15`
+- GitHub tag releases are publishing source archives successfully
 
-- The repository is structurally ready for Xcode and GitHub Actions.
-- The maintainer taking over should validate the project on a Mac with full Xcode installed before making broader product assumptions.
-
-Read [`DEVELOPMENT.md`](./DEVELOPMENT.md) before spending time on build issues, because the most likely failure mode is toolchain configuration rather than application logic.
+This means the repo is healthy for normal development. The main missing verification layers are distribution validation, accessibility validation, and UI-level regression coverage.
 
 ## Immediate Recommended Next Steps
 
-If you are picking this project up fresh, do these steps first:
+If you are taking the project over, start here:
 
-1. Install full Xcode and ensure it is the active developer directory.
-2. Open the package and confirm it builds on a clean macOS machine.
-3. Convert or wrap the package into a true sandboxed macOS app target.
-4. Verify the entitlements are attached and codesigning is correct.
-5. Test with a real Obsidian vault containing links, images, callouts, and nested folders.
-6. Decide whether the next priority is parser fidelity or shipping the sandboxed app shell.
+1. read [`STATUS.md`](./STATUS.md) and [`MODERNIZATION_PLAN.md`](./MODERNIZATION_PLAN.md)
+2. run the app locally with `make try-local`
+3. generate and browse `build/SampleVault` with `make demo-vault`
+4. confirm the sandbox/read-only assumptions in `Configuration/Obviewer.entitlements`
+5. choose the next workstream from the modernization plan rather than improvising
 
-Recommended default priority:
+Recommended default sequence:
 
-- Ship the app container and validate the read-only guarantee first
-- Improve markdown fidelity second
-- Expand media and Obsidian feature coverage third
+1. finish the shipping distribution path
+2. improve parser and renderer fidelity
+3. improve performance and live refresh behavior
+4. refine graph, media, accessibility, and visual polish
 
-## What To Be Careful About
+## Things That Can Mislead A New Maintainer
 
-There are several traps that a new maintainer could fall into:
+### Trap 1: confusing "no edit button" with true read-only safety
 
-### Trap 1: Confusing "no edit button" with read-only safety
+The real protection comes from sandboxing, entitlements, and a codebase with no write path.
 
-Removing edit controls is not enough. The real protection must come from the sandbox entitlement model and the absence of write paths in code.
+### Trap 2: assuming the current parser is a full markdown engine
 
-### Trap 2: Assuming the parser is complete
+It is a useful and increasingly capable product parser, but it is still not full CommonMark plus full Obsidian parity.
 
-The parser is intentionally lightweight. It is a useful starting point, not a finished markdown engine.
+### Trap 3: assuming green CI means the app is product-complete
 
-### Trap 3: Assuming the Swift package is the final app shape
+The core and orchestration tests are solid, but distribution, accessibility, and large-vault performance still need major work.
 
-The package is a practical bootstrap format. The intended shipping output is a sandboxed macOS app.
+### Trap 4: treating every rendering issue as a UI problem
 
-### Trap 4: Treating unsupported Obsidian constructs as bugs in the UI
-
-Some gaps are parser limitations rather than rendering bugs. Distinguish parsing issues from view-layer issues before changing UI code.
+Some defects belong in parsing, some in lookup, and some in rendering. Follow the data flow before patching UI code.
 
 ## Decisions Already Made
 
-The following decisions are already embodied in the repository:
+These decisions are already encoded in the repo:
 
-- Native SwiftUI is the preferred UI direction.
-- AppKit interop is acceptable when native macOS behavior requires it.
-- The visual design should feel editorial, warm, and deliberate rather than generic utility software.
-- Local-only access is intentional.
-- The repository should remain easy for a later maintainer to understand from documents alone.
+- macOS-first is intentional
+- local-only access is intentional
+- SwiftUI is the default UI direction
+- AppKit interop is acceptable when native macOS behavior requires it
+- editorial visual design is part of the product, not decoration
+- Apache 2.0 is the default project license
+- the repo should stay understandable from the docs alone
 
 ## Decisions Still Open
 
-The following important decisions are not finalized yet:
+These choices remain open and should be made deliberately:
 
-- Which open-source license, if any, should be applied
-- Whether to keep the app as pure SwiftUI or introduce more AppKit for advanced text rendering
-- Whether to build a richer parser in-house or adopt an external markdown/rendering package
-- How ambitious the first shippable scope should be
-- Whether GitHub Discussions should become an active planning surface or remain mostly dormant
+- Developer ID direct distribution versus Mac App Store as the primary shipping channel
+- in-house parser evolution versus adopting a stronger markdown engine
+- whether the next major UI investment stays mostly in SwiftUI or adds deeper AppKit text/layout support
+- how ambitious the first public distribution milestone should be
+- whether to add an auto-update system before or after App Store evaluation
 
-## Files To Read Next
+## Read Next
 
-If you only have a little time, read these in order:
+If you only have limited time, read these in order:
 
 1. [`../README.md`](../README.md)
-2. [`PRODUCT.md`](./PRODUCT.md)
-3. [`ARCHITECTURE.md`](./ARCHITECTURE.md)
-4. [`DEVELOPMENT.md`](./DEVELOPMENT.md)
-5. [`STATUS.md`](./STATUS.md)
+2. [`STATUS.md`](./STATUS.md)
+3. [`PRODUCT.md`](./PRODUCT.md)
+4. [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+5. [`DEVELOPMENT.md`](./DEVELOPMENT.md)
+6. [`MODERNIZATION_PLAN.md`](./MODERNIZATION_PLAN.md)

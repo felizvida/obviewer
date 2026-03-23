@@ -2,78 +2,50 @@
 
 [![CI](https://github.com/felizvida/obviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/felizvida/obviewer/actions/workflows/ci.yml)
 
-Obviewer is a macOS-native, read-only Obsidian vault viewer built for calm, premium reading.
+Obviewer is a native macOS reader for local Obsidian vaults built around one non-negotiable promise: the app must remain read-only with respect to the user's notes.
 
-This starter leans hard into the one requirement that matters most: the vault itself must never be mutated. The intended production app should be sandboxed and granted only user-selected read-only access to the vault directory.
+The project is already a working prototype, not just a sketch. It has a portable core, a macOS app shell, a reader-first interface, a graph workspace, a generated demo vault, documentation screenshots, and green GitHub CI. It is not yet a fully shipped consumer app because signed/notarized app distribution, parser fidelity, accessibility, and large-vault performance still need dedicated modernization work.
 
-## Documentation
+## Start Here
 
-This repository includes a full handoff-oriented documentation set for future maintainers.
-
-Start here:
-
-- [`QUICKSTART.md`](./QUICKSTART.md)
-- [`docs/VISUAL_TOUR.md`](./docs/VISUAL_TOUR.md)
-- [`docs/README.md`](./docs/README.md)
-- [`docs/HANDOFF.md`](./docs/HANDOFF.md)
-- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
-- [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md)
-- [`docs/PRODUCT.md`](./docs/PRODUCT.md)
-- [`docs/STATUS.md`](./docs/STATUS.md)
+- [`QUICKSTART.md`](./QUICKSTART.md) for the fastest local run
+- [`docs/VISUAL_TOUR.md`](./docs/VISUAL_TOUR.md) for the current UI and design language
+- [`docs/README.md`](./docs/README.md) for the zero-memory documentation index
+- [`docs/HANDOFF.md`](./docs/HANDOFF.md) for the current project state and maintainer context
+- [`docs/MODERNIZATION_PLAN.md`](./docs/MODERNIZATION_PLAN.md) for the phased roadmap to turn the prototype into a modern shipping product
 
 [![Obviewer visual tour](./docs/images/visual-tour-library-home.png)](./docs/VISUAL_TOUR.md)
 
-## Product Direction
+## What Works Today
 
-- Native macOS app built with SwiftUI and selective AppKit bridges
-- Local-folder only, no sync layer, no editing affordances
-- High-contrast, typography-led reading experience with generous spacing and motion
-- Fast vault indexing for Markdown notes plus vault attachments
-- Obsidian-aware viewing for wiki links, callouts, tags, and image embeds
+- Native SwiftUI macOS app shell with `NavigationSplitView`
+- Portable `ObviewerCore` module for parsing, lookup, vault indexing, and graph construction
+- macOS-specific `ObviewerMacApp` module for security-scoped access, bookmarks, app state, and UI
+- Local vault loading with progress reporting
+- Search by title, path, tags, and preview text
+- Obsidian-aware parsing for links, callouts, tables, headings, tags, and image embeds
+- Inline image rendering with size hints plus a lightbox for image attachments
+- Reader workspace with metadata, linked-note navigation, and a contents rail
+- Graph workspace with local and global graph views
+- Rich synthetic-vault tooling for realistic manual testing
+- Documentation screenshot generation from the real app
+- Green CI on `macos-14` and `macos-15`
 
 ## Safety Model
 
-The UI being "view only" is not enough. The real guarantee comes from platform boundaries:
+The UI being "view only" is not enough. The guarantee comes from platform boundaries and the code structure:
 
-1. Enable App Sandbox.
-2. Grant only `com.apple.security.files.user-selected.read-only`.
-3. Do not include `read-write` or broader file exceptions.
-4. Open note files with read APIs only.
-5. Model vault access behind a dedicated read gateway with no write methods.
+1. The shipping app must run with App Sandbox enabled.
+2. The app must request only `com.apple.security.files.user-selected.read-only`.
+3. Vault access must come from user-selected folders, not broad filesystem exceptions.
+4. Vault reads must flow through the reader layer, with no write API.
+5. Release packaging must preserve the sandbox entitlements through code signing.
 
-The sample entitlements file in [`Configuration/Obviewer.entitlements`](/Users/liux17/codex/obviewer/Configuration/Obviewer.entitlements) shows the minimum shape.
-
-## Current Starter
-
-The package includes:
-
-- A native SwiftUI shell using `NavigationSplitView`
-- A reusable `ObviewerCore` module for vault models, parsing, and indexing
-- A macOS-specific `ObviewerMacApp` module for app state, security-scoped access, and UI
-- Security-scoped bookmark persistence for reopening the selected vault
-- An Obsidian-aware parser for inline links, tables, headings, lists, callouts, tags, and image embeds
-- A premium reading surface with note metadata, inline links, table rendering, and linked-note navigation
-- A right-side contents rail for long-note navigation
-- XcodeGen-based app scaffolding and helper scripts for producing a signed release bundle once signing is configured
-
-## Architecture
-
-The codebase is now split into three targets:
-
-- `ObviewerCore`
-  Portable domain layer for notes, attachments, parsing, lookup, and vault indexing
-- `ObviewerMacApp`
-  macOS shell layer for `AppModel`, security-scoped access, bookmark persistence, picker integration, and SwiftUI/AppKit views
-- `Obviewer`
-  Thin executable entry point that boots the macOS app
-
-This keeps parser and vault logic easier to test, debug, and eventually port to another client shell.
+The current entitlement baseline lives in [`Configuration/Obviewer.entitlements`](/Users/liux17/codex/obviewer/Configuration/Obviewer.entitlements).
 
 ## Quick Start
 
-The fastest path is in [`QUICKSTART.md`](./QUICKSTART.md).
-
-The one-command version is:
+The shortest local trial path is:
 
 ```bash
 git clone https://github.com/felizvida/obviewer.git
@@ -81,89 +53,58 @@ cd obviewer
 make try-local
 ```
 
-If you want a realistic synthetic vault to test against instead of your own notes, generate one with:
+If you want a realistic vault without touching your own notes:
 
 ```bash
 make demo-vault
 ```
 
-That creates a large sample vault at `build/SampleVault` with many notes, folders, duplicate filenames, images, documents, and cross-links.
+That generates `build/SampleVault`, which includes nested folders, duplicate filenames, shared and local attachments, tags, tables, links, images, and graph-friendly note relationships.
 
-To regenerate the documentation screenshots used in the visual tour:
+## Current Distribution State
 
-```bash
-make docs-screenshots
-```
+Today the GitHub release workflow publishes source archives and checksums. It does not yet publish a signed/notarized `.app` or `.dmg`.
 
-That command will:
+The repo already contains the pieces needed to finish that path:
 
-- verify that full Xcode is selected
-- install `xcodegen` with Homebrew if needed
-- generate `Obviewer.xcodeproj`
-- open the project in Xcode
+- `project.yml` for XcodeGen app-project generation
+- `scripts/build_app.sh` for signed app builds
+- `scripts/package_release_app.sh` for signed release packaging
+- `.github/workflows/release.yml` for tag-driven release automation
 
-Then:
+The next distribution milestone is a notarized GitHub `.dmg`, with Mac App Store distribution as a later option if the product warrants it.
 
-1. Select the `Obviewer` scheme.
-2. If Xcode asks about signing, choose your Personal Team.
-3. Press Run.
-4. Choose your local Obsidian vault inside the app.
+## Architecture Snapshot
 
-If you generated the sample vault, point the app at `build/SampleVault`.
+The codebase is split into three primary targets:
 
-If you prefer the manual path, you can still open the package in Xcode or run `swift build` and `swift test` from a shell with the full Xcode toolchain selected.
+- `ObviewerCore`
+  Portable models and services for notes, attachments, parser output, graph data, and vault indexing
+- `ObviewerMacApp`
+  macOS app state, platform integrations, SwiftUI/AppKit views, and documentation rendering
+- `Obviewer`
+  Thin executable entry point that launches the app
 
-## Easier App Packaging
+This separation keeps the vault and parser logic easier to test, debug, and eventually reuse in another shell.
 
-The repository now includes an `XcodeGen` project spec plus helper scripts so a future maintainer can generate a real macOS app project and package a signed release bundle without reconstructing the project by hand.
+## Modernization Priorities
 
-Typical flow:
+The project should modernize in this order:
 
-```bash
-brew install xcodegen
-export OBVIEWER_CODE_SIGN_IDENTITY="Developer ID Application: Example Corp (TEAMID1234)"
-export OBVIEWER_DEVELOPMENT_TEAM="TEAMID1234"
-make xcodeproj
-make build-app
-make package-app
-```
+1. Ship the production-grade app container and distribution path
+2. Upgrade markdown and Obsidian fidelity without weakening the read-only boundary
+3. Improve large-vault performance and live refresh behavior
+4. Deepen navigation, graph, media, and accessibility polish
+5. Add observability and maintenance workflows that keep the project healthy over time
 
-`make package-app` now refuses to produce an unsigned artifact, because doing so would bypass the sandbox-based read-only guarantee.
+The detailed roadmap is in [`docs/MODERNIZATION_PLAN.md`](./docs/MODERNIZATION_PLAN.md).
 
 ## Repository Health
 
-- CI runs on push, pull request, and manual dispatch through `.github/workflows/ci.yml`.
-- CI validates the Swift package on `macos-14` and `macos-15`, plus the XcodeGen scaffolding and packaging scripts.
-- Tagging `v*` triggers `.github/workflows/release.yml`, which rebuilds, retests, generates source archives, and publishes a GitHub release.
-- Bug reports and feature requests are routed through issue forms.
-- Contribution, support, and security guidance live in the repository root and `.github/`.
-- `CODEOWNERS` is configured so review routing starts with the repository owner.
-
-## Converting This Into a Shipping App
-
-This repository is a Swift package starter. To ship it as a proper `.app` bundle:
-
-1. Open the package in Xcode on a Mac with full Xcode installed.
-2. Create a macOS App target or package-generated app container.
-3. Attach [`Configuration/Obviewer.entitlements`](/Users/liux17/codex/obviewer/Configuration/Obviewer.entitlements) to the app target.
-4. Keep the app sandboxed in Debug and Release.
-5. Codesign and notarize as a standard sandboxed macOS app.
-
-## UX Direction
-
-The visual direction in this starter is intentionally not "developer utility gray":
-
-- Warm paper background instead of flat white
-- Serif-led note typography with rounded chrome
-- Material sidebar surfaces and soft depth
-- Dense metadata kept secondary to the reading flow
-
-## Next High-Value Steps
-
-- Replace the lightweight parser with a fuller CommonMark plus Obsidian extension pipeline
-- Add quick switcher and fuzzier large-vault navigation
-- Add footnotes, Mermaid block previews, and richer media rendering
-- Add live vault change observation through file-system events
+- CI runs on pushes to `main` and `codex/**`, on pull requests, and on manual dispatch
+- Releases are tag-driven through `.github/workflows/release.yml`
+- The repo includes issue templates, CODEOWNERS, contribution guidance, and security/support docs
+- The current release line is green after `v0.2.5`
 
 ## License
 
