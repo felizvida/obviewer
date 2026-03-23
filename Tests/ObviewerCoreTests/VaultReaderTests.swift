@@ -136,6 +136,75 @@ final class VaultReaderTests: XCTestCase {
         XCTAssertEqual(note.frontmatter.value(for: "status"), .string("cached"))
     }
 
+    func testReloadVaultAppliesSelectiveCreatedModifiedAndRemovedPaths() throws {
+        let sandbox = try TemporaryVault()
+        defer { sandbox.cleanup() }
+
+        try sandbox.write(
+            "Projects/Plan.md",
+            contents: """
+            # Plan
+
+            Original plan body.
+            """
+        )
+        try sandbox.write(
+            "Journal/Today.md",
+            contents: """
+            # Today
+
+            Unchanged journal note.
+            """
+        )
+        try sandbox.writeData("Projects/manual.pdf", data: Data([0x25, 0x50, 0x44, 0x46]))
+
+        let initialSnapshot = try VaultReader().loadVault(at: sandbox.rootURL)
+        let unchangedJournal = try XCTUnwrap(initialSnapshot.note(withID: "Journal/Today.md"))
+
+        try sandbox.write(
+            "Projects/Plan.md",
+            contents: """
+            # Plan
+
+            Updated selective reload body.
+            """
+        )
+        try sandbox.write(
+            "Projects/Backlog.md",
+            contents: """
+            # Backlog
+
+            Added during selective reload.
+            """
+        )
+        try sandbox.writeData("Projects/cover.png", data: Data([0x89, 0x50, 0x4E, 0x47]))
+        try sandbox.delete("Projects/manual.pdf")
+
+        let snapshot = try VaultReader().reloadVault(
+            at: sandbox.rootURL,
+            previousSnapshot: initialSnapshot,
+            changes: VaultReloadChanges(
+                modifiedPaths: ["Projects/Plan.md"],
+                createdPaths: ["Projects/Backlog.md", "Projects/cover.png"],
+                removedPaths: ["Projects/manual.pdf"]
+            )
+        )
+
+        XCTAssertEqual(snapshot.notes.count, 3)
+        XCTAssertEqual(snapshot.attachments.count, 1)
+        XCTAssertEqual(
+            snapshot.note(withID: "Projects/Plan.md")?.previewText,
+            "Plan"
+        )
+        XCTAssertNotNil(snapshot.note(withID: "Projects/Backlog.md"))
+        XCTAssertEqual(
+            snapshot.attachment(for: "Projects/cover.png")?.kind,
+            .image
+        )
+        XCTAssertNil(snapshot.attachment(for: "Projects/manual.pdf"))
+        XCTAssertEqual(snapshot.note(withID: "Journal/Today.md"), unchangedJournal)
+    }
+
     func testLoadLargeGeneratedVaultExercisesRealObsidianFeatures() throws {
         let fixture = try TemporaryDemoVault(profile: .integration)
         defer { fixture.cleanup() }
@@ -247,6 +316,10 @@ private struct TemporaryVault {
             attributes: nil
         )
         try data.write(to: fileURL)
+    }
+
+    func delete(_ relativePath: String) throws {
+        try FileManager.default.removeItem(at: rootURL.appending(path: relativePath))
     }
 
     func cleanup() {

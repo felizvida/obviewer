@@ -144,7 +144,7 @@ Present:
 - acceptable behavior on the synthetic demo vault
 - loading progress visibility
 - live vault watching on macOS
-- incremental reload that reuses unchanged note models instead of reparsing every markdown file
+- selective incremental reload that applies changed, added, and removed file paths while reusing untouched note models
 
 Still incomplete:
 
@@ -177,7 +177,7 @@ The repo is release-automated, but the published artifact is still source-only. 
 
 ### Risk 3: Performance ceiling
 
-The new watcher and incremental reload path improve day-to-day edits, but the app still re-enumerates the vault and lacks a persistent cache for truly large vaults.
+The new watcher and selective reload path improve day-to-day edits, but the app still lacks a persistent cache and more advanced indexing for truly large vaults.
 
 ### Risk 4: UI verification gap
 

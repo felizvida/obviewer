@@ -491,6 +491,12 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(loader.recordedURLs, [vaultURL, vaultURL])
         XCTAssertEqual(loader.reloadPreviousSnapshotIDs.count, 1)
         XCTAssertEqual(
+            loader.recordedReloadChanges,
+            [
+                VaultReloadChanges(modifiedPaths: ["Projects/Plan.md"]),
+            ]
+        )
+        XCTAssertEqual(
             Set(loader.reloadPreviousSnapshotIDs[0]),
             ["Root.md", "Journal/Today.md", "Projects/Plan.md"]
         )
@@ -544,6 +550,7 @@ private final class VaultLoaderSpy: @unchecked Sendable, VaultLoading {
     private var results: [Result<VaultSnapshot, Error>]
     private var urls = [URL]()
     private var reloadSnapshots = [[String]]()
+    private var reloadChanges = [VaultReloadChanges?]()
     private let progressEvents: [VaultLoadingProgress]
 
     init(result: Result<VaultSnapshot, Error>) {
@@ -573,22 +580,30 @@ private final class VaultLoaderSpy: @unchecked Sendable, VaultLoading {
         return reloadSnapshots
     }
 
+    var recordedReloadChanges: [VaultReloadChanges?] {
+        lock.lock()
+        defer { lock.unlock() }
+        return reloadChanges
+    }
+
     func loadVault(
         at url: URL,
         progress: (@Sendable (VaultLoadingProgress) -> Void)?
     ) throws -> VaultSnapshot {
-        try reloadVault(at: url, previousSnapshot: nil, progress: progress)
+        try reloadVault(at: url, previousSnapshot: nil, changes: nil, progress: progress)
     }
 
     func reloadVault(
         at url: URL,
         previousSnapshot: VaultSnapshot?,
+        changes: VaultReloadChanges?,
         progress: (@Sendable (VaultLoadingProgress) -> Void)?
     ) throws -> VaultSnapshot {
         lock.lock()
         urls.append(url)
         if let previousSnapshot {
             reloadSnapshots.append(previousSnapshot.notes.map(\.id))
+            reloadChanges.append(changes)
         }
         let current = results.count > 1 ? results.removeFirst() : results[0]
         lock.unlock()
@@ -610,7 +625,10 @@ private final class VaultWatcherSpy: VaultWatching {
     private(set) var startedURLs = [URL]()
     private var sessions = [VaultWatchSessionSpy]()
 
-    func beginWatching(url: URL, onChange: @escaping @Sendable () -> Void) -> any VaultWatchSession {
+    func beginWatching(
+        url: URL,
+        onChange: @escaping @Sendable (VaultReloadChanges) -> Void
+    ) -> any VaultWatchSession {
         startedURLs.append(url)
         let session = VaultWatchSessionSpy(onChange: onChange)
         sessions.append(session)
@@ -618,15 +636,17 @@ private final class VaultWatcherSpy: VaultWatching {
     }
 
     func emitChange() {
-        sessions.last?.emitChange()
+        sessions.last?.emitChange(
+            VaultReloadChanges(modifiedPaths: ["Projects/Plan.md"])
+        )
     }
 }
 
 private final class VaultWatchSessionSpy: VaultWatchSession {
-    private let onChange: @Sendable () -> Void
+    private let onChange: @Sendable (VaultReloadChanges) -> Void
     private(set) var invalidationCount = 0
 
-    init(onChange: @escaping @Sendable () -> Void) {
+    init(onChange: @escaping @Sendable (VaultReloadChanges) -> Void) {
         self.onChange = onChange
     }
 
@@ -634,8 +654,8 @@ private final class VaultWatchSessionSpy: VaultWatchSession {
         invalidationCount += 1
     }
 
-    func emitChange() {
-        onChange()
+    func emitChange(_ changes: VaultReloadChanges) {
+        onChange(changes)
     }
 }
 

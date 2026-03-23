@@ -24,7 +24,7 @@ public final class AppModel: ObservableObject {
 
     private var didAttemptRestore = false
     private var watchSession: (any VaultWatchSession)?
-    private var pendingWatchedReload = false
+    private var pendingWatchedChanges = VaultReloadChanges.none
 
     public convenience init() {
         self.init(
@@ -160,6 +160,7 @@ public final class AppModel: ObservableObject {
                 from: restoredURL,
                 persistBookmark: false,
                 previousSnapshot: snapshot,
+                changes: nil,
                 restartWatcher: true
             )
         } catch {
@@ -178,6 +179,7 @@ public final class AppModel: ObservableObject {
             from: url,
             persistBookmark: true,
             previousSnapshot: snapshot?.rootURL == url ? snapshot : nil,
+            changes: nil,
             restartWatcher: true
         )
     }
@@ -188,6 +190,7 @@ public final class AppModel: ObservableObject {
             from: vaultURL,
             persistBookmark: false,
             previousSnapshot: snapshot,
+            changes: nil,
             restartWatcher: false
         )
     }
@@ -225,6 +228,7 @@ public final class AppModel: ObservableObject {
         from url: URL,
         persistBookmark: Bool,
         previousSnapshot: VaultSnapshot?,
+        changes: VaultReloadChanges?,
         restartWatcher: Bool
     ) async {
         isLoading = true
@@ -253,12 +257,16 @@ public final class AppModel: ObservableObject {
                 progressTask.cancel()
             }
 
-            let snapshot = try await Task.detached(priority: .userInitiated) { [reader, url, progressContinuation, previousSnapshot] in
+            let snapshot = try await Task.detached(priority: .userInitiated) { [reader, url, progressContinuation, previousSnapshot, changes] in
                 defer {
                     progressContinuation.finish()
                 }
 
-                return try reader.reloadVault(at: url, previousSnapshot: previousSnapshot) { progress in
+                return try reader.reloadVault(
+                    at: url,
+                    previousSnapshot: previousSnapshot,
+                    changes: changes
+                ) { progress in
                     progressContinuation.yield(progress)
                 }
             }.value
@@ -285,12 +293,14 @@ public final class AppModel: ObservableObject {
         isLoading = false
         loadingProgress = nil
 
-        if pendingWatchedReload, let vaultURL {
-            pendingWatchedReload = false
+        if pendingWatchedChanges.isEmpty == false, let vaultURL {
+            let queuedChanges = pendingWatchedChanges
+            pendingWatchedChanges = .none
             await loadVault(
                 from: vaultURL,
                 persistBookmark: false,
                 previousSnapshot: snapshot,
+                changes: queuedChanges,
                 restartWatcher: false
             )
         }
@@ -298,9 +308,10 @@ public final class AppModel: ObservableObject {
 
     private func startWatchingVault(at url: URL) {
         watchSession?.invalidate()
-        watchSession = watcher.beginWatching(url: url) { [weak self] in
+        pendingWatchedChanges = .none
+        watchSession = watcher.beginWatching(url: url) { [weak self] changes in
             Task { @MainActor [weak self] in
-                await self?.handleWatchedVaultChange()
+                await self?.handleWatchedVaultChange(changes)
             }
         }
         isLiveReloadEnabled = true
@@ -310,17 +321,23 @@ public final class AppModel: ObservableObject {
         watchSession?.invalidate()
         watchSession = nil
         isLiveReloadEnabled = false
-        pendingWatchedReload = false
+        pendingWatchedChanges = .none
     }
 
-    private func handleWatchedVaultChange() async {
-        guard vaultURL != nil else { return }
+    private func handleWatchedVaultChange(_ changes: VaultReloadChanges) async {
+        guard let vaultURL else { return }
         guard isLoading == false else {
-            pendingWatchedReload = true
+            pendingWatchedChanges = pendingWatchedChanges.merged(with: changes)
             return
         }
 
-        await reloadVault()
+        await loadVault(
+            from: vaultURL,
+            persistBookmark: false,
+            previousSnapshot: snapshot,
+            changes: changes,
+            restartWatcher: false
+        )
     }
 
 }

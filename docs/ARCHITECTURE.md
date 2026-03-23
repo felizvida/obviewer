@@ -72,7 +72,7 @@ The main runtime flow is:
 7. notes and attachments become a `VaultSnapshot`
 8. `VaultSnapshot` derives lookup tables and a `NoteGraph`
 9. `AppModel` starts a vault watcher after a successful load
-10. filesystem changes trigger debounced reloads through the same loader boundary
+10. filesystem changes trigger debounced, path-aware reload batches through the same loader boundary
 11. `ContentView` renders the library shell
 12. `ReaderView` renders note content and attachment flows
 13. `GraphView` renders local/global graph exploration
@@ -143,7 +143,7 @@ Responsibilities:
 - classify notes and attachments
 - read note contents through read-only APIs
 - emit progress updates
-- reuse unchanged notes during reloads
+- reuse unchanged notes and patch only affected files during watched reloads
 - produce the final snapshot
 
 Important design choices:
@@ -154,7 +154,7 @@ Important design choices:
 
 Pressure points:
 
-- reload still re-enumerates the vault rather than applying a persistent index
+- reloads are path-aware now, but there is still no persistent index or cache layer for very large vaults
 - no cache layer beyond in-memory reuse of unchanged notes
 - frontmatter is still intentionally shallow and does not yet model nested YAML objects
 

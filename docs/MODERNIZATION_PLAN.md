@@ -32,7 +32,7 @@ The project still lacks:
 
 - signed/notarized end-user distribution
 - full markdown and Obsidian fidelity
-- deeper incremental indexing and caching
+- deeper incremental indexing, caching, and persistent large-vault state
 - accessibility hardening
 - UI regression coverage
 - operational polish for real public distribution
@@ -98,8 +98,8 @@ Primary outcome:
 
 Work items:
 
-- deepen the new watcher flow into more selective change handling
-- introduce more granular incremental indexing instead of full rescans for small edits
+- deepen the new watcher flow into broader change coverage and recovery behavior
+- introduce more granular incremental indexing and caching beyond the current path-aware selective reloads
 - add lightweight caching where it reduces repeated parse/index cost
 - profile startup, reload, and graph generation on large fixture vaults
 - improve search ranking and large-result navigation

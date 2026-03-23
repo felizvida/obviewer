@@ -12,13 +12,45 @@ public struct VaultReader: VaultLoading, Sendable {
         at rootURL: URL,
         progress: (@Sendable (VaultLoadingProgress) -> Void)? = nil
     ) throws -> VaultSnapshot {
-        try reloadVault(at: rootURL, previousSnapshot: nil, progress: progress)
+        try reloadVault(at: rootURL, previousSnapshot: nil, changes: nil, progress: progress)
     }
 
     public func reloadVault(
         at rootURL: URL,
         previousSnapshot: VaultSnapshot?,
+        changes: VaultReloadChanges?,
         progress: (@Sendable (VaultLoadingProgress) -> Void)? = nil
+    ) throws -> VaultSnapshot {
+        if let previousSnapshot, let changes {
+            if changes.isEmpty {
+                progress?(
+                    VaultLoadingProgress(
+                        processedFileCount: 0,
+                        noteCount: previousSnapshot.notes.count,
+                        attachmentCount: previousSnapshot.attachments.count,
+                        currentPath: nil
+                    )
+                )
+                return previousSnapshot
+            }
+
+            if changes.requiresFullReload == false {
+                return try selectivelyReloadVault(
+                    at: rootURL,
+                    previousSnapshot: previousSnapshot,
+                    changes: changes,
+                    progress: progress
+                )
+            }
+        }
+
+        return try fullyReloadVault(at: rootURL, previousSnapshot: previousSnapshot, progress: progress)
+    }
+
+    private func fullyReloadVault(
+        at rootURL: URL,
+        previousSnapshot: VaultSnapshot?,
+        progress: (@Sendable (VaultLoadingProgress) -> Void)?
     ) throws -> VaultSnapshot {
         let resourceKeys: Set<URLResourceKey> = [
             .isRegularFileKey,
@@ -66,28 +98,12 @@ public struct VaultReader: VaultLoading, Sendable {
 
             if extensionName == "md" {
                 let note: VaultNote
-                if let previousNote = previousNotesByID[relativePath],
-                   previousNote.modifiedAt == modifiedAt {
+                if let previousNote = previousNotesByID[relativePath], previousNote.modifiedAt == modifiedAt {
                     note = previousNote
                 } else {
-                    let markdown = try readText(at: fileURL)
-                    let fallbackTitle = ((relativePath as NSString).lastPathComponent as NSString).deletingPathExtension
-                    let parsed = ObsidianParser().parse(markdown: markdown, fallbackTitle: fallbackTitle)
-                    note = VaultNote(
-                        id: relativePath,
-                        title: parsed.title,
+                    note = try loadNote(
+                        at: fileURL,
                         relativePath: relativePath,
-                        folderPath: (relativePath as NSString).deletingLastPathComponent == "."
-                            ? ""
-                            : (relativePath as NSString).deletingLastPathComponent,
-                        previewText: parsed.previewText,
-                        frontmatter: parsed.frontmatter,
-                        tags: parsed.tags,
-                        outboundLinks: parsed.outboundLinks,
-                        tableOfContents: parsed.tableOfContents,
-                        blocks: parsed.blocks,
-                        wordCount: parsed.wordCount,
-                        readingTimeMinutes: parsed.readingTimeMinutes,
                         modifiedAt: modifiedAt
                     )
                 }
@@ -115,6 +131,142 @@ public struct VaultReader: VaultLoading, Sendable {
         )
 
         return VaultSnapshot(rootURL: rootURL, notes: notes, attachments: attachments)
+    }
+
+    private func selectivelyReloadVault(
+        at rootURL: URL,
+        previousSnapshot: VaultSnapshot,
+        changes: VaultReloadChanges,
+        progress: (@Sendable (VaultLoadingProgress) -> Void)?
+    ) throws -> VaultSnapshot {
+        let resourceKeys: Set<URLResourceKey> = [
+            .isRegularFileKey,
+            .contentModificationDateKey,
+        ]
+
+        var notesByPath = Dictionary(
+            uniqueKeysWithValues: previousSnapshot.notes.map { ($0.relativePath, $0) }
+        )
+        var attachmentsByPath = Dictionary(
+            uniqueKeysWithValues: previousSnapshot.attachments.map { ($0.relativePath, $0) }
+        )
+        let affectedPaths = changes.affectedPaths
+        var processedFileCount = 0
+
+        func reportProgress(currentPath: String?) {
+            progress?(
+                VaultLoadingProgress(
+                    processedFileCount: processedFileCount,
+                    noteCount: notesByPath.count,
+                    attachmentCount: attachmentsByPath.count,
+                    currentPath: currentPath
+                )
+            )
+        }
+
+        for relativePath in affectedPaths {
+            processedFileCount += 1
+            if processedFileCount == 1 || processedFileCount.isMultiple(of: progressUpdateInterval) {
+                reportProgress(currentPath: relativePath)
+            }
+
+            if changes.removedPaths.contains(relativePath) {
+                removeIndexedItem(
+                    at: relativePath,
+                    notesByPath: &notesByPath,
+                    attachmentsByPath: &attachmentsByPath
+                )
+                continue
+            }
+
+            let fileURL = rootURL.appending(path: relativePath)
+            guard let values = try? fileURL.resourceValues(forKeys: resourceKeys),
+                  values.isRegularFile == true else {
+                removeIndexedItem(
+                    at: relativePath,
+                    notesByPath: &notesByPath,
+                    attachmentsByPath: &attachmentsByPath
+                )
+                continue
+            }
+
+            let modifiedAt = values.contentModificationDate ?? .distantPast
+            let extensionName = fileURL.pathExtension.lowercased()
+
+            if extensionName == "md" {
+                let note: VaultNote
+                if let previousNote = notesByPath[relativePath], previousNote.modifiedAt == modifiedAt {
+                    note = previousNote
+                } else {
+                    note = try loadNote(
+                        at: fileURL,
+                        relativePath: relativePath,
+                        modifiedAt: modifiedAt
+                    )
+                }
+                notesByPath[relativePath] = note
+                attachmentsByPath.removeValue(forKey: relativePath)
+                continue
+            }
+
+            if let kind = classifyAttachment(extensionName) {
+                attachmentsByPath[relativePath] = VaultAttachment(
+                    relativePath: relativePath,
+                    url: fileURL,
+                    kind: kind
+                )
+                notesByPath.removeValue(forKey: relativePath)
+            } else {
+                removeIndexedItem(
+                    at: relativePath,
+                    notesByPath: &notesByPath,
+                    attachmentsByPath: &attachmentsByPath
+                )
+            }
+        }
+
+        reportProgress(currentPath: nil)
+        return VaultSnapshot(
+            rootURL: rootURL,
+            notes: Array(notesByPath.values),
+            attachments: Array(attachmentsByPath.values)
+        )
+    }
+
+    private func loadNote(
+        at fileURL: URL,
+        relativePath: String,
+        modifiedAt: Date
+    ) throws -> VaultNote {
+        let markdown = try readText(at: fileURL)
+        let fallbackTitle = ((relativePath as NSString).lastPathComponent as NSString).deletingPathExtension
+        let parsed = ObsidianParser().parse(markdown: markdown, fallbackTitle: fallbackTitle)
+        return VaultNote(
+            id: relativePath,
+            title: parsed.title,
+            relativePath: relativePath,
+            folderPath: (relativePath as NSString).deletingLastPathComponent == "."
+                ? ""
+                : (relativePath as NSString).deletingLastPathComponent,
+            previewText: parsed.previewText,
+            frontmatter: parsed.frontmatter,
+            tags: parsed.tags,
+            outboundLinks: parsed.outboundLinks,
+            tableOfContents: parsed.tableOfContents,
+            blocks: parsed.blocks,
+            wordCount: parsed.wordCount,
+            readingTimeMinutes: parsed.readingTimeMinutes,
+            modifiedAt: modifiedAt
+        )
+    }
+
+    private func removeIndexedItem(
+        at relativePath: String,
+        notesByPath: inout [String: VaultNote],
+        attachmentsByPath: inout [String: VaultAttachment]
+    ) {
+        notesByPath.removeValue(forKey: relativePath)
+        attachmentsByPath.removeValue(forKey: relativePath)
     }
 
     private func readText(at url: URL) throws -> String {

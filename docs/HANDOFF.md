@@ -41,7 +41,7 @@ What exists today:
 
 - split package architecture: `ObviewerCore`, `ObviewerMacApp`, and `Obviewer`
 - SwiftUI app shell with note library, reader workspace, and graph workspace
-- vault loading with progress reporting, live watching, and incremental reload reuse
+- vault loading with progress reporting, live watching, and path-aware selective reloads
 - security-scoped bookmark restore flow
 - Obsidian-aware parsing for links, callouts, tables, tags, headings, footnotes, image embeds, and unsupported-content fallback blocks
 - inline image rendering with size hints and image lightbox behavior
@@ -57,7 +57,7 @@ What does not exist yet:
 - a published signed/notarized `.app` or `.dmg`
 - App Store distribution
 - full CommonMark plus Obsidian fidelity
-- persistent indexing cache and more granular large-vault incremental indexing
+- persistent indexing cache and deeper large-vault incremental indexing
 - accessibility audit and VoiceOver hardening
 - UI snapshot testing
 - performance instrumentation for very large vaults
@@ -83,7 +83,7 @@ Any change that weakens this chain should be treated as a high-risk regression.
 
 ## Current Architecture In One Paragraph
 
-`AppModel` orchestrates vault loading, bookmark restore, search state, graph state, navigation, and watched reloads. `VaultReader` scans the vault and hands markdown text to `ObsidianParser`, which produces simplified render blocks plus outbound links, tags, headings, and metadata. `VaultSnapshot` stores notes, attachments, lookup tables, and the derived `NoteGraph`. `ContentView` hosts the split-view shell, `ReaderView` renders notes into the reading surface, `RichTextView` handles inline content, and `GraphView` renders the graph workspace. Supporting tools generate demo vaults and documentation screenshots from the same real UI stack.
+`AppModel` orchestrates vault loading, bookmark restore, search state, graph state, navigation, and watched reloads. `VaultWatcher` turns filesystem changes into path-aware reload batches, and `VaultReader` applies those batches by reusing untouched notes while reparsing only affected files. `ObsidianParser` produces simplified render blocks plus outbound links, tags, headings, and metadata. `VaultSnapshot` stores notes, attachments, lookup tables, and the derived `NoteGraph`. `ContentView` hosts the split-view shell, `ReaderView` renders notes into the reading surface, `RichTextView` handles inline content, and `GraphView` renders the graph workspace. Supporting tools generate demo vaults and documentation screenshots from the same real UI stack.
 
 For the full breakdown, read [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
