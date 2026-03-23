@@ -20,6 +20,16 @@ struct ObviewerBenchmarkTool {
             print(renderedOutput)
         }
 
+        if let summaryOutputURL = options.summaryOutputURL {
+            let renderedSummary = report.renderedMarkdown
+            try FileManager.default.createDirectory(
+                at: summaryOutputURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try renderedSummary.write(to: summaryOutputURL, atomically: true, encoding: .utf8)
+            print("Wrote benchmark summary to \(summaryOutputURL.path)")
+        }
+
         if let budget = try options.loadBudget() {
             try budget.validate(report: report)
             print("Benchmark budgets satisfied.")
@@ -34,6 +44,8 @@ struct ObviewerBenchmarkTool {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             return String(decoding: try encoder.encode(report), as: UTF8.self)
+        case .markdown:
+            return report.renderedMarkdown
         }
     }
 }
@@ -48,6 +60,7 @@ private struct CLIOptions {
     enum OutputFormat: String {
         case text
         case json
+        case markdown
     }
 
     let format: OutputFormat
@@ -55,6 +68,7 @@ private struct CLIOptions {
     let existingVaultURL: URL?
     let outputURL: URL?
     let budgetURL: URL?
+    let summaryOutputURL: URL?
 
     static func parse(_ arguments: [String]) throws -> CLIOptions {
         var format = OutputFormat.text
@@ -62,6 +76,7 @@ private struct CLIOptions {
         var existingVaultURL: URL?
         var outputURL: URL?
         var budgetURL: URL?
+        var summaryOutputURL: URL?
 
         var index = 0
         while index < arguments.count {
@@ -100,6 +115,12 @@ private struct CLIOptions {
                     throw CLIError.missingValue(argument)
                 }
                 budgetURL = URL(fileURLWithPath: arguments[index])
+            case "--summary-output":
+                index += 1
+                guard index < arguments.count else {
+                    throw CLIError.missingValue(argument)
+                }
+                summaryOutputURL = URL(fileURLWithPath: arguments[index])
             default:
                 throw CLIError.unsupportedArgument(argument)
             }
@@ -111,7 +132,8 @@ private struct CLIOptions {
             profile: profile,
             existingVaultURL: existingVaultURL,
             outputURL: outputURL,
-            budgetURL: budgetURL
+            budgetURL: budgetURL,
+            summaryOutputURL: summaryOutputURL
         )
     }
 
@@ -160,7 +182,7 @@ private enum CLIError: LocalizedError {
         case .unsupportedArgument(let argument):
             return "Unsupported argument: \(argument)"
         case .invalidFormat(let format):
-            return "Unknown format '\(format)'. Use text or json."
+            return "Unknown format '\(format)'. Use text, json, or markdown."
         case .unknownProfile(let value):
             return "Unknown profile '\(value)'. Use smoke, showcase, integration, or benchmark."
         case .unreadableVault(let path):
@@ -343,6 +365,64 @@ private struct BenchmarkReport: Codable {
             lines.append("Sample Query Matches")
             for result in searchResults {
                 lines.append("- \(result.query): \(result.matchCount)")
+            }
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    var renderedMarkdown: String {
+        var lines = [String]()
+        lines.append("# Obviewer Vault Benchmark")
+        lines.append("")
+        lines.append("- Source: \(source)\(profileName.map { " (\($0))" } ?? "")")
+        lines.append("- Vault: `\(rootPath)`")
+        lines.append("- Files: \(diagnostics.totalFileCount) total (\(diagnostics.noteCount) notes, \(diagnostics.attachmentCount) attachments)")
+        lines.append("- Folders: \(diagnostics.folderCount)")
+        lines.append("- Unique tags: \(diagnostics.uniqueTagCount)")
+        lines.append("- Graph: \(graphNodeCount) nodes, \(graphEdgeCount) edges")
+        lines.append("- Average words per note: \(formatDecimal(diagnostics.averageWordsPerNote))")
+        lines.append("- Average outbound links per note: \(formatDecimal(diagnostics.averageOutboundLinksPerNote))")
+
+        if diagnostics.attachmentKindCounts.isEmpty == false {
+            lines.append("")
+            lines.append("## Attachment Mix")
+            lines.append("")
+            lines.append("| Kind | Count |")
+            lines.append("| --- | ---: |")
+            for summary in diagnostics.attachmentKindCounts {
+                lines.append("| \(summary.kind.rawValue) | \(summary.count) |")
+            }
+        }
+
+        if diagnostics.largestFolders.isEmpty == false {
+            lines.append("")
+            lines.append("## Largest Folders")
+            lines.append("")
+            lines.append("| Folder | Total Files | Notes | Attachments |")
+            lines.append("| --- | ---: | ---: | ---: |")
+            for folder in diagnostics.largestFolders {
+                lines.append("| \(folder.displayName) | \(folder.totalFileCount) | \(folder.noteCount) | \(folder.attachmentCount) |")
+            }
+        }
+
+        lines.append("")
+        lines.append("## Timings")
+        lines.append("")
+        lines.append("| Metric | Milliseconds |")
+        lines.append("| --- | ---: |")
+        for timing in timings {
+            lines.append("| \(timing.name) | \(formatDecimal(timing.milliseconds)) |")
+        }
+
+        if searchResults.isEmpty == false {
+            lines.append("")
+            lines.append("## Sample Query Matches")
+            lines.append("")
+            lines.append("| Query | Matches |")
+            lines.append("| --- | ---: |")
+            for result in searchResults {
+                lines.append("| \(result.query) | \(result.matchCount) |")
             }
         }
 

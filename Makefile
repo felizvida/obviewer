@@ -4,7 +4,7 @@ help:
 	@printf '%s\n' \
 	"make try-local   Generate the Xcode project and open it for the easiest first run" \
 	"make demo-vault  Generate a rich sample Obsidian vault under build/SampleVault" \
-	"make benchmark-vault Profile a vault; supports PROFILE, VAULT, FORMAT, OUTPUT, and BUDGET env vars" \
+	"make benchmark-vault Profile a vault; supports PROFILE, VAULT, FORMAT, OUTPUT, SUMMARY, and BUDGET env vars" \
 	"make docs-screenshots Generate polished product screenshots under docs/images" \
 	"make xcodeproj   Generate Obviewer.xcodeproj using XcodeGen" \
 	"make build-app   Build a signed Release app (requires signing env vars)" \

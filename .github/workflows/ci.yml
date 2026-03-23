@@ -93,11 +93,17 @@ jobs:
           PROFILE=${{ matrix.profile }} \
           FORMAT=json \
           OUTPUT=build/reports/benchmark-${{ matrix.profile }}.json \
+          SUMMARY=build/reports/benchmark-${{ matrix.profile }}.md \
           BUDGET='${{ matrix.budget }}' \
           make benchmark-vault
+
+      - name: Publish benchmark job summary
+        run: cat build/reports/benchmark-${{ matrix.profile }}.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload benchmark artifact
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
-          path: build/reports/benchmark-${{ matrix.profile }}.json
+          path: |
+            build/reports/benchmark-${{ matrix.profile }}.json
+            build/reports/benchmark-${{ matrix.profile }}.md

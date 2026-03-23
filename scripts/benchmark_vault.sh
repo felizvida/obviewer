@@ -6,6 +6,7 @@ PROFILE_NAME="${PROFILE:-benchmark}"
 OUTPUT_FORMAT="${FORMAT:-text}"
 BUDGET_PATH="${BUDGET:-}"
 OUTPUT_PATH="${OUTPUT:-}"
+SUMMARY_PATH="${SUMMARY:-}"
 CACHE_ROOT="$ROOT_DIR/build/.swiftpm-cache"
 MODULE_CACHE_ROOT="$ROOT_DIR/build/.swiftpm-modulecache"
 CLANG_CACHE_ROOT="$ROOT_DIR/build/.clang-modulecache"
@@ -19,6 +20,9 @@ export CLANG_MODULE_CACHE_PATH="$CLANG_CACHE_ROOT"
 args=(--format "$OUTPUT_FORMAT")
 if [[ -n "$OUTPUT_PATH" ]]; then
     args+=(--output "$OUTPUT_PATH")
+fi
+if [[ -n "$SUMMARY_PATH" ]]; then
+    args+=(--summary-output "$SUMMARY_PATH")
 fi
 if [[ -n "$BUDGET_PATH" ]]; then
     args+=(--budget "$BUDGET_PATH")

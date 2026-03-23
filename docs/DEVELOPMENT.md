@@ -170,6 +170,7 @@ Notes:
 - existing-vault runs stay read-only and skip the selective-reload mutation step
 - the smoke profile can now run as a pass/fail CI guardrail through `Configuration/benchmark-smoke-budget.json`
 - CI also runs an `integration` benchmark profile and uploads its JSON artifact without enforcing a timing budget yet
+- benchmark jobs also emit markdown summaries into the GitHub Actions job summary so maintainers can scan timings without downloading artifacts
 - larger-profile runs are still primarily for profiling and regression investigation, not hard CI gates yet
 
 ## CI And Release Automation

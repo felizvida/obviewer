@@ -28,6 +28,7 @@ The project already has:
 - large-vault benchmark tooling and index diagnostics
 - smoke-profile benchmark budget enforcement in CI
 - integration-profile benchmark reporting in CI
+- benchmark summaries surfaced directly in CI job output
 - documentation screenshot tooling
 - local and CI verification
 - tag-driven source releases

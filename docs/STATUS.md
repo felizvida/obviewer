@@ -150,6 +150,7 @@ Present:
 - large-vault benchmark tooling with index diagnostics for cold load, warm reload, selective reload, search, and graph queries
 - smoke-profile benchmark budget enforcement in CI with a published JSON report artifact
 - integration-profile benchmark reporting in CI for larger-fixture visibility without hard timing budgets yet
+- markdown benchmark summaries in CI job pages for faster maintainer review
 
 Still incomplete:
 

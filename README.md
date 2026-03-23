@@ -78,7 +78,7 @@ For the same path that CI enforces, use:
 PROFILE=smoke BUDGET=Configuration/benchmark-smoke-budget.json make benchmark-vault
 ```
 
-CI also publishes an `integration` benchmark report artifact on every run so larger-profile performance trends can be watched before stricter budgets are locked in.
+CI also publishes `smoke` and `integration` benchmark artifacts on every run, and each job now writes a readable benchmark summary directly into the GitHub Actions run page.
 
 ## Current Distribution State
 
