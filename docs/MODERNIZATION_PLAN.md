@@ -22,6 +22,7 @@ The project already has:
 - a split core/macOS architecture
 - note parsing, lookup, search, and graph derivation
 - live vault watching and incremental reload foundations
+- persistent warm-start snapshot caching for unchanged parsed notes and attachment metadata
 - reader and graph workspaces
 - synthetic vault tooling
 - documentation screenshot tooling
@@ -32,7 +33,7 @@ The project still lacks:
 
 - signed/notarized end-user distribution
 - full markdown and Obsidian fidelity
-- deeper incremental indexing, caching, and persistent large-vault state
+- deeper incremental indexing and persistent large-vault state beyond the current snapshot cache
 - accessibility hardening
 - UI regression coverage
 - operational polish for real public distribution
@@ -168,7 +169,7 @@ If one maintainer is driving the next serious push, this is the recommended orde
 
 ### Days 61-90
 
-- deepen the new file-watching and incremental reload foundations
+- deepen the new file-watching, selective reload, and warm-start cache foundations into broader indexed persistence
 - improve graph interaction and layout quality
 - begin accessibility and UI-regression work
 

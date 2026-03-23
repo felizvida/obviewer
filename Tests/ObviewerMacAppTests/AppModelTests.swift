@@ -51,6 +51,41 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
+    func testChooseVaultUsesCachedSeedSnapshotOnColdLoad() async {
+        let vaultURL = URL(fileURLWithPath: "/tmp/obviewer-tests/vault")
+        let cachedSnapshot = VaultSnapshot(
+            rootURL: vaultURL,
+            notes: [
+                .fixture(
+                    relativePath: "Cached/Plan.md",
+                    title: "Cached Plan",
+                    tags: ["cached"],
+                    modifiedAt: .distantPast
+                ),
+            ],
+            attachments: [
+                .fixture(relativePath: "Assets/cover.png", kind: .image),
+            ]
+        )
+        let cache = VaultNoteCacheSpy(snapshot: cachedSnapshot)
+        let loader = VaultLoaderSpy(result: .success(makeSnapshot()))
+        let model = AppModel(
+            bookmarkStore: BookmarkStoreSpy(),
+            picker: VaultPickerStub(url: vaultURL),
+            reader: loader,
+            securityScopeManager: SecurityScopeSpy(),
+            noteCache: cache
+        )
+
+        await model.chooseVault()
+
+        XCTAssertEqual(loader.reloadPreviousSnapshotIDs, [["Cached/Plan.md"]])
+        XCTAssertEqual(loader.reloadPreviousAttachmentPaths, [["Assets/cover.png"]])
+        XCTAssertEqual(cache.loadedURLs, [vaultURL])
+        XCTAssertEqual(cache.savedRootURLs, [vaultURL])
+    }
+
+    @MainActor
     func testRestoreVaultLoadsOnlyOnce() async {
         let vaultURL = URL(fileURLWithPath: "/tmp/obviewer-tests/restored")
         let bookmarkStore = BookmarkStoreSpy(restoredURL: vaultURL)
@@ -545,11 +580,41 @@ private final class SecurityScopeSpy: SecurityScopeManaging {
     }
 }
 
+private struct VaultNoteCacheSpy: VaultNoteCaching {
+    private(set) var loadedURLsStorage = LockedBox<[URL]>([])
+    private(set) var savedRootURLsStorage = LockedBox<[URL]>([])
+    let snapshot: VaultSnapshot?
+
+    init(snapshot: VaultSnapshot?) {
+        self.snapshot = snapshot
+    }
+
+    var loadedURLs: [URL] {
+        loadedURLsStorage.value
+    }
+
+    var savedRootURLs: [URL] {
+        savedRootURLsStorage.value
+    }
+
+    func loadSeedSnapshot(for vaultURL: URL) -> VaultSnapshot? {
+        loadedURLsStorage.withValue { $0.append(vaultURL) }
+        return snapshot
+    }
+
+    func saveSeedSnapshot(_ snapshot: VaultSnapshot) {
+        savedRootURLsStorage.withValue { $0.append(snapshot.rootURL) }
+    }
+
+    func removeSeedSnapshot(for vaultURL: URL) {}
+}
+
 private final class VaultLoaderSpy: @unchecked Sendable, VaultLoading {
     private let lock = NSLock()
     private var results: [Result<VaultSnapshot, Error>]
     private var urls = [URL]()
     private var reloadSnapshots = [[String]]()
+    private var reloadAttachmentSnapshots = [[String]]()
     private var reloadChanges = [VaultReloadChanges?]()
     private let progressEvents: [VaultLoadingProgress]
 
@@ -586,6 +651,12 @@ private final class VaultLoaderSpy: @unchecked Sendable, VaultLoading {
         return reloadChanges
     }
 
+    var reloadPreviousAttachmentPaths: [[String]] {
+        lock.lock()
+        defer { lock.unlock() }
+        return reloadAttachmentSnapshots
+    }
+
     func loadVault(
         at url: URL,
         progress: (@Sendable (VaultLoadingProgress) -> Void)?
@@ -603,6 +674,7 @@ private final class VaultLoaderSpy: @unchecked Sendable, VaultLoading {
         urls.append(url)
         if let previousSnapshot {
             reloadSnapshots.append(previousSnapshot.notes.map(\.id))
+            reloadAttachmentSnapshots.append(previousSnapshot.attachments.map(\.relativePath))
             reloadChanges.append(changes)
         }
         let current = results.count > 1 ? results.removeFirst() : results[0]
@@ -617,6 +689,27 @@ private enum FixtureError: LocalizedError {
 
     var errorDescription: String? {
         "Fixture failure."
+    }
+}
+
+private final class LockedBox<Value>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: Value
+
+    init(_ value: Value) {
+        storage = value
+    }
+
+    var value: Value {
+        lock.lock()
+        defer { lock.unlock() }
+        return storage
+    }
+
+    func withValue(_ update: (inout Value) -> Void) {
+        lock.lock()
+        update(&storage)
+        lock.unlock()
     }
 }
 

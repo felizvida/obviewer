@@ -22,7 +22,8 @@ The project is already a working prototype, not just a sketch. It has a portable
 - Portable `ObviewerCore` module for parsing, lookup, vault indexing, and graph construction
 - macOS-specific `ObviewerMacApp` module for security-scoped access, bookmarks, app state, and UI
 - Local vault loading with progress reporting, live vault watching, and path-aware selective reloads
-- Search by title, path, tags, preview text, aliases, and frontmatter metadata
+- Warm-start snapshot cache that reuses parsed notes and attachment metadata across relaunches when files are unchanged
+- Search by title, path, tags, preview text, aliases, and frontmatter metadata through a core precomputed search index
 - Obsidian-aware parsing for frontmatter, links, tables, headings, ordered/task/nested lists, footnotes, tags, callouts, image embeds, and graceful fallback blocks for Mermaid/math/media embeds
 - Inline image rendering with size hints plus a lightbox for image attachments
 - Reader workspace with metadata, linked-note navigation, and a contents rail

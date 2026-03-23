@@ -20,6 +20,7 @@ public final class AppModel: ObservableObject {
     private let picker: any VaultChoosing
     private let reader: any VaultLoading
     private let securityScopeManager: any SecurityScopeManaging
+    private let noteCache: any VaultNoteCaching
     private let watcher: any VaultWatching
 
     private var didAttemptRestore = false
@@ -32,6 +33,7 @@ public final class AppModel: ObservableObject {
             picker: VaultPicker(),
             reader: VaultReader(),
             securityScopeManager: SecurityScopedAccessController(),
+            noteCache: VaultNoteCacheStore(),
             watcher: VaultWatcher()
         )
     }
@@ -41,33 +43,20 @@ public final class AppModel: ObservableObject {
         picker: any VaultChoosing,
         reader: any VaultLoading,
         securityScopeManager: any SecurityScopeManaging,
+        noteCache: any VaultNoteCaching = NullVaultNoteCache(),
         watcher: (any VaultWatching)? = nil
     ) {
         self.bookmarkStore = bookmarkStore
         self.picker = picker
         self.reader = reader
         self.securityScopeManager = securityScopeManager
+        self.noteCache = noteCache
         self.watcher = watcher ?? VaultWatcher()
     }
 
     var filteredNotes: [VaultNote] {
         guard let snapshot else { return [] }
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard query.isEmpty == false else { return snapshot.notes }
-
-        let normalizedQuery = query.lowercased()
-        let normalizedTagQuery = normalizedQuery.hasPrefix("#")
-            ? String(normalizedQuery.dropFirst())
-            : normalizedQuery
-        return snapshot.notes.filter { note in
-            note.title.lowercased().contains(normalizedQuery)
-                || note.relativePath.lowercased().contains(normalizedQuery)
-                || note.tags.contains(where: { $0.localizedCaseInsensitiveContains(normalizedTagQuery) })
-                || note.previewText.lowercased().contains(normalizedQuery)
-                || note.frontmatter.searchableValues.contains(where: {
-                    $0.localizedCaseInsensitiveContains(normalizedQuery)
-                })
-        }
+        return snapshot.searchNotes(matching: searchText)
     }
 
     var noteSections: [NoteListSection] {
@@ -257,14 +246,17 @@ public final class AppModel: ObservableObject {
                 progressTask.cancel()
             }
 
-            let snapshot = try await Task.detached(priority: .userInitiated) { [reader, url, progressContinuation, previousSnapshot, changes] in
+            let snapshot = try await Task.detached(priority: .userInitiated) {
+                [reader, noteCache, url, progressContinuation, previousSnapshot, changes]
+                in
                 defer {
                     progressContinuation.finish()
                 }
 
+                let seedSnapshot = previousSnapshot ?? noteCache.loadSeedSnapshot(for: url)
                 return try reader.reloadVault(
                     at: url,
-                    previousSnapshot: previousSnapshot,
+                    previousSnapshot: seedSnapshot,
                     changes: changes
                 ) { progress in
                     progressContinuation.yield(progress)
@@ -274,6 +266,8 @@ public final class AppModel: ObservableObject {
             if persistBookmark {
                 try bookmarkStore.save(url: url)
             }
+
+            noteCache.saveSeedSnapshot(snapshot)
 
             self.snapshot = snapshot
             vaultURL = url

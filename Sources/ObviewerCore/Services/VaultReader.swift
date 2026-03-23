@@ -72,6 +72,9 @@ public struct VaultReader: VaultLoading, Sendable {
         let previousNotesByID = Dictionary(
             uniqueKeysWithValues: (previousSnapshot?.notes ?? []).map { ($0.id, $0) }
         )
+        let previousAttachmentsByPath = Dictionary(
+            uniqueKeysWithValues: (previousSnapshot?.attachments ?? []).map { ($0.relativePath, $0) }
+        )
 
         func reportProgress(currentPath: String) {
             progress?(
@@ -112,11 +115,19 @@ public struct VaultReader: VaultLoading, Sendable {
             }
 
             guard let kind = classifyAttachment(extensionName) else { continue }
-            let attachment = VaultAttachment(
-                relativePath: relativePath,
-                url: fileURL,
-                kind: kind
-            )
+            let attachment: VaultAttachment
+            if let previousAttachment = previousAttachmentsByPath[relativePath],
+               previousAttachment.modifiedAt == modifiedAt,
+               previousAttachment.kind == kind {
+                attachment = previousAttachment
+            } else {
+                attachment = loadAttachment(
+                    at: fileURL,
+                    relativePath: relativePath,
+                    kind: kind,
+                    modifiedAt: modifiedAt
+                )
+            }
 
             attachments.append(attachment)
         }
@@ -210,11 +221,20 @@ public struct VaultReader: VaultLoading, Sendable {
             }
 
             if let kind = classifyAttachment(extensionName) {
-                attachmentsByPath[relativePath] = VaultAttachment(
-                    relativePath: relativePath,
-                    url: fileURL,
-                    kind: kind
-                )
+                let attachment: VaultAttachment
+                if let previousAttachment = attachmentsByPath[relativePath],
+                   previousAttachment.modifiedAt == modifiedAt,
+                   previousAttachment.kind == kind {
+                    attachment = previousAttachment
+                } else {
+                    attachment = loadAttachment(
+                        at: fileURL,
+                        relativePath: relativePath,
+                        kind: kind,
+                        modifiedAt: modifiedAt
+                    )
+                }
+                attachmentsByPath[relativePath] = attachment
                 notesByPath.removeValue(forKey: relativePath)
             } else {
                 removeIndexedItem(
@@ -256,6 +276,20 @@ public struct VaultReader: VaultLoading, Sendable {
             blocks: parsed.blocks,
             wordCount: parsed.wordCount,
             readingTimeMinutes: parsed.readingTimeMinutes,
+            modifiedAt: modifiedAt
+        )
+    }
+
+    private func loadAttachment(
+        at fileURL: URL,
+        relativePath: String,
+        kind: VaultAttachment.Kind,
+        modifiedAt: Date
+    ) -> VaultAttachment {
+        VaultAttachment(
+            relativePath: relativePath,
+            url: fileURL,
+            kind: kind,
             modifiedAt: modifiedAt
         )
     }

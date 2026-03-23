@@ -82,6 +82,18 @@ public struct VaultSnapshot: Sendable {
 
         return nil
     }
+
+    public func searchNotes(matching rawQuery: String) -> [VaultNote] {
+        let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query.isEmpty == false else {
+            return notes
+        }
+
+        let normalizedQuery = query.lowercased()
+        return notes.filter { note in
+            note.searchCorpus.contains(normalizedQuery)
+        }
+    }
 }
 
 public struct NoteGraph: Sendable {
@@ -443,6 +455,7 @@ public struct VaultNote: Identifiable, Hashable, Sendable {
     public let wordCount: Int
     public let readingTimeMinutes: Int
     public let modifiedAt: Date
+    public let searchCorpus: String
 
     public init(
         id: String,
@@ -457,7 +470,8 @@ public struct VaultNote: Identifiable, Hashable, Sendable {
         blocks: [RenderBlock],
         wordCount: Int,
         readingTimeMinutes: Int,
-        modifiedAt: Date
+        modifiedAt: Date,
+        searchCorpus: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -472,6 +486,13 @@ public struct VaultNote: Identifiable, Hashable, Sendable {
         self.wordCount = wordCount
         self.readingTimeMinutes = readingTimeMinutes
         self.modifiedAt = modifiedAt
+        self.searchCorpus = searchCorpus ?? makeSearchCorpus(
+            title: title,
+            relativePath: relativePath,
+            previewText: previewText,
+            frontmatter: frontmatter,
+            tags: tags
+        )
     }
 
     fileprivate var lookupKeys: [String] {
@@ -500,11 +521,13 @@ public struct VaultAttachment: Hashable, Sendable {
     public let relativePath: String
     public let url: URL
     public let kind: Kind
+    public let modifiedAt: Date
 
-    public init(relativePath: String, url: URL, kind: Kind) {
+    public init(relativePath: String, url: URL, kind: Kind, modifiedAt: Date = .distantPast) {
         self.relativePath = relativePath
         self.url = url
         self.kind = kind
+        self.modifiedAt = modifiedAt
     }
 }
 
@@ -821,6 +844,25 @@ private func formatFrontmatterNumber(_ value: Double) -> String {
         return String(Int(value))
     }
     return value.formatted(.number.precision(.fractionLength(0 ... 3)))
+}
+
+private func makeSearchCorpus(
+    title: String,
+    relativePath: String,
+    previewText: String,
+    frontmatter: NoteFrontmatter,
+    tags: [String]
+) -> String {
+    let tagComponents = tags.flatMap { tag in
+        [tag, "#\(tag)"]
+    }
+
+    return ([title, relativePath, previewText] + frontmatter.searchableValues + tagComponents)
+        .map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        }
+        .filter { $0.isEmpty == false }
+        .joined(separator: "\n")
 }
 
 private func referenceLookupKeys(for target: String, sourceRelativePath: String?) -> [String] {

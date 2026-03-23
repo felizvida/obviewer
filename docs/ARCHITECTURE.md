@@ -102,9 +102,10 @@ Responsibilities:
 
 - own the current `VaultSnapshot`
 - track vault URL, loading state, errors, and current selection
-- manage search and graph scope state
+- manage search input and graph scope state
 - orchestrate choose, restore, and reload flows
 - react to filesystem changes through a watcher service
+- seed cold loads from a persisted snapshot cache when safe to do so
 - bridge UI actions into core lookup/navigation behavior
 
 Important design choice:
@@ -123,12 +124,14 @@ Responsibilities:
 - define `VaultSnapshot`, `VaultNote`, `VaultAttachment`, render models, and graph models
 - normalize note and attachment references
 - resolve links source-relatively
+- provide precomputed note-search matching in core
 - build the note graph and graph subgraphs
 
 Important design choices:
 
 - the render model is intentionally presentation-oriented rather than a full markdown AST
 - note and attachment lookup prefer source-relative resolution to handle duplicate filenames sanely
+- note search is derived in core from a precomputed per-note search corpus instead of ad hoc UI filtering
 - graph data is derived and stored with the snapshot instead of being recomputed in the UI
 
 ### VaultReader
@@ -144,6 +147,7 @@ Responsibilities:
 - read note contents through read-only APIs
 - emit progress updates
 - reuse unchanged notes and patch only affected files during watched reloads
+- accept warm-start seed snapshots from persistent cache storage
 - produce the final snapshot
 
 Important design choices:
@@ -154,8 +158,8 @@ Important design choices:
 
 Pressure points:
 
-- reloads are path-aware now, but there is still no persistent index or cache layer for very large vaults
-- no cache layer beyond in-memory reuse of unchanged notes
+- the current persistent cache stores parsed notes, attachment metadata, and search corpora, but not richer global index state
+- reloads are path-aware now, but there is still no deeper persistent index for very large vaults
 - frontmatter is still intentionally shallow and does not yet model nested YAML objects
 
 ### ObsidianParser
@@ -247,6 +251,7 @@ Files:
 - `Sources/ObviewerMacApp/Services/SecurityScopedAccessController.swift`
 - `Sources/ObviewerMacApp/Services/VaultPicker.swift`
 - `Sources/ObviewerMacApp/Services/VaultWatcher.swift`
+- `Sources/ObviewerMacApp/Services/VaultNoteCacheStore.swift`
 
 Responsibilities:
 
@@ -254,6 +259,7 @@ Responsibilities:
 - own the security-scoped access lifecycle
 - bridge to `NSOpenPanel`
 - observe vault directories and notify the app model about filesystem changes
+- persist warm-start snapshot seeds outside the vault for cold-load reuse
 
 Why this matters:
 

@@ -162,12 +162,68 @@ final class VaultSnapshotTests: XCTestCase {
             ["Projects/Alpha.md", "Projects/Beta.md", "Projects/Older.md"]
         )
     }
+
+    func testSearchNotesMatchesTitlePathPreviewTagsAndFrontmatter() {
+        let snapshot = VaultSnapshot(
+            rootURL: URL(fileURLWithPath: "/tmp/obviewer-tests"),
+            notes: [
+                .fixture(
+                    relativePath: "Projects/Plan.md",
+                    title: "Launch Plan",
+                    previewText: "Ship the control center rollout",
+                    tags: ["roadmap"],
+                    frontmatter: NoteFrontmatter(
+                        entries: [
+                            FrontmatterEntry(
+                                key: "aliases",
+                                value: .array([.string("Control Center")])
+                            ),
+                            FrontmatterEntry(
+                                key: "owner",
+                                value: .string("Platform Experience")
+                            ),
+                        ]
+                    )
+                ),
+                .fixture(
+                    relativePath: "Journal/Today.md",
+                    title: "Today",
+                    previewText: "Research sync notes",
+                    tags: ["research"]
+                ),
+            ],
+            attachments: []
+        )
+
+        XCTAssertEqual(snapshot.searchNotes(matching: "launch").map(\.id), ["Projects/Plan.md"])
+        XCTAssertEqual(snapshot.searchNotes(matching: "projects/plan").map(\.id), ["Projects/Plan.md"])
+        XCTAssertEqual(snapshot.searchNotes(matching: "control center").map(\.id), ["Projects/Plan.md"])
+        XCTAssertEqual(snapshot.searchNotes(matching: "platform experience").map(\.id), ["Projects/Plan.md"])
+        XCTAssertEqual(snapshot.searchNotes(matching: "#research").map(\.id), ["Journal/Today.md"])
+        XCTAssertEqual(Set(snapshot.searchNotes(matching: "research").map(\.id)), ["Journal/Today.md"])
+    }
+
+    func testSearchNotesReturnsAllNotesForBlankQuery() {
+        let snapshot = VaultSnapshot(
+            rootURL: URL(fileURLWithPath: "/tmp/obviewer-tests"),
+            notes: [
+                .fixture(relativePath: "One.md", title: "One"),
+                .fixture(relativePath: "Two.md", title: "Two"),
+            ],
+            attachments: []
+        )
+
+        XCTAssertEqual(snapshot.searchNotes(matching: "").map(\.id), ["One.md", "Two.md"])
+        XCTAssertEqual(snapshot.searchNotes(matching: "   ").map(\.id), ["One.md", "Two.md"])
+    }
 }
 
 private extension VaultNote {
     static func fixture(
         relativePath: String,
         title: String,
+        previewText: String? = nil,
+        tags: [String] = [],
         frontmatter: NoteFrontmatter = NoteFrontmatter(),
         modifiedAt: Date = .distantPast
     ) -> VaultNote {
@@ -178,9 +234,9 @@ private extension VaultNote {
             folderPath: (relativePath as NSString).deletingLastPathComponent == "."
                 ? ""
                 : (relativePath as NSString).deletingLastPathComponent,
-            previewText: title,
+            previewText: previewText ?? title,
             frontmatter: frontmatter,
-            tags: [],
+            tags: tags,
             outboundLinks: [],
             tableOfContents: [],
             blocks: [],

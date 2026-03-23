@@ -145,11 +145,13 @@ Present:
 - loading progress visibility
 - live vault watching on macOS
 - selective incremental reload that applies changed, added, and removed file paths while reusing untouched note models
+- persistent warm-start snapshot cache that reuses parsed notes and attachment metadata across relaunches when files are unchanged
+- precomputed core search corpus for title/path/tag/preview/frontmatter matching
 
 Still incomplete:
 
-- persistent indexing cache
 - truly selective directory-level or file-level reindexing
+- persistent state beyond the current snapshot cache, such as larger indexed stores, ranking data, or richer file metadata
 - large-vault profiling
 - caching and smarter search ranking
 
@@ -177,7 +179,7 @@ The repo is release-automated, but the published artifact is still source-only. 
 
 ### Risk 3: Performance ceiling
 
-The new watcher and selective reload path improve day-to-day edits, but the app still lacks a persistent cache and more advanced indexing for truly large vaults.
+The new watcher, selective reload path, warm-start snapshot cache, and precomputed search corpus improve both edits and cold launches, but the app still lacks deeper persistent indexing and more advanced scaling work for truly large vaults.
 
 ### Risk 4: UI verification gap
 

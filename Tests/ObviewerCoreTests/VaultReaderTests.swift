@@ -136,6 +136,37 @@ final class VaultReaderTests: XCTestCase {
         XCTAssertEqual(note.frontmatter.value(for: "status"), .string("cached"))
     }
 
+    func testReloadVaultReusesUnchangedAttachmentsFromPreviousSnapshot() throws {
+        let sandbox = try TemporaryVault()
+        defer { sandbox.cleanup() }
+
+        try sandbox.writeData("Assets/cover.png", data: Data([0x89, 0x50, 0x4E, 0x47]))
+
+        let fileURL = sandbox.rootURL.appending(path: "Assets/cover.png")
+        let modifiedAt = try XCTUnwrap(
+            fileURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        )
+
+        let previousAttachment = VaultAttachment(
+            relativePath: "Assets/cover.png",
+            url: URL(fileURLWithPath: "/tmp/obviewer-tests/reused-cover.png"),
+            kind: .image,
+            modifiedAt: modifiedAt
+        )
+        let previousSnapshot = VaultSnapshot(
+            rootURL: sandbox.rootURL,
+            notes: [],
+            attachments: [previousAttachment]
+        )
+
+        let snapshot = try VaultReader().reloadVault(
+            at: sandbox.rootURL,
+            previousSnapshot: previousSnapshot
+        )
+
+        XCTAssertEqual(snapshot.attachments, [previousAttachment])
+    }
+
     func testReloadVaultAppliesSelectiveCreatedModifiedAndRemovedPaths() throws {
         let sandbox = try TemporaryVault()
         defer { sandbox.cleanup() }
@@ -262,6 +293,25 @@ final class VaultReaderTests: XCTestCase {
         XCTAssertEqual(events.last?.noteCount, manifest.noteCount)
         XCTAssertEqual(events.last?.attachmentCount, manifest.attachmentCount)
         XCTAssertNil(events.last?.currentPath)
+    }
+
+    func testLoadLargeGeneratedVaultBuildsSearchableSnapshot() throws {
+        let fixture = try TemporaryDemoVault(profile: .integration)
+        defer { fixture.cleanup() }
+
+        let snapshot = try VaultReader().loadVault(at: fixture.rootURL)
+        let manifest = fixture.manifest
+
+        let readerTaggedIDs = Set(snapshot.searchNotes(matching: "#reader").map(\.id))
+        XCTAssertTrue(readerTaggedIDs.contains(manifest.homeNoteID))
+        XCTAssertTrue(readerTaggedIDs.contains("Reader Playground.md"))
+
+        let duplicateDailyIDs = Set(snapshot.searchNotes(matching: "Daily").map(\.id))
+        XCTAssertTrue(duplicateDailyIDs.contains(manifest.alphaDailyNoteID))
+        XCTAssertTrue(duplicateDailyIDs.contains(manifest.betaDailyNoteID))
+
+        let architectureIDs = Set(snapshot.searchNotes(matching: "Knowledge/Architecture").map(\.id))
+        XCTAssertTrue(architectureIDs.contains(manifest.architectureIndexNoteID))
     }
 }
 

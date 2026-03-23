@@ -128,6 +128,7 @@ Current test targets:
 - `Tests/ObviewerCoreTests/VaultReaderTests.swift`
 - `Tests/ObviewerCoreTests/NoteGraphTests.swift`
 - `Tests/ObviewerMacAppTests/AppModelTests.swift`
+- `Tests/ObviewerMacAppTests/VaultNoteCacheStoreTests.swift`
 - `Tests/ObviewerMacAppTests/ViewSupportTests.swift`
 
 Current coverage is strongest around:
@@ -137,6 +138,7 @@ Current coverage is strongest around:
 - graph derivation
 - vault enumeration against real temporary directories
 - live watching and incremental reload orchestration
+- warm-start snapshot-cache persistence and cold-load reuse
 - app-model orchestration
 - selected view-support utilities
 
