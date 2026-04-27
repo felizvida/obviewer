@@ -35,4 +35,10 @@ final class ViewSupportTests: XCTestCase {
         XCTAssertTrue((0..<6).contains(first))
         XCTAssertTrue((0..<6).contains(longValue))
     }
+
+    func testGraphPaletteBucketsByTopLevelFolder() {
+        XCTAssertEqual(GraphPalette.bucketName(for: ""), "Vault Root")
+        XCTAssertEqual(GraphPalette.bucketName(for: "Projects/Alpha"), "Projects")
+        XCTAssertEqual(GraphPalette.bucketName(for: "Journal"), "Journal")
+    }
 }

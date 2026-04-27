@@ -18,6 +18,12 @@ final class VaultNoteCacheStoreTests: XCTestCase {
                     tags: ["roadmap"],
                     modifiedAt: Date(timeIntervalSince1970: 1_234)
                 ),
+                .fixture(
+                    relativePath: "Projects/Daily.md",
+                    title: "Daily",
+                    tags: ["journal"],
+                    modifiedAt: Date(timeIntervalSince1970: 1_236)
+                ),
             ],
             attachments: [
                 VaultAttachment(
@@ -34,6 +40,43 @@ final class VaultNoteCacheStoreTests: XCTestCase {
 
         XCTAssertEqual(restored.notes, snapshot.notes)
         XCTAssertEqual(restored.attachments, snapshot.attachments)
+        XCTAssertEqual(restored.indexManifest, snapshot.indexManifest)
+        XCTAssertEqual(restored.persistentIndex, snapshot.persistentIndex)
+    }
+
+    func testCacheStoreRoundTripsVeryLongVaultPathUsingBoundedFilename() throws {
+        let sandbox = try TemporaryCacheDirectory()
+        defer { sandbox.cleanup() }
+
+        let store = VaultNoteCacheStore(cachesRootURL: sandbox.rootURL)
+        let longComponent = String(repeating: "deep-folder-", count: 30)
+        let vaultURL = URL(fileURLWithPath: "/tmp/\(longComponent)/vault")
+        let snapshot = VaultSnapshot(
+            rootURL: vaultURL,
+            notes: [
+                .fixture(
+                    relativePath: "Projects/Plan.md",
+                    title: "Plan",
+                    tags: ["roadmap"],
+                    modifiedAt: Date(timeIntervalSince1970: 1_234)
+                ),
+            ],
+            attachments: []
+        )
+
+        store.saveSeedSnapshot(snapshot)
+
+        let cacheFiles = try FileManager.default.contentsOfDirectory(
+            at: sandbox.rootURL,
+            includingPropertiesForKeys: nil
+        )
+        XCTAssertEqual(cacheFiles.count, 1)
+        XCTAssertLessThan(cacheFiles[0].lastPathComponent.count, 100)
+
+        let restored = try XCTUnwrap(store.loadSeedSnapshot(for: vaultURL))
+        XCTAssertEqual(restored.notes, snapshot.notes)
+        XCTAssertEqual(restored.indexManifest, snapshot.indexManifest)
+        XCTAssertEqual(restored.persistentIndex, snapshot.persistentIndex)
     }
 
     func testCacheStoreDropsCorruptPayloads() throws {
@@ -42,20 +85,18 @@ final class VaultNoteCacheStoreTests: XCTestCase {
 
         let store = VaultNoteCacheStore(cachesRootURL: sandbox.rootURL)
         let vaultURL = URL(fileURLWithPath: "/tmp/obviewer-tests/vault")
-        let cacheFileURL = sandbox.rootURL.appending(path: cacheKey(for: vaultURL) + ".plist")
-        try FileManager.default.createDirectory(at: sandbox.rootURL, withIntermediateDirectories: true)
+        let snapshot = VaultSnapshot(rootURL: vaultURL, notes: [], attachments: [])
+        store.saveSeedSnapshot(snapshot)
+        let cacheFileURL = try XCTUnwrap(
+            FileManager.default.contentsOfDirectory(
+                at: sandbox.rootURL,
+                includingPropertiesForKeys: nil
+            ).first
+        )
         try Data("not a plist".utf8).write(to: cacheFileURL)
 
         XCTAssertNil(store.loadSeedSnapshot(for: vaultURL))
         XCTAssertFalse(FileManager.default.fileExists(atPath: cacheFileURL.path))
-    }
-
-    private func cacheKey(for vaultURL: URL) -> String {
-        let normalizedPath = vaultURL.standardizedFileURL.resolvingSymlinksInPath().path
-        return Data(normalizedPath.utf8).base64EncodedString()
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "=", with: "")
     }
 }
 

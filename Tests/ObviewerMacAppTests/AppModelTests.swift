@@ -48,6 +48,9 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(bookmarkStore.savedURLs, [vaultURL])
         XCTAssertEqual(securityScope.activatedURLs, [vaultURL])
         XCTAssertEqual(loader.recordedURLs, [vaultURL])
+        XCTAssertEqual(model.indexDiagnostics?.noteCount, snapshot.notes.count)
+        XCTAssertEqual(model.indexDiagnostics?.attachmentCount, snapshot.attachments.count)
+        XCTAssertEqual(model.indexDiagnostics?.graphEdgeCount, 3)
     }
 
     @MainActor

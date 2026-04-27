@@ -10,30 +10,54 @@ struct ReaderView: View {
     let pendingAnchorID: String?
     let onConsumePendingAnchor: () -> Void
     @State private var presentedImage: PresentedAttachmentImage?
+    @AppStorage("obviewer.reader.textScale") private var readerTextScale = 1.0
+    @AppStorage("obviewer.reader.lineWidth") private var readerLineWidth = 860.0
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                HStack(alignment: .top, spacing: 36) {
-                    VStack(alignment: .leading, spacing: 30) {
-                        header
+                VStack(spacing: 24) {
+                    ReaderExperienceBar(
+                        textScale: $readerTextScale,
+                        lineWidth: $readerLineWidth
+                    )
+                    .frame(maxWidth: 1_180, alignment: .trailing)
 
-                        Divider()
+                    HStack(alignment: .top, spacing: 30) {
+                        VStack(alignment: .leading, spacing: 30) {
+                            header
 
-                        ForEach(Array(note.blocks.enumerated()), id: \.offset) { _, block in
-                            blockView(block, proxy: proxy)
+                            ReaderSectionDivider()
+
+                            ForEach(Array(note.blocks.enumerated()), id: \.offset) { _, block in
+                                blockView(block, proxy: proxy)
+                            }
+                        }
+                        .frame(maxWidth: contentWidth, alignment: .leading)
+                        .padding(42)
+                        .background(
+                            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                                .fill(VisualTheme.readerSurface)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                                .stroke(Color.white.opacity(0.72), lineWidth: 1)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                                .stroke(Color.black.opacity(0.045), lineWidth: 1)
+                        )
+                        .shadow(color: Color.black.opacity(0.06), radius: 24, x: 0, y: 14)
+
+                        ReaderOutlineRail(note: note) { anchor in
+                            scroll(to: anchor, using: proxy)
+                        } onNavigate: { target in
+                            onNavigate(target, nil)
                         }
                     }
-                    .frame(maxWidth: 860, alignment: .leading)
-
-                    ReaderOutlineRail(note: note) { anchor in
-                        scroll(to: anchor, using: proxy)
-                    } onNavigate: { target in
-                        onNavigate(target, nil)
-                    }
                 }
-                .padding(56)
-                .frame(maxWidth: 1_260, alignment: .center)
+                .padding(42)
+                .frame(maxWidth: 1_340, alignment: .center)
                 .frame(maxWidth: .infinity, alignment: .center)
             }
             .scrollIndicators(.hidden)
@@ -49,10 +73,33 @@ struct ReaderView: View {
         }
     }
 
+    private var clampedTextScale: CGFloat {
+        CGFloat(min(max(readerTextScale, 0.9), 1.25))
+    }
+
+    private var contentWidth: CGFloat {
+        CGFloat(min(max(readerLineWidth, 680), 980))
+    }
+
+    private func scaled(_ size: CGFloat) -> CGFloat {
+        (size * clampedTextScale).rounded()
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 16) {
+            Capsule(style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [VisualTheme.fern, VisualTheme.ember.opacity(0.78)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: 86, height: 5)
+
             Text(note.title)
-                .font(.system(size: 48, weight: .bold, design: .serif))
+                .font(.system(size: scaled(48), weight: .bold, design: .serif))
+                .foregroundStyle(VisualTheme.ink)
                 .textSelection(.enabled)
 
             Text(note.relativePath)
@@ -79,10 +126,7 @@ struct ReaderView: View {
             .font(.system(size: 12, weight: .semibold, design: .rounded))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(Color.white.opacity(0.7))
-            )
+            .softPanel(cornerRadius: 999, opacity: 0.66)
     }
 
     @ViewBuilder
@@ -91,7 +135,7 @@ struct ReaderView: View {
         case .heading(let level, let text, let anchor):
             RichTextView(
                 text: text,
-                size: headingSize(for: level),
+                size: scaled(headingSize(for: level)),
                 weight: headingWeight(for: level),
                 design: .serif,
                 onNavigate: onNavigate,
@@ -107,7 +151,7 @@ struct ReaderView: View {
         case .paragraph(let text):
             RichTextView(
                 text: text,
-                size: 21,
+                size: scaled(21),
                 weight: .regular,
                 design: .serif,
                 color: Color.black.opacity(0.82),
@@ -118,11 +162,12 @@ struct ReaderView: View {
                 inlineImageResolver: resolveInlineImage(path:alt:sizeHint:),
                 onOpenInlineImage: presentInlineImage(path:alt:sizeHint:)
             )
-            .lineSpacing(7)
+            .lineSpacing(scaled(7))
 
         case .list(let items):
             ListBlockView(
                 items: items,
+                textScale: clampedTextScale,
                 onNavigate: onNavigate,
                 onOpenAttachment: openAttachment(path:),
                 onOpenAnchor: { scroll(to: $0, using: proxy) },
@@ -139,7 +184,7 @@ struct ReaderView: View {
 
                 RichTextView(
                     text: text,
-                    size: 20,
+                    size: scaled(20),
                     weight: .regular,
                     design: .serif,
                     color: .secondary,
@@ -150,7 +195,7 @@ struct ReaderView: View {
                     inlineImageResolver: resolveInlineImage(path:alt:sizeHint:),
                     onOpenInlineImage: presentInlineImage(path:alt:sizeHint:)
                 )
-                .lineSpacing(6)
+                .lineSpacing(scaled(6))
             }
             .padding(.leading, 6)
 
@@ -160,7 +205,7 @@ struct ReaderView: View {
                     Image(systemName: iconName(for: kind))
                     RichTextView(
                         text: title,
-                        size: 14,
+                        size: scaled(14),
                         weight: .bold,
                         design: .rounded,
                         onNavigate: onNavigate,
@@ -174,7 +219,7 @@ struct ReaderView: View {
 
                 RichTextView(
                     text: body,
-                    size: 18,
+                    size: scaled(18),
                     weight: .regular,
                     design: .serif,
                     onNavigate: onNavigate,
@@ -184,7 +229,7 @@ struct ReaderView: View {
                     inlineImageResolver: resolveInlineImage(path:alt:sizeHint:),
                     onOpenInlineImage: presentInlineImage(path:alt:sizeHint:)
                 )
-                .lineSpacing(6)
+                .lineSpacing(scaled(6))
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -198,31 +243,13 @@ struct ReaderView: View {
             )
 
         case .code(let language, let code):
-            VStack(alignment: .leading, spacing: 12) {
-                if let language {
-                    Text(language.uppercased())
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-
-                ScrollView(.horizontal) {
-                    Text(code)
-                        .font(.system(size: 15, weight: .regular, design: .monospaced))
-                        .foregroundStyle(Color(red: 0.95, green: 0.95, blue: 0.92))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            .padding(22)
-            .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(Color(red: 0.14, green: 0.15, blue: 0.16))
-            )
+            CodeBlockView(language: language, code: code, textScale: clampedTextScale)
 
         case .table(let headers, let rows):
             TableBlockView(
                 headers: headers,
                 rows: rows,
+                textScale: clampedTextScale,
                 onNavigate: onNavigate,
                 onOpenAttachment: openAttachment(path:),
                 onOpenAnchor: { scroll(to: $0, using: proxy) },
@@ -243,6 +270,7 @@ struct ReaderView: View {
         case .footnotes(let items):
             FootnotesBlockView(
                 items: items,
+                textScale: clampedTextScale,
                 onNavigate: onNavigate,
                 onOpenAttachment: openAttachment(path:),
                 onOpenAnchor: { scroll(to: $0, using: proxy) },
@@ -518,6 +546,95 @@ struct ReaderView: View {
     }
 }
 
+private struct ReaderSectionDivider: View {
+    var body: some View {
+        LinearGradient(
+            colors: [
+                Color.black.opacity(0.09),
+                Color.black.opacity(0.02),
+                .clear,
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        .frame(height: 1)
+        .padding(.vertical, 2)
+    }
+}
+
+private struct ReaderExperienceBar: View {
+    @Binding var textScale: Double
+    @Binding var lineWidth: Double
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "eyeglasses")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(VisualTheme.fern)
+
+            controlButton(systemImage: "textformat.size.smaller", help: "Smaller text") {
+                adjustTextScale(by: -0.05)
+            }
+
+            controlButton(systemImage: "textformat.size.larger", help: "Larger text") {
+                adjustTextScale(by: 0.05)
+            }
+
+            Divider()
+                .frame(height: 16)
+
+            controlButton(systemImage: "arrow.down.right.and.arrow.up.left", help: "Narrower page") {
+                adjustLineWidth(by: -40)
+            }
+
+            controlButton(systemImage: "arrow.up.left.and.arrow.down.right", help: "Wider page") {
+                adjustLineWidth(by: 40)
+            }
+
+            controlButton(systemImage: "arrow.counterclockwise", help: "Reset reading layout") {
+                reset()
+            }
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+        .softPanel(cornerRadius: 999, opacity: 0.56)
+    }
+
+    private func controlButton(
+        systemImage: String,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(VisualTheme.softInk)
+                .frame(width: 24, height: 22)
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+
+    private func adjustTextScale(by delta: Double) {
+        withAnimation(.easeInOut(duration: 0.18)) {
+            textScale = min(max(textScale + delta, 0.9), 1.25)
+        }
+    }
+
+    private func adjustLineWidth(by delta: Double) {
+        withAnimation(.easeInOut(duration: 0.18)) {
+            lineWidth = min(max(lineWidth + delta, 680), 980)
+        }
+    }
+
+    private func reset() {
+        withAnimation(.easeInOut(duration: 0.18)) {
+            textScale = 1
+            lineWidth = 860
+        }
+    }
+}
+
 private struct FrontmatterSummaryCard: View {
     let frontmatter: NoteFrontmatter
 
@@ -569,6 +686,7 @@ private struct FrontmatterSummaryCard: View {
 
 private struct ListBlockView: View {
     let items: [RenderListItem]
+    let textScale: CGFloat
     let onNavigate: (String, String?) -> Void
     let onOpenAttachment: (String) -> Void
     let onOpenAnchor: (String) -> Void
@@ -580,6 +698,7 @@ private struct ListBlockView: View {
         ListItemsGroupView(
             items: items,
             level: 0,
+            textScale: textScale,
             onNavigate: onNavigate,
             onOpenAttachment: onOpenAttachment,
             onOpenAnchor: onOpenAnchor,
@@ -593,6 +712,7 @@ private struct ListBlockView: View {
 private struct ListItemsGroupView: View {
     let items: [RenderListItem]
     let level: Int
+    let textScale: CGFloat
     let onNavigate: (String, String?) -> Void
     let onOpenAttachment: (String) -> Void
     let onOpenAnchor: (String) -> Void
@@ -611,7 +731,7 @@ private struct ListItemsGroupView: View {
 
                         RichTextView(
                             text: item.text,
-                            size: 20,
+                            size: scaled(20),
                             weight: .regular,
                             design: .serif,
                             onNavigate: onNavigate,
@@ -621,13 +741,14 @@ private struct ListItemsGroupView: View {
                             inlineImageResolver: inlineImageResolver,
                             onOpenInlineImage: onOpenInlineImage
                         )
-                        .lineSpacing(6)
+                        .lineSpacing(scaled(6))
                     }
 
                     if item.children.isEmpty == false {
                         ListItemsGroupView(
                             items: item.children,
                             level: level + 1,
+                            textScale: textScale,
                             onNavigate: onNavigate,
                             onOpenAttachment: onOpenAttachment,
                             onOpenAnchor: onOpenAnchor,
@@ -675,6 +796,90 @@ private struct ListItemsGroupView: View {
             return 5
         }
     }
+
+    private func scaled(_ size: CGFloat) -> CGFloat {
+        (size * textScale).rounded()
+    }
+}
+
+private struct CodeBlockView: View {
+    let language: String?
+    let code: String
+    let textScale: CGFloat
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Label(languageLabel, systemImage: "curlybraces")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color.white.opacity(0.68))
+
+                Spacer(minLength: 16)
+
+                Button {
+                    copyCode()
+                } label: {
+                    Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(Color.white.opacity(0.82))
+            }
+
+            ScrollView(.horizontal) {
+                Text(code)
+                    .font(.system(size: scaled(15), weight: .regular, design: .monospaced))
+                    .foregroundStyle(Color(red: 0.95, green: 0.95, blue: 0.92))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, 2)
+            }
+        }
+        .padding(22)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.12, green: 0.14, blue: 0.15),
+                            Color(red: 0.17, green: 0.19, blue: 0.18),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.08), radius: 14, x: 0, y: 8)
+    }
+
+    private var languageLabel: String {
+        guard let language, language.isEmpty == false else {
+            return "CODE"
+        }
+        return language.uppercased()
+    }
+
+    private func scaled(_ size: CGFloat) -> CGFloat {
+        (size * textScale).rounded()
+    }
+
+    private func copyCode() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(code, forType: .string)
+        withAnimation(.easeInOut(duration: 0.14)) {
+            copied = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) {
+            withAnimation(.easeInOut(duration: 0.14)) {
+                copied = false
+            }
+        }
+    }
 }
 
 private struct PresentedAttachmentImage: Identifiable {
@@ -693,51 +898,89 @@ private struct ImageLightboxView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .top, spacing: 18) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(presentedImage.caption)
-                        .font(.system(size: 24, weight: .bold, design: .serif))
-                    Text(presentedImage.attachment.relativePath)
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary)
+                HStack(alignment: .top, spacing: 14) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(VisualTheme.selectedSurface)
+
+                        Image(systemName: "photo")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundStyle(VisualTheme.fern)
+                    }
+                    .frame(width: 48, height: 48)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(presentedImage.caption)
+                            .font(.system(size: 24, weight: .bold, design: .serif))
+                        Text(presentedImage.attachment.relativePath)
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Spacer(minLength: 20)
 
                 VStack(alignment: .trailing, spacing: 10) {
                     HStack(spacing: 12) {
-                        Text("Zoom")
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundStyle(.secondary)
+                        Button {
+                            adjustZoom(by: -0.25)
+                        } label: {
+                            Image(systemName: "minus.magnifyingglass")
+                        }
+                        .help("Zoom out")
 
                         Slider(value: $zoom, in: 0.75 ... 4, step: 0.25)
                             .frame(width: 180)
+
+                        Button {
+                            adjustZoom(by: 0.25)
+                        } label: {
+                            Image(systemName: "plus.magnifyingglass")
+                        }
+                        .help("Zoom in")
 
                         Text("\(zoom.formatted(.number.precision(.fractionLength(2))))x")
                             .font(.system(size: 12, weight: .bold, design: .rounded))
                             .frame(width: 50, alignment: .trailing)
                     }
+                    .buttonStyle(.borderless)
 
                     HStack(spacing: 10) {
-                        Button("Open Original") {
+                        Button {
+                            resetZoom()
+                        } label: {
+                            Label("Fit", systemImage: "arrow.down.right.and.arrow.up.left")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button {
                             NSWorkspace.shared.open(presentedImage.attachment.url)
+                        } label: {
+                            Label("Open Original", systemImage: "arrow.up.forward.app")
                         }
                         .buttonStyle(.bordered)
 
-                        Button("Reveal File") {
+                        Button {
                             NSWorkspace.shared.activateFileViewerSelecting([presentedImage.attachment.url])
+                        } label: {
+                            Label("Reveal File", systemImage: "folder")
                         }
                         .buttonStyle(.bordered)
 
-                        Button("Close") {
+                        Button {
                             dismiss()
+                        } label: {
+                            Label("Close", systemImage: "xmark")
                         }
                         .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.cancelAction)
                     }
                 }
             }
             .padding(.horizontal, 28)
             .padding(.top, 24)
             .padding(.bottom, 20)
+            .background(VisualTheme.readerSurface)
 
             Divider()
 
@@ -751,6 +994,9 @@ private struct ImageLightboxView: View {
                     endPoint: .bottomTrailing
                 )
 
+                LightboxGrid()
+                    .opacity(0.2)
+
                 ScrollView([.horizontal, .vertical]) {
                     Image(nsImage: presentedImage.image)
                         .resizable()
@@ -758,6 +1004,7 @@ private struct ImageLightboxView: View {
                         .aspectRatio(contentMode: .fit)
                         .frame(width: baseWidth * zoom)
                         .padding(48)
+                        .shadow(color: Color.black.opacity(0.28), radius: 22, x: 0, y: 14)
                 }
             }
         }
@@ -768,16 +1015,66 @@ private struct ImageLightboxView: View {
         let naturalWidth = presentedImage.image.size.width > 0 ? presentedImage.image.size.width : 900
         return min(max(naturalWidth, 360), 1_280)
     }
+
+    private func adjustZoom(by delta: Double) {
+        withAnimation(.easeInOut(duration: 0.16)) {
+            zoom = min(max(zoom + delta, 0.75), 4)
+        }
+    }
+
+    private func resetZoom() {
+        withAnimation(.easeInOut(duration: 0.16)) {
+            zoom = 1
+        }
+    }
+}
+
+private struct LightboxGrid: View {
+    var body: some View {
+        Canvas { context, size in
+            let spacing: CGFloat = 38
+            var path = Path()
+            var x: CGFloat = 0
+            while x <= size.width {
+                path.move(to: CGPoint(x: x, y: 0))
+                path.addLine(to: CGPoint(x: x, y: size.height))
+                x += spacing
+            }
+
+            var y: CGFloat = 0
+            while y <= size.height {
+                path.move(to: CGPoint(x: 0, y: y))
+                path.addLine(to: CGPoint(x: size.width, y: y))
+                y += spacing
+            }
+
+            context.stroke(path, with: .color(Color.white.opacity(0.18)), lineWidth: 1)
+        }
+        .ignoresSafeArea()
+    }
 }
 
 private struct ReaderOutlineRail: View {
     let note: VaultNote
     let onScrollToSection: (String) -> Void
     let onNavigate: (String) -> Void
+    @State private var hoveredSectionID: String?
+    @State private var hoveredLink: String?
 
     var body: some View {
         if note.tableOfContents.isEmpty == false || note.outboundLinks.isEmpty == false {
             VStack(alignment: .leading, spacing: 18) {
+                HStack(spacing: 8) {
+                    Image(systemName: "sidebar.trailing")
+                        .foregroundStyle(VisualTheme.fern)
+
+                    Text("Navigation")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(VisualTheme.softInk)
+
+                    Spacer(minLength: 4)
+                }
+
                 if note.tableOfContents.isEmpty == false {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Contents")
@@ -788,12 +1085,16 @@ private struct ReaderOutlineRail: View {
                             Button {
                                 onScrollToSection(item.id)
                             } label: {
-                                Text(item.title)
-                                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.leading, CGFloat(max(item.level - 1, 0)) * 12)
+                                RailSectionRow(
+                                    title: item.title,
+                                    level: item.level,
+                                    isHovered: hoveredSectionID == item.id
+                                )
                             }
                             .buttonStyle(.plain)
+                            .onHover { hovering in
+                                hoveredSectionID = hovering ? item.id : nil
+                            }
                         }
                     }
                 }
@@ -805,42 +1106,80 @@ private struct ReaderOutlineRail: View {
                             .foregroundStyle(.secondary)
 
                         ForEach(note.outboundLinks, id: \.self) { link in
-                            Button(link) {
+                            Button {
                                 onNavigate(link)
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "arrow.up.forward")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(VisualTheme.blue)
+
+                                    Text(link)
+                                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                        .lineLimit(1)
+
+                                    Spacer(minLength: 4)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 9)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .fill(Color.white.opacity(hoveredLink == link ? 0.9 : 0.72))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                                )
                             }
                             .buttonStyle(.plain)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 9)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(Color.white.opacity(0.72))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
-                            )
+                            .onHover { hovering in
+                                hoveredLink = hovering ? link : nil
+                            }
                         }
                     }
                 }
             }
             .padding(20)
             .frame(width: 260, alignment: .topLeading)
-            .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(Color.white.opacity(0.48))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(Color.black.opacity(0.05), lineWidth: 1)
-            )
+            .softPanel(cornerRadius: 24, opacity: 0.48)
         }
+    }
+}
+
+private struct RailSectionRow: View {
+    let title: String
+    let level: Int
+    let isHovered: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 999, style: .continuous)
+                .fill(VisualTheme.fern.opacity(isHovered ? 0.78 : 0.34))
+                .frame(width: 3, height: 18)
+
+            Text(title)
+                .font(.system(size: 13, weight: isHovered ? .bold : .medium, design: .rounded))
+                .foregroundStyle(isHovered ? VisualTheme.ink : Color.primary)
+                .lineLimit(2)
+
+            Spacer(minLength: 4)
+        }
+        .padding(.leading, CGFloat(max(level - 1, 0)) * 12)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(isHovered ? 0.78 : 0))
+        )
+        .animation(.easeInOut(duration: 0.14), value: isHovered)
     }
 }
 
 private struct TableBlockView: View {
     let headers: [RichText]
     let rows: [[RichText]]
+    let textScale: CGFloat
     let onNavigate: (String, String?) -> Void
     let onOpenAttachment: (String) -> Void
     let onOpenAnchor: (String) -> Void
@@ -854,7 +1193,7 @@ private struct TableBlockView: View {
                 ForEach(Array(headers.enumerated()), id: \.offset) { _, header in
                     RichTextView(
                         text: header,
-                        size: 13,
+                        size: scaled(13),
                         weight: .bold,
                         design: .rounded,
                         onNavigate: onNavigate,
@@ -873,7 +1212,7 @@ private struct TableBlockView: View {
                     ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
                         RichTextView(
                             text: cell,
-                            size: 16,
+                            size: scaled(16),
                             weight: .regular,
                             design: .serif,
                             onNavigate: onNavigate,
@@ -898,6 +1237,10 @@ private struct TableBlockView: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(Color.black.opacity(0.06), lineWidth: 1)
         )
+    }
+
+    private func scaled(_ size: CGFloat) -> CGFloat {
+        (size * textScale).rounded()
     }
 }
 
@@ -941,6 +1284,7 @@ private struct UnsupportedBlockView: View {
 
 private struct FootnotesBlockView: View {
     let items: [FootnoteItem]
+    let textScale: CGFloat
     let onNavigate: (String, String?) -> Void
     let onOpenAttachment: (String) -> Void
     let onOpenAnchor: (String) -> Void
@@ -951,7 +1295,7 @@ private struct FootnotesBlockView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Footnotes")
-                .font(.system(size: 22, weight: .bold, design: .serif))
+                .font(.system(size: scaled(22), weight: .bold, design: .serif))
 
             ForEach(items) { item in
                 HStack(alignment: .top, spacing: 14) {
@@ -963,7 +1307,7 @@ private struct FootnotesBlockView: View {
 
                     RichTextView(
                         text: item.text,
-                        size: 17,
+                        size: scaled(17),
                         weight: .regular,
                         design: .serif,
                         color: Color.black.opacity(0.78),
@@ -988,5 +1332,9 @@ private struct FootnotesBlockView: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(Color.black.opacity(0.06), lineWidth: 1)
         )
+    }
+
+    private func scaled(_ size: CGFloat) -> CGFloat {
+        (size * textScale).rounded()
     }
 }

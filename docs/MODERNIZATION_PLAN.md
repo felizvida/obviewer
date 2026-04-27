@@ -15,14 +15,14 @@ That means:
 - improve scale and responsiveness third
 - refine graph, media, accessibility, and visual polish after the foundation is solid
 
-## Baseline As Of March 23, 2026
+## Baseline As Of April 2, 2026
 
 The project already has:
 
 - a split core/macOS architecture
 - note parsing, lookup, search, and graph derivation
 - live vault watching and incremental reload foundations
-- persistent warm-start snapshot caching for unchanged parsed notes and attachment metadata
+- persistent warm-start snapshot caching for unchanged parsed notes, attachment metadata, manifests, and reusable lookup/graph seed state
 - reader and graph workspaces
 - synthetic vault tooling
 - large-vault benchmark tooling and index diagnostics
@@ -37,7 +37,7 @@ The project still lacks:
 
 - signed/notarized end-user distribution
 - full markdown and Obsidian fidelity
-- deeper incremental indexing and persistent large-vault state beyond the current snapshot cache
+- deeper incremental indexing and persistent large-vault state beyond the current snapshot cache, manifest seed, and lookup/graph seed
 - accessibility hardening
 - UI regression coverage
 - operational polish for real public distribution

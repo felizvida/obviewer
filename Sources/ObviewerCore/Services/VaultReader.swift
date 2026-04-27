@@ -68,6 +68,7 @@ public struct VaultReader: VaultLoading, Sendable {
 
         var notes = [VaultNote]()
         var attachments = [VaultAttachment]()
+        var manifestFiles = [VaultIndexedFile]()
         var processedFileCount = 0
         let previousNotesByID = Dictionary(
             uniqueKeysWithValues: (previousSnapshot?.notes ?? []).map { ($0.id, $0) }
@@ -100,6 +101,13 @@ public struct VaultReader: VaultLoading, Sendable {
             let extensionName = fileURL.pathExtension.lowercased()
 
             if extensionName == "md" {
+                manifestFiles.append(
+                    VaultIndexedFile(
+                        relativePath: relativePath,
+                        kind: .note,
+                        modifiedAt: modifiedAt
+                    )
+                )
                 let note: VaultNote
                 if let previousNote = previousNotesByID[relativePath], previousNote.modifiedAt == modifiedAt {
                     note = previousNote
@@ -115,6 +123,13 @@ public struct VaultReader: VaultLoading, Sendable {
             }
 
             guard let kind = classifyAttachment(extensionName) else { continue }
+            manifestFiles.append(
+                VaultIndexedFile(
+                    relativePath: relativePath,
+                    kind: .init(attachmentKind: kind),
+                    modifiedAt: modifiedAt
+                )
+            )
             let attachment: VaultAttachment
             if let previousAttachment = previousAttachmentsByPath[relativePath],
                previousAttachment.modifiedAt == modifiedAt,
@@ -141,7 +156,18 @@ public struct VaultReader: VaultLoading, Sendable {
             )
         )
 
-        return VaultSnapshot(rootURL: rootURL, notes: notes, attachments: attachments)
+        let currentManifest = VaultIndexManifest(files: manifestFiles)
+        if let previousSnapshot,
+           currentManifest == previousSnapshot.indexManifest {
+            return previousSnapshot
+        }
+
+        return VaultSnapshot(
+            rootURL: rootURL,
+            notes: notes,
+            attachments: attachments,
+            indexManifest: currentManifest
+        )
     }
 
     private func selectivelyReloadVault(

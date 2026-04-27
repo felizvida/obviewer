@@ -8,6 +8,7 @@ public final class AppModel: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var isLiveReloadEnabled = false
     @Published private(set) var loadingProgress: VaultLoadingProgress?
+    @Published private(set) var indexDiagnostics: VaultIndexDiagnostics?
     @Published public private(set) var vaultURL: URL?
     @Published private(set) var errorMessage: String?
     @Published private(set) var pendingAnchor = PendingAnchor.none
@@ -155,6 +156,7 @@ public final class AppModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
             snapshot = nil
+            indexDiagnostics = nil
             vaultURL = nil
             selectedNoteID = nil
             stopWatchingVault()
@@ -270,6 +272,7 @@ public final class AppModel: ObservableObject {
             noteCache.saveSeedSnapshot(snapshot)
 
             self.snapshot = snapshot
+            indexDiagnostics = snapshot.indexDiagnostics(topFolderCount: 3)
             vaultURL = url
             if let previousSelection, snapshot.note(withID: previousSelection) != nil {
                 selectedNoteID = previousSelection

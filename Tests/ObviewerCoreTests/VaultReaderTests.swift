@@ -136,6 +136,32 @@ final class VaultReaderTests: XCTestCase {
         XCTAssertEqual(note.frontmatter.value(for: "status"), .string("cached"))
     }
 
+    func testReloadVaultPreservesExactManifestForUnchangedVault() throws {
+        let sandbox = try TemporaryVault()
+        defer { sandbox.cleanup() }
+
+        try sandbox.write(
+            "Projects/Plan.md",
+            contents: """
+            # Plan
+
+            Stable content.
+            """
+        )
+        try sandbox.writeData("Assets/cover.png", data: Data([0x89, 0x50, 0x4E, 0x47]))
+
+        let initialSnapshot = try VaultReader().loadVault(at: sandbox.rootURL)
+
+        let reloadedSnapshot = try VaultReader().reloadVault(
+            at: sandbox.rootURL,
+            previousSnapshot: initialSnapshot
+        )
+
+        XCTAssertEqual(reloadedSnapshot.indexManifest, initialSnapshot.indexManifest)
+        XCTAssertEqual(reloadedSnapshot.notes, initialSnapshot.notes)
+        XCTAssertEqual(reloadedSnapshot.attachments, initialSnapshot.attachments)
+    }
+
     func testReloadVaultReusesUnchangedAttachmentsFromPreviousSnapshot() throws {
         let sandbox = try TemporaryVault()
         defer { sandbox.cleanup() }

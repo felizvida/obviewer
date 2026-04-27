@@ -105,7 +105,7 @@ Responsibilities:
 - manage search input and graph scope state
 - orchestrate choose, restore, and reload flows
 - react to filesystem changes through a watcher service
-- seed cold loads from a persisted snapshot cache when safe to do so
+- seed cold loads from a persisted snapshot cache, file manifest, and reusable lookup/graph index state when safe to do so
 - bridge UI actions into core lookup/navigation behavior
 
 Important design choice:
@@ -126,6 +126,7 @@ Responsibilities:
 - resolve links source-relatively
 - provide precomputed note-search matching in core
 - build the note graph and graph subgraphs
+- serialize reusable lookup and graph index state for warm-start cache reuse
 
 Important design choices:
 
@@ -133,6 +134,7 @@ Important design choices:
 - note and attachment lookup prefer source-relative resolution to handle duplicate filenames sanely
 - note search is derived in core from a precomputed per-note search corpus instead of ad hoc UI filtering
 - graph data is derived and stored with the snapshot instead of being recomputed in the UI
+- persistent cache payloads can carry validated lookup and graph state so cold loads can skip more reconstruction work
 
 ### VaultReader
 
@@ -158,7 +160,7 @@ Important design choices:
 
 Pressure points:
 
-- the current persistent cache stores parsed notes, attachment metadata, and search corpora, but not richer global index state
+- the current persistent cache stores parsed notes, attachment metadata, manifests, and reusable lookup/graph state, but not richer ranking or directory-level index state
 - reloads are path-aware now, but there is still no deeper persistent index for very large vaults
 - frontmatter is still intentionally shallow and does not yet model nested YAML objects
 

@@ -4,13 +4,20 @@ public struct VaultSnapshot: Sendable {
     public let rootURL: URL
     public let notes: [VaultNote]
     public let attachments: [VaultAttachment]
+    public let indexManifest: VaultIndexManifest
     public let noteGraph: NoteGraph
 
     private let notesByID: [String: VaultNote]
     private let noteLookup: [String: [String]]
     private let attachmentLookup: [String: [VaultAttachment]]
 
-    public init(rootURL: URL, notes: [VaultNote], attachments: [VaultAttachment]) {
+    public init(
+        rootURL: URL,
+        notes: [VaultNote],
+        attachments: [VaultAttachment],
+        indexManifest: VaultIndexManifest? = nil,
+        persistentIndex: VaultPersistentIndex? = nil
+    ) {
         let sortedNotes = notes.sorted {
             if $0.modifiedAt != $1.modifiedAt {
                 return $0.modifiedAt > $1.modifiedAt
@@ -21,30 +28,27 @@ public struct VaultSnapshot: Sendable {
             $0.relativePath.localizedCaseInsensitiveCompare($1.relativePath) == .orderedAscending
         }
         let notesByID = Dictionary(uniqueKeysWithValues: sortedNotes.map { ($0.id, $0) })
-
-        var noteLookup = [String: [String]]()
-        for note in sortedNotes.sorted(by: {
-            $0.relativePath.localizedCaseInsensitiveCompare($1.relativePath) == .orderedAscending
-        }) {
-            for key in note.lookupKeys {
-                noteLookup[key, default: []].append(note.id)
-            }
-        }
-
-        var attachmentLookup = [String: [VaultAttachment]]()
-        for attachment in sortedAttachments {
-            for key in attachmentLookupKeys(relativePath: attachment.relativePath) {
-                attachmentLookup[key, default: []].append(attachment)
-            }
+        let attachmentsByPath = Dictionary(uniqueKeysWithValues: sortedAttachments.map { ($0.relativePath, $0) })
+        let computedNoteLookup = makeNoteLookup(from: sortedNotes)
+        let computedAttachmentLookup = makeAttachmentLookup(from: sortedAttachments)
+        let hydratedIndex = persistentIndex.flatMap { persistentIndex in
+            hydratePersistentIndex(
+                persistentIndex,
+                notes: sortedNotes,
+                notesByID: notesByID,
+                attachmentsByPath: attachmentsByPath
+            )
         }
 
         self.rootURL = rootURL
         self.notes = sortedNotes
         self.attachments = sortedAttachments
-        self.noteGraph = NoteGraph(notes: sortedNotes, notesByID: notesByID, noteLookup: noteLookup)
+        self.indexManifest = indexManifest ?? VaultIndexManifest(notes: sortedNotes, attachments: sortedAttachments)
+        self.noteGraph = hydratedIndex?.noteGraph
+            ?? NoteGraph(notes: sortedNotes, notesByID: notesByID, noteLookup: computedNoteLookup)
         self.notesByID = notesByID
-        self.noteLookup = noteLookup
-        self.attachmentLookup = attachmentLookup
+        self.noteLookup = hydratedIndex?.noteLookup ?? computedNoteLookup
+        self.attachmentLookup = hydratedIndex?.attachmentLookup ?? computedAttachmentLookup
     }
 
     public func note(withID id: String) -> VaultNote? {
@@ -148,6 +152,96 @@ public struct VaultSnapshot: Sendable {
             attachmentKindCounts: attachmentKindCounts,
             largestFolders: Array(largestFolders.prefix(max(topFolderCount, 0)))
         )
+    }
+
+    public var persistentIndex: VaultPersistentIndex {
+        VaultPersistentIndex(
+            noteLookup: noteLookup,
+            attachmentLookup: attachmentLookup.mapValues { attachments in
+                attachments.map(\.relativePath)
+            },
+            graphEdges: noteGraph.edges
+        )
+    }
+}
+
+public struct VaultPersistentIndex: Hashable, Sendable, Codable {
+    public let noteLookup: [String: [String]]
+    public let attachmentLookup: [String: [String]]
+    public let graphEdges: [NoteGraphEdge]
+
+    public init(
+        noteLookup: [String: [String]],
+        attachmentLookup: [String: [String]],
+        graphEdges: [NoteGraphEdge]
+    ) {
+        self.noteLookup = noteLookup
+        self.attachmentLookup = attachmentLookup
+        self.graphEdges = graphEdges
+    }
+}
+
+public struct VaultIndexManifest: Hashable, Sendable, Codable {
+    public let files: [VaultIndexedFile]
+
+    public init(files: [VaultIndexedFile]) {
+        self.files = files.sorted {
+            $0.relativePath.localizedCaseInsensitiveCompare($1.relativePath) == .orderedAscending
+        }
+    }
+
+    public init(notes: [VaultNote], attachments: [VaultAttachment]) {
+        self.init(
+            files: notes.map { note in
+                VaultIndexedFile(
+                    relativePath: note.relativePath,
+                    kind: .note,
+                    modifiedAt: note.modifiedAt
+                )
+            } + attachments.map { attachment in
+                VaultIndexedFile(
+                    relativePath: attachment.relativePath,
+                    kind: .init(attachmentKind: attachment.kind),
+                    modifiedAt: attachment.modifiedAt
+                )
+            }
+        )
+    }
+}
+
+public struct VaultIndexedFile: Hashable, Sendable, Codable {
+    public enum Kind: String, Hashable, Sendable, Codable {
+        case note
+        case image
+        case pdf
+        case audio
+        case video
+        case other
+
+        init(attachmentKind: VaultAttachment.Kind) {
+            switch attachmentKind {
+            case .image:
+                self = .image
+            case .pdf:
+                self = .pdf
+            case .audio:
+                self = .audio
+            case .video:
+                self = .video
+            case .other:
+                self = .other
+            }
+        }
+    }
+
+    public let relativePath: String
+    public let kind: Kind
+    public let modifiedAt: Date
+
+    public init(relativePath: String, kind: Kind, modifiedAt: Date) {
+        self.relativePath = relativePath
+        self.kind = kind
+        self.modifiedAt = modifiedAt
     }
 }
 
@@ -262,6 +356,59 @@ public struct NoteGraph: Sendable {
             }
         }
 
+        let state = Self.makeState(
+            notes: notes,
+            outgoing: outgoing,
+            incoming: incoming,
+            edgeSet: edgeSet
+        )
+        self.nodes = state.nodes
+        self.edges = state.edges
+        self.nodesByID = state.nodesByID
+        self.outgoing = state.outgoing
+        self.incoming = state.incoming
+    }
+
+    init(notes: [VaultNote], edges: [NoteGraphEdge]) {
+        let noteIDs = Set(notes.map(\.id))
+        var outgoing = [String: Set<String>]()
+        var incoming = [String: Set<String>]()
+        var edgeSet = Set<NoteGraphEdge>()
+
+        for edge in edges {
+            guard noteIDs.contains(edge.sourceID), noteIDs.contains(edge.targetID) else {
+                continue
+            }
+            guard edge.sourceID != edge.targetID else {
+                continue
+            }
+            guard edgeSet.insert(edge).inserted else {
+                continue
+            }
+
+            outgoing[edge.sourceID, default: []].insert(edge.targetID)
+            incoming[edge.targetID, default: []].insert(edge.sourceID)
+        }
+
+        let state = Self.makeState(
+            notes: notes,
+            outgoing: outgoing,
+            incoming: incoming,
+            edgeSet: edgeSet
+        )
+        self.nodes = state.nodes
+        self.edges = state.edges
+        self.nodesByID = state.nodesByID
+        self.outgoing = state.outgoing
+        self.incoming = state.incoming
+    }
+
+    private static func makeState(
+        notes: [VaultNote],
+        outgoing: [String: Set<String>],
+        incoming: [String: Set<String>],
+        edgeSet: Set<NoteGraphEdge>
+    ) -> NoteGraphState {
         let nodes = notes.map { note in
             NoteGraphNode(
                 id: note.id,
@@ -287,19 +434,21 @@ public struct NoteGraph: Sendable {
             return lhs.targetID.localizedCaseInsensitiveCompare(rhs.targetID) == .orderedAscending
         }
 
-        self.nodes = nodes
-        self.edges = sortedEdges
-        self.nodesByID = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
-        self.outgoing = outgoing.mapValues { noteIDs in
-            noteIDs.sorted { lhs, rhs in
-                lhs.localizedCaseInsensitiveCompare(rhs) == .orderedAscending
+        return NoteGraphState(
+            nodes: nodes,
+            edges: sortedEdges,
+            nodesByID: Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) }),
+            outgoing: outgoing.mapValues { noteIDs in
+                noteIDs.sorted { lhs, rhs in
+                    lhs.localizedCaseInsensitiveCompare(rhs) == .orderedAscending
+                }
+            },
+            incoming: incoming.mapValues { noteIDs in
+                noteIDs.sorted { lhs, rhs in
+                    lhs.localizedCaseInsensitiveCompare(rhs) == .orderedAscending
+                }
             }
-        }
-        self.incoming = incoming.mapValues { noteIDs in
-            noteIDs.sorted { lhs, rhs in
-                lhs.localizedCaseInsensitiveCompare(rhs) == .orderedAscending
-            }
-        }
+        )
     }
 
     public func node(withID id: String) -> NoteGraphNode? {
@@ -397,6 +546,14 @@ public struct NoteGraph: Sendable {
     }
 }
 
+private struct NoteGraphState {
+    let nodes: [NoteGraphNode]
+    let edges: [NoteGraphEdge]
+    let nodesByID: [String: NoteGraphNode]
+    let outgoing: [String: [String]]
+    let incoming: [String: [String]]
+}
+
 public struct NoteGraphNode: Identifiable, Hashable, Sendable {
     public let id: String
     public let title: String
@@ -408,7 +565,7 @@ public struct NoteGraphNode: Identifiable, Hashable, Sendable {
     public let wordCount: Int
 }
 
-public struct NoteGraphEdge: Hashable, Sendable {
+public struct NoteGraphEdge: Hashable, Sendable, Codable {
     public let sourceID: String
     public let targetID: String
 
@@ -416,6 +573,77 @@ public struct NoteGraphEdge: Hashable, Sendable {
         self.sourceID = sourceID
         self.targetID = targetID
     }
+}
+
+private struct HydratedPersistentIndex {
+    let noteLookup: [String: [String]]
+    let attachmentLookup: [String: [VaultAttachment]]
+    let noteGraph: NoteGraph
+}
+
+private func makeNoteLookup(from notes: [VaultNote]) -> [String: [String]] {
+    var noteLookup = [String: [String]]()
+    for note in notes.sorted(by: {
+        $0.relativePath.localizedCaseInsensitiveCompare($1.relativePath) == .orderedAscending
+    }) {
+        for key in note.lookupKeys {
+            noteLookup[key, default: []].append(note.id)
+        }
+    }
+    return noteLookup
+}
+
+private func makeAttachmentLookup(from attachments: [VaultAttachment]) -> [String: [VaultAttachment]] {
+    var attachmentLookup = [String: [VaultAttachment]]()
+    for attachment in attachments {
+        for key in attachmentLookupKeys(relativePath: attachment.relativePath) {
+            attachmentLookup[key, default: []].append(attachment)
+        }
+    }
+    return attachmentLookup
+}
+
+private func hydratePersistentIndex(
+    _ persistentIndex: VaultPersistentIndex,
+    notes: [VaultNote],
+    notesByID: [String: VaultNote],
+    attachmentsByPath: [String: VaultAttachment]
+) -> HydratedPersistentIndex? {
+    var hydratedNoteLookup = [String: [String]]()
+    for (key, ids) in persistentIndex.noteLookup {
+        let filteredIDs = ids.filter { notesByID[$0] != nil }
+        guard filteredIDs.count == ids.count else {
+            return nil
+        }
+        if filteredIDs.isEmpty == false {
+            hydratedNoteLookup[key] = filteredIDs
+        }
+    }
+
+    var hydratedAttachmentLookup = [String: [VaultAttachment]]()
+    for (key, relativePaths) in persistentIndex.attachmentLookup {
+        let hydratedAttachments = relativePaths.compactMap { attachmentsByPath[$0] }
+        guard hydratedAttachments.count == relativePaths.count else {
+            return nil
+        }
+        if hydratedAttachments.isEmpty == false {
+            hydratedAttachmentLookup[key] = hydratedAttachments
+        }
+    }
+
+    let noteIDs = Set(notes.map(\.id))
+    let filteredEdges = persistentIndex.graphEdges.filter { edge in
+        noteIDs.contains(edge.sourceID) && noteIDs.contains(edge.targetID)
+    }
+    guard filteredEdges.count == persistentIndex.graphEdges.count else {
+        return nil
+    }
+
+    return HydratedPersistentIndex(
+        noteLookup: hydratedNoteLookup,
+        attachmentLookup: hydratedAttachmentLookup,
+        noteGraph: NoteGraph(notes: notes, edges: filteredEdges)
+    )
 }
 
 public struct NoteGraphSubgraph: Sendable {

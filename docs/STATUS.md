@@ -145,7 +145,7 @@ Present:
 - loading progress visibility
 - live vault watching on macOS
 - selective incremental reload that applies changed, added, and removed file paths while reusing untouched note models
-- persistent warm-start snapshot cache that reuses parsed notes and attachment metadata across relaunches when files are unchanged
+- persistent warm-start snapshot cache that reuses parsed notes, attachment metadata, a persisted file manifest, and validated lookup/graph index state across relaunches
 - precomputed core search corpus for title/path/tag/preview/frontmatter matching
 - large-vault benchmark tooling with index diagnostics for cold load, warm reload, selective reload, search, and graph queries
 - smoke-profile benchmark budget enforcement in CI with a published JSON report artifact
@@ -155,7 +155,7 @@ Present:
 Still incomplete:
 
 - truly selective directory-level or file-level reindexing
-- persistent state beyond the current snapshot cache, such as larger indexed stores, ranking data, or richer file metadata
+- persistent state beyond the current snapshot cache, manifest seed, and lookup/graph seed, such as larger indexed stores, ranking data, or richer file metadata
 - broader performance budgets beyond the smoke profile and historical benchmark tracking
 - caching and smarter search ranking
 
@@ -183,7 +183,7 @@ The repo is release-automated, but the published artifact is still source-only. 
 
 ### Risk 3: Performance ceiling
 
-The new watcher, selective reload path, warm-start snapshot cache, precomputed search corpus, and benchmark tooling improve both visibility and behavior, but the app still lacks deeper persistent indexing and automated performance guardrails for truly large vaults.
+The new watcher, selective reload path, manifest-backed warm-start snapshot cache, persisted lookup/graph seed state, precomputed search corpus, and benchmark tooling improve both visibility and behavior, but the app still lacks deeper persistent indexing and automated performance guardrails for truly large vaults.
 
 ### Risk 4: UI verification gap
 

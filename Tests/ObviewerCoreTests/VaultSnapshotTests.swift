@@ -276,6 +276,104 @@ final class VaultSnapshotTests: XCTestCase {
         XCTAssertEqual(diagnostics.largestFolders.first?.noteCount, 2)
         XCTAssertEqual(diagnostics.largestFolders.first?.attachmentCount, 1)
     }
+
+    func testIndexManifestCapturesNotesAndAttachments() {
+        let snapshot = VaultSnapshot(
+            rootURL: URL(fileURLWithPath: "/tmp/obviewer-tests"),
+            notes: [
+                .fixture(
+                    relativePath: "Projects/Plan.md",
+                    title: "Launch Plan",
+                    modifiedAt: Date(timeIntervalSince1970: 10)
+                ),
+                .fixture(
+                    relativePath: "Root.md",
+                    title: "Root",
+                    modifiedAt: Date(timeIntervalSince1970: 20)
+                ),
+            ],
+            attachments: [
+                VaultAttachment(
+                    relativePath: "Assets/cover.png",
+                    url: URL(fileURLWithPath: "/tmp/obviewer-tests/Assets/cover.png"),
+                    kind: .image,
+                    modifiedAt: Date(timeIntervalSince1970: 30)
+                ),
+            ]
+        )
+
+        XCTAssertEqual(
+            snapshot.indexManifest.files,
+            [
+                VaultIndexedFile(
+                    relativePath: "Assets/cover.png",
+                    kind: .image,
+                    modifiedAt: Date(timeIntervalSince1970: 30)
+                ),
+                VaultIndexedFile(
+                    relativePath: "Projects/Plan.md",
+                    kind: .note,
+                    modifiedAt: Date(timeIntervalSince1970: 10)
+                ),
+                VaultIndexedFile(
+                    relativePath: "Root.md",
+                    kind: .note,
+                    modifiedAt: Date(timeIntervalSince1970: 20)
+                ),
+            ]
+        )
+    }
+
+    func testPersistentIndexReconstructsLookupAndGraphState() {
+        let original = VaultSnapshot(
+            rootURL: URL(fileURLWithPath: "/tmp/obviewer-tests"),
+            notes: [
+                .fixture(
+                    relativePath: "Alpha/Daily.md",
+                    title: "Daily",
+                    outboundLinks: ["Shared/Hub"],
+                    modifiedAt: Date(timeIntervalSince1970: 10)
+                ),
+                .fixture(
+                    relativePath: "Beta/Daily.md",
+                    title: "Daily",
+                    outboundLinks: ["Shared/Hub"],
+                    modifiedAt: Date(timeIntervalSince1970: 20)
+                ),
+                .fixture(
+                    relativePath: "Shared/Hub.md",
+                    title: "Hub",
+                    modifiedAt: Date(timeIntervalSince1970: 30)
+                ),
+            ],
+            attachments: [
+                VaultAttachment(
+                    relativePath: "Alpha/cover.png",
+                    url: URL(fileURLWithPath: "/tmp/obviewer-tests/Alpha/cover.png"),
+                    kind: .image,
+                    modifiedAt: Date(timeIntervalSince1970: 40)
+                ),
+                VaultAttachment(
+                    relativePath: "Beta/cover.png",
+                    url: URL(fileURLWithPath: "/tmp/obviewer-tests/Beta/cover.png"),
+                    kind: .image,
+                    modifiedAt: Date(timeIntervalSince1970: 50)
+                ),
+            ]
+        )
+
+        let restored = VaultSnapshot(
+            rootURL: original.rootURL,
+            notes: original.notes,
+            attachments: original.attachments,
+            indexManifest: original.indexManifest,
+            persistentIndex: original.persistentIndex
+        )
+
+        XCTAssertEqual(restored.resolveNoteID(for: "Daily", from: "Alpha/Daily.md"), "Alpha/Daily.md")
+        XCTAssertEqual(restored.attachment(for: "cover.png", from: "Beta/Daily.md")?.relativePath, "Beta/cover.png")
+        XCTAssertEqual(restored.noteGraph.edges, original.noteGraph.edges)
+    }
 }
 
 private extension VaultNote {

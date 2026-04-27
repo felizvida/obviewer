@@ -53,16 +53,24 @@ public struct VaultReloadChanges: Sendable, Equatable {
     }
 
     public func merged(with other: VaultReloadChanges) -> VaultReloadChanges {
-        VaultReloadChanges(
-            modifiedPaths: modifiedPaths
-                .union(other.modifiedPaths)
-                .subtracting(removedPaths.union(other.removedPaths)),
-            createdPaths: createdPaths
-                .union(other.createdPaths)
-                .subtracting(removedPaths.union(other.removedPaths)),
-            removedPaths: removedPaths
-                .union(other.removedPaths)
-                .subtracting(createdPaths.union(other.createdPaths)),
+        let combinedCreatedPaths = createdPaths.union(other.createdPaths)
+        let combinedRemovedPaths = removedPaths.union(other.removedPaths)
+        // If a path is both removed and created while we are coalescing async filesystem
+        // events, we can no longer safely infer its original existence. Treat it as a
+        // modified path so the next reload revalidates the current on-disk state.
+        let conflictedPaths = combinedCreatedPaths.intersection(combinedRemovedPaths)
+        let survivingCreatedPaths = combinedCreatedPaths.subtracting(conflictedPaths)
+        let survivingRemovedPaths = combinedRemovedPaths.subtracting(conflictedPaths)
+        let survivingModifiedPaths = modifiedPaths
+            .union(other.modifiedPaths)
+            .union(conflictedPaths)
+            .subtracting(survivingCreatedPaths)
+            .subtracting(survivingRemovedPaths)
+
+        return VaultReloadChanges(
+            modifiedPaths: survivingModifiedPaths,
+            createdPaths: survivingCreatedPaths,
+            removedPaths: survivingRemovedPaths,
             requiresFullReload: requiresFullReload || other.requiresFullReload
         )
     }

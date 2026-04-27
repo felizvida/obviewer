@@ -33,7 +33,7 @@ The original requirement set that shaped the project was:
 
 Trust outranks feature count. Reading quality outranks management features.
 
-## Current State As Of March 23, 2026
+## Current State As Of April 2, 2026
 
 The repository is a working prototype with a healthy development foundation.
 
@@ -51,7 +51,7 @@ What exists today:
 - documentation screenshot generation from the real app
 - local Xcode validation with a working full-Xcode setup
 - green GitHub CI and tag-driven source release automation
-- warm-start snapshot cache for faster cold launches without writing into the vault
+- manifest-backed warm-start snapshot cache with reusable lookup/graph index state for faster cold launches without writing into the vault
 - Apache 2.0 licensing and standard repo governance files
 
 What does not exist yet:
@@ -59,7 +59,7 @@ What does not exist yet:
 - a published signed/notarized `.app` or `.dmg`
 - App Store distribution
 - full CommonMark plus Obsidian fidelity
-- deeper large-vault incremental indexing and persistent state beyond the current snapshot cache
+- deeper large-vault incremental indexing and persistent state beyond the current snapshot cache, manifest seed, and lookup/graph seed
 - accessibility audit and VoiceOver hardening
 - UI snapshot testing
 - broader automated performance guardrails beyond the current smoke benchmark budget
@@ -85,7 +85,7 @@ Any change that weakens this chain should be treated as a high-risk regression.
 
 ## Current Architecture In One Paragraph
 
-`AppModel` orchestrates vault loading, bookmark restore, search state, graph state, navigation, watched reloads, and warm-start cache reuse. `VaultWatcher` turns filesystem changes into path-aware reload batches, `VaultNoteCacheStore` persists snapshot seeds outside the vault, and `VaultReader` applies changes by reusing untouched notes and attachments while reparsing only affected files. `ObsidianParser` produces simplified render blocks plus outbound links, tags, headings, and metadata. `VaultSnapshot` stores notes, attachments, lookup tables, a precomputed search corpus, index diagnostics, and the derived `NoteGraph`. `ContentView` hosts the split-view shell, `ReaderView` renders notes into the reading surface, `RichTextView` handles inline content, and `GraphView` renders the graph workspace. Supporting tools generate demo vaults, benchmark large-vault behavior, and produce documentation screenshots from the same real UI stack.
+`AppModel` orchestrates vault loading, bookmark restore, search state, graph state, navigation, watched reloads, and warm-start cache reuse. `VaultWatcher` turns filesystem changes into path-aware reload batches, `VaultNoteCacheStore` persists snapshot seeds outside the vault, and `VaultReader` applies changes by reusing untouched notes and attachments while reparsing only affected files. `ObsidianParser` produces simplified render blocks plus outbound links, tags, headings, and metadata. `VaultSnapshot` stores notes, attachments, lookup tables, a precomputed search corpus, index diagnostics, and the derived `NoteGraph`, and it can now rehydrate validated lookup and graph state from the warm-start cache instead of rebuilding all of that work on every cold launch. `ContentView` hosts the split-view shell, `ReaderView` renders notes into the reading surface, `RichTextView` handles inline content, and `GraphView` renders the graph workspace. Supporting tools generate demo vaults, benchmark large-vault behavior, and produce documentation screenshots from the same real UI stack.
 
 For the full breakdown, read [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 

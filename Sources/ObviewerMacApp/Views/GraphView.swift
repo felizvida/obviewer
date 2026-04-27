@@ -78,6 +78,8 @@ struct GraphWorkspaceView: View {
                         graphPill(text: "Filtered", systemImage: "line.3.horizontal.decrease.circle")
                     }
                 }
+
+                GraphLegendBar(subgraph: subgraph)
             }
         }
     }
@@ -101,16 +103,7 @@ struct GraphWorkspaceView: View {
     private func graphPill(text: String, systemImage: String) -> some View {
         Label(text, systemImage: systemImage)
             .font(.system(size: 11, weight: .semibold, design: .rounded))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(Color.white.opacity(0.72))
-            )
-            .overlay(
-                Capsule(style: .continuous)
-                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
-            )
+            .foregroundStyle(.secondary)
     }
 
     private var emptyState: some View {
@@ -159,10 +152,13 @@ private struct GraphCanvasPanel: View {
 
             ZStack {
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .fill(Color.white.opacity(0.56))
+                    .fill(VisualTheme.readerSurface)
 
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                    .stroke(Color.white.opacity(0.62), lineWidth: 1)
+
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .stroke(Color.black.opacity(0.05), lineWidth: 1)
 
                 Canvas { context, size in
                     drawCanvasBackground(context: &context, size: size)
@@ -178,11 +174,13 @@ private struct GraphCanvasPanel: View {
                     } ?? false
 
                     Button {
-                        onSelectNote(node.id)
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            onSelectNote(node.id)
+                        }
                     } label: {
                         GraphNodeView(
                             node: node,
-                            color: folderColor(for: node.folderPath),
+                            color: GraphPalette.color(for: node.folderPath),
                             scope: graphScope,
                             isSelected: isSelected,
                             isHighlighted: isHighlighted,
@@ -199,9 +197,32 @@ private struct GraphCanvasPanel: View {
             }
         }
         .frame(minHeight: 640)
+        .shadow(color: Color.black.opacity(0.06), radius: 24, x: 0, y: 14)
     }
 
     private func drawCanvasBackground(context: inout GraphicsContext, size: CGSize) {
+        let gridSpacing: CGFloat = 64
+        var gridPath = Path()
+        var x: CGFloat = gridSpacing
+        while x < size.width {
+            gridPath.move(to: CGPoint(x: x, y: 0))
+            gridPath.addLine(to: CGPoint(x: x, y: size.height))
+            x += gridSpacing
+        }
+
+        var y: CGFloat = gridSpacing
+        while y < size.height {
+            gridPath.move(to: CGPoint(x: 0, y: y))
+            gridPath.addLine(to: CGPoint(x: size.width, y: y))
+            y += gridSpacing
+        }
+
+        context.stroke(
+            gridPath,
+            with: .color(Color.black.opacity(0.025)),
+            lineWidth: 1
+        )
+
         let glowRect = CGRect(
             x: size.width * 0.52,
             y: size.height * 0.08,
@@ -268,7 +289,10 @@ private struct GraphCanvasPanel: View {
         )
     }
 
-    private func folderColor(for folderPath: String) -> Color {
+}
+
+enum GraphPalette {
+    static func color(for folderPath: String) -> Color {
         let palette: [Color] = [
             Color(red: 0.28, green: 0.47, blue: 0.72),
             Color(red: 0.27, green: 0.58, blue: 0.46),
@@ -281,6 +305,65 @@ private struct GraphCanvasPanel: View {
         let bucket = folderPath.split(separator: "/").first.map(String.init) ?? "Vault Root"
         return palette[StablePaletteIndex.index(for: bucket, modulo: palette.count)]
     }
+
+    static func bucketName(for folderPath: String) -> String {
+        folderPath.split(separator: "/").first.map(String.init) ?? "Vault Root"
+    }
+}
+
+private struct GraphLegendBar: View {
+    let subgraph: NoteGraphSubgraph
+
+    private var buckets: [GraphLegendBucket] {
+        let grouped = Dictionary(grouping: subgraph.nodes) { node in
+            GraphPalette.bucketName(for: node.folderPath)
+        }
+
+        return grouped.map { bucket, nodes in
+            GraphLegendBucket(name: bucket, count: nodes.count, color: GraphPalette.color(for: bucket))
+        }.sorted { lhs, rhs in
+            if lhs.count != rhs.count {
+                return lhs.count > rhs.count
+            }
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "paintpalette")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            ForEach(buckets.prefix(6)) { bucket in
+                Circle()
+                    .fill(bucket.color)
+                    .frame(width: 11, height: 11)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.7), lineWidth: 1)
+                    )
+                    .help("\(bucket.name): \(bucket.count) notes")
+            }
+
+            if buckets.count > 6 {
+                Text("+\(buckets.count - 6)")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+        .softPanel(cornerRadius: 999, opacity: 0.46)
+    }
+}
+
+private struct GraphLegendBucket: Identifiable {
+    let name: String
+    let count: Int
+    let color: Color
+
+    var id: String { name }
 }
 
 enum StablePaletteIndex {
@@ -352,6 +435,9 @@ private struct GraphNodeView: View {
             }
         }
         .contentShape(Rectangle())
+        .scaleEffect(isSelected ? 1.08 : isHovered ? 1.04 : 1)
+        .animation(.spring(response: 0.24, dampingFraction: 0.78), value: isSelected)
+        .animation(.easeInOut(duration: 0.14), value: isHovered)
     }
 
     private var showsLabel: Bool {
@@ -438,8 +524,10 @@ private struct GraphInspectorPanel: View {
                         statPill(text: "\(selectedNode.tagCount) tags", systemImage: "tag")
                     }
 
-                    Button("Open In Reader") {
+                    Button {
                         onOpenReader()
+                    } label: {
+                        Label("Open In Reader", systemImage: "book.pages")
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
@@ -476,14 +564,7 @@ private struct GraphInspectorPanel: View {
         }
         .padding(22)
         .frame(width: 310, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white.opacity(0.52))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(Color.black.opacity(0.06), lineWidth: 1)
-        )
+        .softPanel(cornerRadius: 28, opacity: 0.58)
     }
 
     private func statPill(text: String, systemImage: String) -> some View {
