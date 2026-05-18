@@ -151,7 +151,7 @@ The detailed roadmap is in [`docs/MODERNIZATION_PLAN.md`](./docs/MODERNIZATION_P
 - CI runs on pushes to `main` and `codex/**`, on pull requests, and on manual dispatch
 - Releases are tag-driven through `.github/workflows/release.yml`
 - The repo includes issue templates, CODEOWNERS, contribution guidance, and security/support docs
-- The current release line is green after `v0.2.7`
+- The current release line is green after `v0.2.8`
 
 ## License
 

@@ -50,19 +50,16 @@ final class ReleaseHardeningTests: XCTestCase {
         XCTAssertTrue(releaseCommon.contains("com.apple.security.files.user-selected.read-write"))
     }
 
-    func testGeneratedProjectSourceRequiresHardenedRuntimeAndBuildSettingVersion() throws {
+    func testProjectSourceRequiresHardenedRuntimeAndBuildSettingVersion() throws {
         let projectYAML = try String(
             contentsOf: repositoryRootURL.appendingPathComponent("project.yml"),
             encoding: .utf8
         )
-        let infoPlist = try String(
-            contentsOf: repositoryRootURL.appendingPathComponent("App/Info.plist"),
-            encoding: .utf8
-        )
 
         XCTAssertTrue(projectYAML.contains("ENABLE_HARDENED_RUNTIME: YES"))
-        XCTAssertTrue(infoPlist.contains("<string>$(MARKETING_VERSION)</string>"))
-        XCTAssertTrue(infoPlist.contains("<string>$(CURRENT_PROJECT_VERSION)</string>"))
+        XCTAssertTrue(projectYAML.contains("path: App/Info.plist"))
+        XCTAssertTrue(projectYAML.contains("CFBundleShortVersionString: \"$(MARKETING_VERSION)\""))
+        XCTAssertTrue(projectYAML.contains("CFBundleVersion: \"$(CURRENT_PROJECT_VERSION)\""))
     }
 
     private var repositoryRootURL: URL {

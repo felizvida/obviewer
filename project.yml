@@ -91,7 +91,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Configuration/Obviewer.entitlements
         ENABLE_HARDENED_RUNTIME: YES
         GENERATE_INFOPLIST_FILE: NO
-        MARKETING_VERSION: 0.2.7
+        MARKETING_VERSION: 0.2.8
         CURRENT_PROJECT_VERSION: 1
 
   ObviewerCoreTests:
