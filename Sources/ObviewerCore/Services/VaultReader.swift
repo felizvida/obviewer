@@ -47,6 +47,94 @@ public struct VaultReader: VaultLoading, Sendable {
         return try fullyReloadVault(at: rootURL, previousSnapshot: previousSnapshot, progress: progress)
     }
 
+    public func loadMarkdownFile(
+        at fileURL: URL,
+        progress: (@Sendable (VaultLoadingProgress) -> Void)? = nil
+    ) throws -> VaultSnapshot {
+        try reloadMarkdownFile(at: fileURL, previousSnapshot: nil, progress: progress)
+    }
+
+    public func reloadMarkdownFile(
+        at fileURL: URL,
+        previousSnapshot: VaultSnapshot?,
+        progress: (@Sendable (VaultLoadingProgress) -> Void)? = nil
+    ) throws -> VaultSnapshot {
+        guard fileURL.pathExtension.lowercased() == "md" else {
+            throw VaultReaderError.unsupportedInput(fileURL.path)
+        }
+
+        let resourceKeys: Set<URLResourceKey> = [
+            .isRegularFileKey,
+            .contentModificationDateKey,
+        ]
+        let values = try fileURL.resourceValues(forKeys: resourceKeys)
+        guard values.isRegularFile == true else {
+            throw VaultReaderError.unreadableVault(fileURL.path)
+        }
+
+        let rootURL = fileURL.deletingLastPathComponent()
+        let relativePath = fileURL.lastPathComponent
+        let modifiedAt = values.contentModificationDate ?? .distantPast
+        progress?(
+            VaultLoadingProgress(
+                processedFileCount: 1,
+                noteCount: 0,
+                attachmentCount: 0,
+                currentPath: relativePath
+            )
+        )
+
+        let previousNotesByID = Dictionary(
+            uniqueKeysWithValues: (previousSnapshot?.notes ?? []).map { ($0.id, $0) }
+        )
+        let note: VaultNote
+        if let previousNote = previousNotesByID[relativePath], previousNote.modifiedAt == modifiedAt {
+            note = previousNote
+        } else {
+            note = try loadNote(at: fileURL, relativePath: relativePath, modifiedAt: modifiedAt)
+        }
+
+        let manifest = VaultIndexManifest(
+            files: [
+                VaultIndexedFile(
+                    relativePath: relativePath,
+                    kind: .note,
+                    modifiedAt: modifiedAt
+                ),
+            ]
+        )
+
+        if let previousSnapshot,
+           previousSnapshot.rootURL == rootURL,
+           previousSnapshot.indexManifest == manifest {
+            progress?(
+                VaultLoadingProgress(
+                    processedFileCount: 1,
+                    noteCount: previousSnapshot.notes.count,
+                    attachmentCount: previousSnapshot.attachments.count,
+                    currentPath: nil
+                )
+            )
+            return previousSnapshot
+        }
+
+        progress?(
+            VaultLoadingProgress(
+                processedFileCount: 1,
+                noteCount: 1,
+                attachmentCount: 0,
+                currentPath: nil
+            )
+        )
+
+        return VaultSnapshot(
+            rootURL: rootURL,
+            notes: [note],
+            attachments: [],
+            indexManifest: manifest
+        )
+    }
+
     private func fullyReloadVault(
         at rootURL: URL,
         previousSnapshot: VaultSnapshot?,
@@ -372,11 +460,14 @@ public struct VaultReader: VaultLoading, Sendable {
 
 public enum VaultReaderError: LocalizedError {
     case unreadableVault(String)
+    case unsupportedInput(String)
 
     public var errorDescription: String? {
         switch self {
         case .unreadableVault(let path):
             return "Unable to read vault at \(path)."
+        case .unsupportedInput(let path):
+            return "Unsupported reading input at \(path)."
         }
     }
 }

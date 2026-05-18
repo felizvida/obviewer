@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/felizvida/obviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/felizvida/obviewer/actions/workflows/ci.yml)
 
-Obviewer is a native macOS reader for local Obsidian vaults built around one non-negotiable promise: the app must remain read-only with respect to the user's notes.
+Obviewer is a native macOS reader for local Markdown files, Markdown folders, and Obsidian vaults built around one non-negotiable promise: the app must remain read-only with respect to the user's notes.
 
 The project is already a working prototype, not just a sketch. It has a portable core, a macOS app shell, a reader-first interface, a graph workspace, a generated demo vault, documentation screenshots, and green GitHub CI. It is not yet a fully shipped consumer app because signed/notarized app distribution, parser fidelity, accessibility, and large-vault performance still need dedicated modernization work.
 
@@ -21,6 +21,7 @@ The project is already a working prototype, not just a sketch. It has a portable
 - Native SwiftUI macOS app shell with `NavigationSplitView`
 - Portable `ObviewerCore` module for parsing, lookup, vault indexing, and graph construction
 - macOS-specific `ObviewerMacApp` module for security-scoped access, bookmarks, app state, and UI
+- Input profiles for focused Markdown files, plain Markdown folders, and Obsidian vaults
 - Local vault loading with progress reporting, live vault watching, and path-aware selective reloads
 - Warm-start snapshot cache that persists parsed notes, attachment metadata, a file manifest, and reusable lookup/graph index state so unchanged cold launches can short-circuit most snapshot reconstruction
 - Search by title, path, tags, preview text, aliases, and frontmatter metadata through a core precomputed search index
@@ -43,6 +44,8 @@ The UI being "view only" is not enough. The guarantee comes from platform bounda
 3. Vault access must come from user-selected folders, not broad filesystem exceptions.
 4. Vault reads must flow through the reader layer, with no write API.
 5. Release packaging must preserve the sandbox entitlements through code signing.
+6. Security-scoped bookmarks must be created with read-only access only.
+7. Opening an attachment in another app must be explicit because that app is outside Obviewer's read-only boundary.
 
 The current entitlement baseline lives in [`Configuration/Obviewer.entitlements`](/Users/liux17/codex/obviewer/Configuration/Obviewer.entitlements).
 
@@ -54,6 +57,28 @@ The shortest local trial path is:
 git clone https://github.com/felizvida/obviewer.git
 cd obviewer
 make try-local
+```
+
+In the app, choose `Open` and pick any of these:
+
+- a single `.md` file for focused, document-only Markdown reading
+- a folder of Markdown files for local library/search mode
+- an Obsidian vault folder for Obsidian-aware links, tags, embeds, and graph behavior
+
+Single-file mode only reads the selected document and does not watch or index sibling files. If a Markdown document relies on relative images, PDFs, or other local assets, open the containing folder with the Markdown profile instead.
+
+For command-line launches, use profiles explicitly:
+
+```bash
+swift run Obviewer --markdown /absolute/path/to/Note.md
+swift run Obviewer --obsidian /absolute/path/to/ObsidianVault
+```
+
+For a built `.app`, prefer the in-app `Open` button or Finder `Open With` so macOS grants read-only sandbox access. Absolute-path switches are useful for local development and profile testing, but a fully sandboxed signed app may still require a user-selected file or folder grant:
+
+```bash
+open /Applications/Obviewer.app --args --markdown /absolute/path/to/Note.md
+open /Applications/Obviewer.app --args --obsidian /absolute/path/to/ObsidianVault
 ```
 
 If you want a realistic vault without touching your own notes:
@@ -92,6 +117,7 @@ The Phase 1 distribution foundation now includes:
 - `scripts/package_release_app.sh` for signed release zip packaging
 - `scripts/package_release_dmg.sh` for signed DMG packaging, with optional notarization
 - `.github/workflows/release.yml` for tag-driven release automation that can publish a signed/notarized DMG when secrets are present
+- CI release-hardening checks for executable packaging scripts, read-only entitlements, hardened runtime settings, and read-only bookmark creation
 
 The next distribution milestone is to configure the Apple credentials in GitHub and validate the first fully notarized public download.
 
@@ -100,9 +126,9 @@ The next distribution milestone is to configure the Apple credentials in GitHub 
 The codebase is split into three primary targets:
 
 - `ObviewerCore`
-  Portable models and services for notes, attachments, parser output, graph data, and vault indexing
+  Portable models and services for notes, attachments, parser output, graph data, input profiles, and vault indexing
 - `ObviewerMacApp`
-  macOS app state, platform integrations, SwiftUI/AppKit views, and documentation rendering
+  macOS app state, platform input adapters, security-scoped access, SwiftUI/AppKit views, and documentation rendering
 - `Obviewer`
   Thin executable entry point that launches the app
 
@@ -125,7 +151,7 @@ The detailed roadmap is in [`docs/MODERNIZATION_PLAN.md`](./docs/MODERNIZATION_P
 - CI runs on pushes to `main` and `codex/**`, on pull requests, and on manual dispatch
 - Releases are tag-driven through `.github/workflows/release.yml`
 - The repo includes issue templates, CODEOWNERS, contribution guidance, and security/support docs
-- The current release line is green after `v0.2.5`
+- The current release line is green after `v0.2.7`
 
 ## License
 

@@ -51,10 +51,26 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Validate entitlements
-        run: plutil -lint Configuration/Obviewer.entitlements
+        run: |
+          plutil -lint Configuration/Obviewer.entitlements
+          test "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.app-sandbox' Configuration/Obviewer.entitlements)" = "true"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.files.user-selected.read-only' Configuration/Obviewer.entitlements)" = "true"
+          ! /usr/libexec/PlistBuddy -c 'Print :com.apple.security.files.user-selected.read-write' Configuration/Obviewer.entitlements
 
       - name: Validate packaging scripts
-        run: bash -n scripts/build_app.sh scripts/generate_xcode_project.sh scripts/notarize_release_app.sh scripts/package_release_app.sh scripts/package_release_dmg.sh scripts/release_common.sh
+        run: |
+          bash -n scripts/build_app.sh scripts/generate_xcode_project.sh scripts/notarize_release_app.sh scripts/package_release_app.sh scripts/package_release_dmg.sh scripts/release_common.sh
+          test -x scripts/build_app.sh
+          test -x scripts/generate_xcode_project.sh
+          test -x scripts/notarize_release_app.sh
+          test -x scripts/package_release_app.sh
+          test -x scripts/package_release_dmg.sh
+
+      - name: Validate release hardening settings
+        run: |
+          grep -q "ENABLE_HARDENED_RUNTIME: YES" project.yml
+          grep -q "securityScopeAllowOnlyReadAccess" Sources/ObviewerMacApp/Services/BookmarkStore.swift
+          grep -q "com.apple.security.files.user-selected.read-write" scripts/release_common.sh
 
       - name: Install XcodeGen
         run: brew install xcodegen

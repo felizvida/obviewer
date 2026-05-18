@@ -115,15 +115,19 @@ struct GraphWorkspaceView: View {
             Text("No graph to show yet.")
                 .font(.system(size: 24, weight: .bold, design: .serif))
 
-            Text("Open a vault and select a note to render a real note graph.")
+            Text("Select a note or switch to Global to render a real vault map.")
                 .font(.system(size: 15, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
+
+            Label("Graph data is derived from indexed Markdown links only.", systemImage: "lock.shield")
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(VisualTheme.quietInk)
         }
         .padding(30)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white.opacity(0.58))
+                .fill(VisualTheme.heroSurface)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
@@ -152,7 +156,7 @@ private struct GraphCanvasPanel: View {
 
             ZStack {
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .fill(VisualTheme.readerSurface)
+                    .fill(VisualTheme.heroSurface)
 
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
                     .stroke(Color.white.opacity(0.62), lineWidth: 1)
@@ -354,7 +358,14 @@ private struct GraphLegendBar: View {
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 8)
-        .softPanel(cornerRadius: 999, opacity: 0.46)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.white.opacity(0.52))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(Color.black.opacity(0.045), lineWidth: 1)
+        )
     }
 }
 
@@ -543,9 +554,24 @@ private struct GraphInspectorPanel: View {
                     noteIDs: snapshot.noteGraph.outboundNoteIDs(from: selectedNode.id)
                 )
             } else {
-                Text("Select a note in the graph to inspect its connections and jump back into the reader.")
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 12) {
+                    Image(systemName: "cursorarrow.rays")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(VisualTheme.fern)
+
+                    Text("Choose a node")
+                        .font(.system(size: 22, weight: .bold, design: .serif))
+
+                    Text("Select a note in the graph to inspect backlinks, outbound links, and open it in the reader.")
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(Color.white.opacity(0.52))
+                )
             }
 
             if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
@@ -564,7 +590,7 @@ private struct GraphInspectorPanel: View {
         }
         .padding(22)
         .frame(width: 310, alignment: .topLeading)
-        .softPanel(cornerRadius: 28, opacity: 0.58)
+        .premiumPanel(cornerRadius: 28)
     }
 
     private func statPill(text: String, systemImage: String) -> some View {

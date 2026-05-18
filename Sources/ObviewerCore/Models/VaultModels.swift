@@ -1235,7 +1235,19 @@ private func referenceLookupKeys(for target: String, sourceRelativePath: String?
         return [normalizedTarget]
     }
 
+    if prefersSourceRelativeReference(target) {
+        return [relativeTarget, normalizedTarget]
+    }
+
     return [normalizedTarget, relativeTarget]
+}
+
+private func prefersSourceRelativeReference(_ target: String) -> Bool {
+    let trimmed = target
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .replacingOccurrences(of: "\\", with: "/")
+
+    return trimmed.hasPrefix(".") || trimmed.contains("/")
 }
 
 private func resolveRelativeReference(_ target: String, from sourceRelativePath: String) -> String? {

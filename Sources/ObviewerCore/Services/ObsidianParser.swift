@@ -259,6 +259,9 @@ public struct ObsidianParser: Sendable {
     private func parseHeading(from line: String) -> (level: Int, text: String)? {
         let hashes = line.prefix { $0 == "#" }
         guard hashes.isEmpty == false, hashes.count <= 6 else { return nil }
+        guard hashes.count < line.count else { return nil }
+        let separatorIndex = line.index(line.startIndex, offsetBy: hashes.count)
+        guard line[separatorIndex].isWhitespace else { return nil }
         let text = line.dropFirst(hashes.count).trimmingCharacters(in: .whitespaces)
         guard text.isEmpty == false else { return nil }
         return (hashes.count, text)

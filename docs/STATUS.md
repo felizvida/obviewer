@@ -29,12 +29,13 @@ The project has moved past "scaffold only" status. It is now strong enough for r
 - security-scoped bookmark persistence exists
 - security-scoped access is started and swapped through dedicated services
 - vault enumeration is centralized and read-oriented
+- single-file Markdown mode is document-only and does not index sibling files without a folder grant
 - live loading progress is surfaced to the UI
 
 ### Note Processing
 
 - markdown files are discovered
-- supported attachments are indexed
+- supported attachments are indexed for folder inputs
 - notes are parsed into a render model with inline runs
 - structured frontmatter is extracted and carried into the note model
 - search over title, path, tags, preview text, aliases, and frontmatter metadata is implemented
@@ -114,6 +115,9 @@ Architecturally present:
 - reader-only file access path
 - read-only entitlement baseline exists
 - unsigned release packaging is blocked
+- security-scoped bookmarks request read-only access
+- release validation rejects read-write user-selected file entitlement drift
+- attachment handoff to external apps is explicit because external apps can edit outside Obviewer's boundary
 
 Still incomplete:
 
@@ -129,6 +133,8 @@ Present:
 - XcodeGen app-project generation
 - notarization-ready DMG packaging scripts
 - release workflow hooks for signed/notarized DMG publishing when secrets are configured
+- executable packaging entrypoint checks in tests and CI
+- hardened runtime validation in the signed app verification script
 
 Still incomplete:
 

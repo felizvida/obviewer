@@ -35,7 +35,7 @@ public struct ContentView: View {
                         await model.chooseVault()
                     }
                 } label: {
-                    Label("Open Vault", systemImage: "folder.badge.plus")
+                    Label("Open", systemImage: "folder.badge.plus")
                 }
 
                 Button {
@@ -47,9 +47,6 @@ public struct ContentView: View {
                 }
                 .disabled(model.vaultURL == nil)
             }
-        }
-        .task {
-            await model.restoreVaultIfNeeded()
         }
         .alert("Unable to Open Vault", isPresented: Binding(
             get: { model.errorMessage != nil },
@@ -70,15 +67,11 @@ public struct ContentView: View {
     private var sidebar: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(Color.white.opacity(0.42))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .stroke(Color.white.opacity(0.48), lineWidth: 1)
-                )
+                .fill(VisualTheme.sidebarSurface)
                 .padding(16)
-                .shadow(color: Color.black.opacity(0.05), radius: 22, x: 0, y: 12)
+                .shadow(color: Color.black.opacity(0.055), radius: 26, x: 0, y: 14)
 
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 18) {
                 header
                 search
                 librarySummary
@@ -164,13 +157,13 @@ public struct ContentView: View {
                 }
             }
 
-            Text("A read-only Obsidian reader for macOS.")
+            Text(profileDescription)
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
 
-            if let vaultURL = model.vaultURL {
-                HStack(spacing: 10) {
-                    Label(vaultURL.lastPathComponent, systemImage: "books.vertical")
+            if let readingInput = model.readingInput {
+                HStack(spacing: 8) {
+                    Label(readingInput.url.lastPathComponent, systemImage: inputIcon(for: readingInput))
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
@@ -179,20 +172,32 @@ public struct ContentView: View {
                                 .fill(Color.black.opacity(0.06))
                         )
 
+                    profileBadge(readingInput.profile)
                     LiveSyncBadge(isEnabled: model.isLiveReloadEnabled)
                 }
             }
+
+            ReadOnlyAssuranceStrip(isLive: model.isLiveReloadEnabled)
         }
     }
 
     private var librarySummary: some View {
-        HStack(spacing: 10) {
-            summaryPill(text: "\(model.filteredNotes.count) notes", systemImage: "doc.text")
-            if let snapshot = model.snapshot, snapshot.attachments.isEmpty == false {
-                summaryPill(text: "\(snapshot.attachments.count) files", systemImage: "paperclip")
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                summaryPill(text: "\(model.filteredNotes.count) notes", systemImage: "doc.text")
+                if let snapshot = model.snapshot, snapshot.attachments.isEmpty == false {
+                    summaryPill(text: "\(snapshot.attachments.count) files", systemImage: "paperclip")
+                }
+                if model.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                    summaryPill(text: "Filtered", systemImage: "line.3.horizontal.decrease.circle")
+                }
             }
-            if model.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                summaryPill(text: "Filtered", systemImage: "line.3.horizontal.decrease.circle")
+
+            if let diagnostics = model.indexDiagnostics {
+                Text("\(diagnostics.folderCount) folders indexed · \(diagnostics.graphEdgeCount) note links")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(VisualTheme.quietInk)
+                    .lineLimit(1)
             }
         }
     }
@@ -208,12 +213,13 @@ public struct ContentView: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(.secondary)
 
-                TextField("Search notes, tags, or paths", text: $model.searchText)
+                TextField(searchPlaceholder, text: $model.searchText)
                     .textFieldStyle(.plain)
+                    .disabled(model.snapshot == nil || model.isLoading)
 
                 if model.searchText.isEmpty == false {
                     Button {
-                        model.searchText = ""
+                        clearSearch()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 13, weight: .semibold))
@@ -226,6 +232,7 @@ public struct ContentView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 11)
             .softPanel(cornerRadius: 16, opacity: 0.68)
+            .opacity(model.snapshot == nil ? 0.72 : 1)
         }
     }
 
@@ -254,21 +261,16 @@ public struct ContentView: View {
             .scrollContentBackground(.hidden)
 
             if model.noteSections.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Image(systemName: "doc.text.magnifyingglass")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(VisualTheme.fern)
-
-                    Text("No matching notes")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-
-                    Text("Try a title, folder, #tag, or frontmatter value.")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(18)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .softPanel(cornerRadius: 20, opacity: 0.66)
+                LibraryEmptyState(
+                    hasVault: model.snapshot != nil,
+                    isSearching: model.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+                    onChooseVault: {
+                        Task {
+                            await model.chooseVault()
+                        }
+                    },
+                    onClearSearch: clearSearch
+                )
                 .padding(.top, 8)
             }
         }
@@ -277,7 +279,7 @@ public struct ContentView: View {
     private func noteRow(_ note: VaultNote, isSelected: Bool, isHovered: Bool) -> some View {
         HStack(alignment: .top, spacing: 12) {
             RoundedRectangle(cornerRadius: 999, style: .continuous)
-                .fill(isSelected ? VisualTheme.fern : Color.clear)
+                .fill(isSelected ? AnyShapeStyle(VisualTheme.accentGradient) : AnyShapeStyle(Color.clear))
                 .frame(width: 3, height: 44)
                 .padding(.top, 2)
 
@@ -307,7 +309,7 @@ public struct ContentView: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(
                     isSelected
-                        ? AnyShapeStyle(Color.white.opacity(0.84))
+                        ? AnyShapeStyle(VisualTheme.selectedSurface)
                         : AnyShapeStyle(Color.white.opacity(isHovered ? 0.62 : 0.0))
                 )
         )
@@ -324,7 +326,59 @@ public struct ContentView: View {
     private func summaryPill(text: String, systemImage: String) -> some View {
         Label(text, systemImage: systemImage)
             .font(.system(size: 11, weight: .semibold, design: .rounded))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(VisualTheme.softInk)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.48))
+            )
+    }
+
+    private func profileBadge(_ profile: ReadingProfile) -> some View {
+        Text(profile.displayName)
+            .font(.system(size: 11, weight: .bold, design: .rounded))
+            .foregroundStyle(VisualTheme.fern)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.58))
+            )
+    }
+
+    private var profileDescription: String {
+        guard let readingInput = model.readingInput else {
+            return "A read-only Markdown and Obsidian reader for macOS."
+        }
+
+        switch (readingInput.profile, readingInput.kind) {
+        case (.obsidian, _):
+            return "Obsidian vault profile with graph, backlinks, embeds, and tags."
+        case (.markdown, .folder):
+            return "Markdown folder profile with clean local reading and search."
+        case (.markdown, .markdownFile):
+            return "Single Markdown file profile with focused read-only viewing."
+        }
+    }
+
+    private func inputIcon(for input: ReadingInputSource) -> String {
+        switch input.kind {
+        case .folder:
+            return input.profile == .obsidian ? "books.vertical" : "folder"
+        case .markdownFile:
+            return "doc.text"
+        }
+    }
+
+    private var searchPlaceholder: String {
+        model.snapshot == nil ? "Open a file or folder to search" : "Search notes, tags, or paths"
+    }
+
+    private func clearSearch() {
+        withAnimation(.easeInOut(duration: 0.16)) {
+            model.searchText = ""
+        }
     }
 
     private var backgroundGradient: some View {
@@ -338,13 +392,12 @@ private struct BrandMark: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [VisualTheme.ink, VisualTheme.fern],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .fill(VisualTheme.accentGradient)
+
+            Circle()
+                .fill(Color.white.opacity(0.18))
+                .frame(width: 18, height: 18)
+                .offset(x: 11, y: -11)
 
             Text("O")
                 .font(.system(size: 21, weight: .black, design: .serif))
@@ -352,6 +405,36 @@ private struct BrandMark: View {
         }
         .frame(width: 42, height: 42)
         .shadow(color: VisualTheme.fern.opacity(0.18), radius: 10, x: 0, y: 5)
+    }
+}
+
+private struct ReadOnlyAssuranceStrip: View {
+    let isLive: Bool
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "lock.shield")
+                .foregroundStyle(VisualTheme.fern)
+
+            Text("Read-only by design")
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(VisualTheme.ink)
+
+            Text(isLive ? "Live reload watches changes without writing." : "Vault files are opened for reading only.")
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.52))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(VisualTheme.fern.opacity(0.13), lineWidth: 1)
+        )
     }
 }
 
@@ -380,6 +463,73 @@ private struct LiveSyncBadge: View {
                     pulse = true
                 }
             }
+        }
+    }
+}
+
+private struct LibraryEmptyState: View {
+    let hasVault: Bool
+    let isSearching: Bool
+    let onChooseVault: () -> Void
+    let onClearSearch: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Image(systemName: iconName)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(VisualTheme.fern)
+
+            Text(title)
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+
+            Text(message)
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            Button(action: buttonAction) {
+                Label(buttonTitle, systemImage: buttonIcon)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(VisualTheme.fern)
+            .padding(.top, 2)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .softPanel(cornerRadius: 20, opacity: 0.66)
+    }
+
+    private var iconName: String {
+        if hasVault == false { return "folder.badge.plus" }
+        return isSearching ? "doc.text.magnifyingglass" : "tray"
+    }
+
+    private var title: String {
+        if hasVault == false { return "No vault open" }
+        return isSearching ? "No matching notes" : "No notes found"
+    }
+
+    private var message: String {
+        if hasVault == false { return "Choose a local Obsidian vault, Markdown folder, or .md file. Obviewer will keep it read-only." }
+        if isSearching { return "Try a title, folder, #tag, or frontmatter value." }
+        return "This vault opened successfully, but no Markdown notes were indexed."
+    }
+
+    private var buttonTitle: String {
+        if hasVault == false { return "Open File or Folder" }
+        return isSearching ? "Clear Search" : "Choose Another Vault"
+    }
+
+    private var buttonIcon: String {
+        if hasVault == false { return "folder.badge.plus" }
+        return isSearching ? "xmark.circle" : "folder"
+    }
+
+    private func buttonAction() {
+        if hasVault == false || isSearching == false {
+            onChooseVault()
+        } else {
+            onClearSearch()
         }
     }
 }
@@ -416,6 +566,13 @@ private struct LoadingVaultState: View {
                 loadingMetric(value: progress?.noteCount ?? 0, label: "Notes", systemImage: "doc.text")
                 loadingMetric(value: progress?.attachmentCount ?? 0, label: "Assets", systemImage: "paperclip")
             }
+
+            HStack(spacing: 10) {
+                Label("Read-only scan", systemImage: "lock.shield")
+                Text("Large image-heavy vaults can take a moment the first time.")
+            }
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .foregroundStyle(VisualTheme.quietInk)
 
             if let currentPath = progress?.currentPath, currentPath.isEmpty == false {
                 VStack(alignment: .leading, spacing: 6) {
@@ -484,7 +641,7 @@ private struct EmptyReaderState: View {
         VStack(alignment: .leading, spacing: 24) {
             ZStack(alignment: .bottomLeading) {
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .fill(VisualTheme.readerSurface)
+                    .fill(VisualTheme.heroSurface)
                     .frame(width: 440, height: 190)
                     .overlay(alignment: .topTrailing) {
                         Image(systemName: "book.pages")
@@ -498,7 +655,7 @@ private struct EmptyReaderState: View {
                         .font(.system(size: 34, weight: .bold, design: .serif))
                         .frame(maxWidth: 360, alignment: .leading)
 
-                    Text("Choose a local Obsidian folder to start reading.")
+                    Text("Choose an Obsidian vault, Markdown folder, or single .md file to start reading.")
                         .font(.system(size: 16, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
@@ -506,13 +663,28 @@ private struct EmptyReaderState: View {
             }
             .shadow(color: Color.black.opacity(0.06), radius: 22, x: 0, y: 12)
 
+            HStack(spacing: 10) {
+                featurePill("Local only", "lock.shield")
+                featurePill("Markdown native", "text.book.closed")
+                featurePill("Graph ready", "point.3.connected.trianglepath.dotted")
+            }
+
             Button(action: action) {
-                Label("Choose Vault", systemImage: "folder.badge.plus")
+                Label("Open File or Folder", systemImage: "folder.badge.plus")
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
         }
         .padding(56)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func featurePill(_ title: String, _ systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.system(size: 12, weight: .bold, design: .rounded))
+            .foregroundStyle(VisualTheme.softInk)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .softPanel(cornerRadius: 999, opacity: 0.58)
     }
 }

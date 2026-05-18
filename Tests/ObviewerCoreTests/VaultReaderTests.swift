@@ -80,6 +80,90 @@ final class VaultReaderTests: XCTestCase {
         XCTAssertNil(snapshot.attachment(for: ".secret.png"))
     }
 
+    func testLoadMarkdownFileBuildsFocusedSingleNoteSnapshot() throws {
+        let sandbox = try TemporaryVault()
+        defer { sandbox.cleanup() }
+
+        try sandbox.write(
+            "Notes/Standalone.md",
+            contents: """
+            # Standalone
+
+            A focused Markdown document with a [local asset](asset.pdf).
+            """
+        )
+        try sandbox.writeData("Notes/asset.pdf", data: Data([0x25, 0x50, 0x44, 0x46]))
+
+        let fileURL = sandbox.rootURL.appending(path: "Notes/Standalone.md")
+        let snapshot = try VaultReader().loadMarkdownFile(at: fileURL)
+
+        XCTAssertEqual(snapshot.rootURL, fileURL.deletingLastPathComponent())
+        XCTAssertEqual(snapshot.notes.map(\.id), ["Standalone.md"])
+        XCTAssertEqual(snapshot.notes.first?.title, "Standalone")
+        XCTAssertEqual(snapshot.notes.first?.relativePath, "Standalone.md")
+        XCTAssertTrue(snapshot.attachments.isEmpty)
+        XCTAssertNil(snapshot.attachment(for: "asset.pdf"))
+        XCTAssertEqual(snapshot.resolveNoteID(for: "Standalone"), "Standalone.md")
+    }
+
+    func testReloadMarkdownFileReusesUnchangedPreviousSnapshot() throws {
+        let sandbox = try TemporaryVault()
+        defer { sandbox.cleanup() }
+
+        try sandbox.write("Readme.md", contents: "# Readme\n\nStable content.")
+        let fileURL = sandbox.rootURL.appending(path: "Readme.md")
+        let firstSnapshot = try VaultReader().loadMarkdownFile(at: fileURL)
+
+        let reloadedSnapshot = try VaultReader().reloadMarkdownFile(
+            at: fileURL,
+            previousSnapshot: firstSnapshot
+        )
+
+        XCTAssertEqual(reloadedSnapshot.indexManifest, firstSnapshot.indexManifest)
+        XCTAssertEqual(reloadedSnapshot.notes, firstSnapshot.notes)
+        XCTAssertTrue(reloadedSnapshot.attachments.isEmpty)
+    }
+
+    func testLoadMarkdownFileRejectsNonMarkdownInput() throws {
+        let sandbox = try TemporaryVault()
+        defer { sandbox.cleanup() }
+
+        try sandbox.write("notes.txt", contents: "Plain text")
+
+        XCTAssertThrowsError(
+            try VaultReader().loadMarkdownFile(at: sandbox.rootURL.appending(path: "notes.txt"))
+        ) { error in
+            guard case VaultReaderError.unsupportedInput = error else {
+                return XCTFail("Expected unsupported markdown file input, got \(error).")
+            }
+        }
+    }
+
+    func testLoadMarkdownFileDoesNotIndexSiblingOrParentAttachments() throws {
+        let sandbox = try TemporaryVault()
+        defer { sandbox.cleanup() }
+
+        try sandbox.write(
+            "Notes/Standalone.md",
+            contents: """
+            # Standalone
+
+            [Sibling](asset.pdf)
+            [Outside](../secret.pdf)
+            """
+        )
+        try sandbox.writeData("Notes/asset.pdf", data: Data([0x25, 0x50, 0x44, 0x46]))
+        try sandbox.writeData("secret.pdf", data: Data([0x25, 0x50, 0x44, 0x46]))
+
+        let snapshot = try VaultReader().loadMarkdownFile(
+            at: sandbox.rootURL.appending(path: "Notes/Standalone.md")
+        )
+
+        XCTAssertTrue(snapshot.attachments.isEmpty)
+        XCTAssertNil(snapshot.attachment(for: "asset.pdf", from: "Standalone.md"))
+        XCTAssertNil(snapshot.attachment(for: "../secret.pdf", from: "Standalone.md"))
+    }
+
     func testReloadVaultReusesUnchangedNotesFromPreviousSnapshot() throws {
         let sandbox = try TemporaryVault()
         defer { sandbox.cleanup() }

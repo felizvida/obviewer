@@ -12,5 +12,7 @@ Examples of in-scope concerns:
 
 - Any path that could mutate vault contents
 - Sandbox or entitlement misconfiguration
+- Security-scoped bookmark behavior that grants broader than read-only access
+- Release artifacts missing hardened runtime, sandbox, or read-only entitlement validation
 - Path traversal or unsafe file resolution
 - Unexpected network access

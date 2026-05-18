@@ -70,6 +70,15 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: Obviewer
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Markdown Document
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - net.daringfireball.markdown
+              - public.markdown
         LSApplicationCategoryType: public.app-category.productivity
         NSPrincipalClass: NSApplication
         NSHighResolutionCapable: true
@@ -80,8 +89,9 @@ targets:
         SWIFT_VERSION: "5.10"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         CODE_SIGN_ENTITLEMENTS: Configuration/Obviewer.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
         GENERATE_INFOPLIST_FILE: NO
-        MARKETING_VERSION: 0.2.3
+        MARKETING_VERSION: 0.2.7
         CURRENT_PROJECT_VERSION: 1
 
   ObviewerCoreTests:

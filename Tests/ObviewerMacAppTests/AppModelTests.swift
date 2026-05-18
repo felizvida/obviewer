@@ -89,6 +89,92 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
+    func testChooseMarkdownFileUsesMarkdownProfileAndFocusedSelection() async {
+        let fileURL = URL(fileURLWithPath: "/tmp/obviewer-tests/docs/Guide.md")
+        let rootURL = fileURL.deletingLastPathComponent()
+        let snapshot = VaultSnapshot(
+            rootURL: rootURL,
+            notes: [
+                .fixture(
+                    relativePath: "Guide.md",
+                    title: "Guide",
+                    tags: [],
+                    modifiedAt: .distantPast
+                ),
+            ],
+            attachments: []
+        )
+        let bookmarkStore = BookmarkStoreSpy()
+        let cache = VaultNoteCacheSpy(snapshot: nil)
+        let loader = ReadingInputLoaderSpy(result: .success(snapshot))
+        let securityScope = SecurityScopeSpy()
+        let watcher = VaultWatcherSpy()
+        let model = AppModel(
+            bookmarkStore: bookmarkStore,
+            picker: VaultPickerStub(url: fileURL),
+            reader: loader,
+            securityScopeManager: securityScope,
+            noteCache: cache,
+            watcher: watcher
+        )
+
+        await model.chooseVault()
+
+        XCTAssertEqual(model.readingInput?.url, fileURL.standardizedFileURL)
+        XCTAssertEqual(model.readingInput?.kind, .markdownFile)
+        XCTAssertEqual(model.readingProfile, .markdown)
+        XCTAssertEqual(model.vaultURL, rootURL.standardizedFileURL)
+        XCTAssertEqual(model.selectedNoteID, "Guide.md")
+        XCTAssertEqual(bookmarkStore.savedURLs, [fileURL.standardizedFileURL])
+        XCTAssertEqual(securityScope.activatedURLs, [fileURL.standardizedFileURL])
+        XCTAssertEqual(loader.recordedInputs.map(\.kind), [.markdownFile])
+        XCTAssertTrue(cache.loadedURLs.isEmpty)
+        XCTAssertTrue(cache.savedRootURLs.isEmpty)
+        XCTAssertTrue(watcher.startedURLs.isEmpty)
+        XCTAssertFalse(model.isLiveReloadEnabled)
+    }
+
+    @MainActor
+    func testLaunchInputIsConsumedOnceAndSkipsBookmarkRestore() async {
+        let restoredURL = URL(fileURLWithPath: "/tmp/obviewer-tests/restored-vault")
+        let fileURL = URL(fileURLWithPath: "/tmp/obviewer-tests/docs/Launch.md")
+        let snapshot = VaultSnapshot(
+            rootURL: fileURL.deletingLastPathComponent(),
+            notes: [
+                .fixture(
+                    relativePath: "Launch.md",
+                    title: "Launch",
+                    tags: [],
+                    modifiedAt: .distantPast
+                ),
+            ],
+            attachments: []
+        )
+        let bookmarkStore = BookmarkStoreSpy(restoredURL: restoredURL)
+        let loader = ReadingInputLoaderSpy(result: .success(snapshot))
+        let model = AppModel(
+            bookmarkStore: bookmarkStore,
+            picker: VaultPickerStub(url: nil),
+            reader: loader,
+            securityScopeManager: SecurityScopeSpy()
+        )
+
+        await model.openLaunchInputOrRestore(
+            LaunchReadingInputRequest(url: fileURL, preferredProfile: .markdown)
+        )
+        await model.openLaunchInputOrRestore(
+            LaunchReadingInputRequest(url: fileURL, preferredProfile: .markdown)
+        )
+        await model.restoreVaultIfNeeded()
+
+        XCTAssertEqual(model.readingInput?.url, fileURL.standardizedFileURL)
+        XCTAssertEqual(model.readingProfile, .markdown)
+        XCTAssertEqual(model.selectedNoteID, "Launch.md")
+        XCTAssertEqual(bookmarkStore.savedURLs, [fileURL.standardizedFileURL])
+        XCTAssertEqual(loader.recordedInputs.map(\.url), [fileURL.standardizedFileURL])
+    }
+
+    @MainActor
     func testRestoreVaultLoadsOnlyOnce() async {
         let vaultURL = URL(fileURLWithPath: "/tmp/obviewer-tests/restored")
         let bookmarkStore = BookmarkStoreSpy(restoredURL: vaultURL)
@@ -539,6 +625,77 @@ final class AppModelTests: XCTestCase {
             ["Root.md", "Journal/Today.md", "Projects/Plan.md"]
         )
     }
+
+    @MainActor
+    func testOlderConcurrentVaultLoadCannotOverwriteNewerLoad() async {
+        let firstURL = URL(fileURLWithPath: "/tmp/obviewer-tests/first-vault")
+        let secondURL = URL(fileURLWithPath: "/tmp/obviewer-tests/second-vault")
+        let firstSnapshot = VaultSnapshot(
+            rootURL: firstURL,
+            notes: [
+                .fixture(
+                    relativePath: "First.md",
+                    title: "First Vault",
+                    tags: [],
+                    modifiedAt: Date(timeIntervalSince1970: 1)
+                ),
+            ],
+            attachments: []
+        )
+        let secondSnapshot = VaultSnapshot(
+            rootURL: secondURL,
+            notes: [
+                .fixture(
+                    relativePath: "Second.md",
+                    title: "Second Vault",
+                    tags: [],
+                    modifiedAt: Date(timeIntervalSince1970: 2)
+                ),
+            ],
+            attachments: []
+        )
+        let firstStarted = expectation(description: "first load started")
+        let secondStarted = expectation(description: "second load started")
+        let loader = OutOfOrderVaultLoader(
+            firstSnapshot: firstSnapshot,
+            secondSnapshot: secondSnapshot,
+            firstStarted: firstStarted,
+            secondStarted: secondStarted
+        )
+        let bookmarkStore = BookmarkStoreSpy()
+        let cache = VaultNoteCacheSpy(snapshot: nil)
+        let model = AppModel(
+            bookmarkStore: bookmarkStore,
+            picker: SequencedVaultPicker(urls: [firstURL, secondURL]),
+            reader: loader,
+            securityScopeManager: SecurityScopeSpy(),
+            noteCache: cache
+        )
+
+        let firstLoad = Task { @MainActor in
+            await model.chooseVault()
+        }
+        await fulfillment(of: [firstStarted], timeout: 1)
+
+        let secondLoad = Task { @MainActor in
+            await model.chooseVault()
+        }
+        await fulfillment(of: [secondStarted], timeout: 1)
+        await secondLoad.value
+
+        XCTAssertEqual(model.vaultURL, secondURL)
+        XCTAssertEqual(model.snapshot?.notes.map { $0.id }, ["Second.md"])
+        XCTAssertEqual(bookmarkStore.savedURLs, [secondURL])
+        XCTAssertEqual(cache.savedRootURLs, [secondURL])
+
+        loader.releaseFirstLoad()
+        await firstLoad.value
+
+        XCTAssertEqual(model.vaultURL, secondURL)
+        XCTAssertEqual(model.snapshot?.notes.map { $0.id }, ["Second.md"])
+        XCTAssertEqual(bookmarkStore.savedURLs, [secondURL])
+        XCTAssertEqual(cache.savedRootURLs, [secondURL])
+    }
 }
 
 @MainActor
@@ -571,6 +728,23 @@ private struct VaultPickerStub: VaultChoosing {
 
     func chooseVault() -> URL? {
         url
+    }
+}
+
+@MainActor
+private final class SequencedVaultPicker: VaultChoosing {
+    private var urls: [URL]
+
+    init(urls: [URL]) {
+        self.urls = urls
+    }
+
+    func chooseVault() -> URL? {
+        guard urls.isEmpty == false else {
+            return nil
+        }
+
+        return urls.removeFirst()
     }
 }
 
@@ -610,6 +784,35 @@ private struct VaultNoteCacheSpy: VaultNoteCaching {
     }
 
     func removeSeedSnapshot(for vaultURL: URL) {}
+}
+
+private final class ReadingInputLoaderSpy: @unchecked Sendable, ReadingInputLoading {
+    private let lock = NSLock()
+    private var results: [Result<VaultSnapshot, Error>]
+    private var inputs = [ReadingInputSource]()
+
+    init(result: Result<VaultSnapshot, Error>) {
+        self.results = [result]
+    }
+
+    var recordedInputs: [ReadingInputSource] {
+        lock.lock()
+        defer { lock.unlock() }
+        return inputs
+    }
+
+    func reloadInput(
+        _ input: ReadingInputSource,
+        previousSnapshot: VaultSnapshot?,
+        changes: VaultReloadChanges?,
+        progress: (@Sendable (VaultLoadingProgress) -> Void)?
+    ) throws -> VaultSnapshot {
+        lock.lock()
+        inputs.append(input)
+        let current = results.count > 1 ? results.removeFirst() : results[0]
+        lock.unlock()
+        return try current.get()
+    }
 }
 
 private final class VaultLoaderSpy: @unchecked Sendable, VaultLoading {
@@ -684,6 +887,60 @@ private final class VaultLoaderSpy: @unchecked Sendable, VaultLoading {
         lock.unlock()
         progressEvents.forEach { progress?($0) }
         return try current.get()
+    }
+}
+
+private final class OutOfOrderVaultLoader: @unchecked Sendable, VaultLoading {
+    private let lock = NSLock()
+    private let firstSnapshot: VaultSnapshot
+    private let secondSnapshot: VaultSnapshot
+    private let firstStarted: XCTestExpectation
+    private let secondStarted: XCTestExpectation
+    private let releaseFirstSemaphore = DispatchSemaphore(value: 0)
+    private var callCount = 0
+
+    init(
+        firstSnapshot: VaultSnapshot,
+        secondSnapshot: VaultSnapshot,
+        firstStarted: XCTestExpectation,
+        secondStarted: XCTestExpectation
+    ) {
+        self.firstSnapshot = firstSnapshot
+        self.secondSnapshot = secondSnapshot
+        self.firstStarted = firstStarted
+        self.secondStarted = secondStarted
+    }
+
+    func loadVault(
+        at url: URL,
+        progress: (@Sendable (VaultLoadingProgress) -> Void)?
+    ) throws -> VaultSnapshot {
+        try reloadVault(at: url, previousSnapshot: nil, changes: nil, progress: progress)
+    }
+
+    func reloadVault(
+        at url: URL,
+        previousSnapshot: VaultSnapshot?,
+        changes: VaultReloadChanges?,
+        progress: (@Sendable (VaultLoadingProgress) -> Void)?
+    ) throws -> VaultSnapshot {
+        lock.lock()
+        let callIndex = callCount
+        callCount += 1
+        lock.unlock()
+
+        if callIndex == 0 {
+            firstStarted.fulfill()
+            releaseFirstSemaphore.wait()
+            return firstSnapshot
+        }
+
+        secondStarted.fulfill()
+        return secondSnapshot
+    }
+
+    func releaseFirstLoad() {
+        releaseFirstSemaphore.signal()
     }
 }
 

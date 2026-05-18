@@ -30,6 +30,7 @@ Portable models and services:
 - vault models and snapshot lookup
 - note graph generation
 - markdown parsing
+- reading profiles and input-source adapters
 - vault indexing and progress reporting
 
 ### `ObviewerFixtureSupport`
@@ -43,7 +44,7 @@ macOS shell and UI:
 - `AppModel`
 - security-scoped access lifecycle
 - bookmark persistence
-- vault picker integration
+- picker, launch-argument, and file-open input adapters
 - SwiftUI/AppKit views
 - documentation screenshot renderer
 
@@ -64,19 +65,21 @@ Thin executable that launches the macOS app.
 The main runtime flow is:
 
 1. the app launches and creates `AppModel`
-2. `AppModel` attempts bookmark restore if applicable
-3. the user chooses a vault through `VaultPicker`
-4. security-scoped access starts
-5. `VaultReader` enumerates files and emits loading progress
-6. markdown notes are parsed by `ObsidianParser`
-7. notes and attachments become a `VaultSnapshot`
-8. `VaultSnapshot` derives lookup tables and a `NoteGraph`
-9. `AppModel` starts a vault watcher after a successful load
-10. filesystem changes trigger debounced, path-aware reload batches through the same loader boundary
-11. `ContentView` renders the library shell
-12. `ReaderView` renders note content and attachment flows
-13. `GraphView` renders local/global graph exploration
-14. link navigation resolves back through `VaultSnapshot`
+2. launch arguments, file-open events, bookmark restore, or the picker produce a URL
+3. `DefaultReadingInputAdapter` converts that URL into a `ReadingInputSource`
+4. the input source carries both shape and profile: single Markdown file, Markdown folder, or Obsidian folder
+5. security-scoped access starts for the selected source URL
+6. `ReadingInputLoading` routes the input to the appropriate reader path
+7. `VaultReader` either scans a folder or builds a focused document-only one-note snapshot for a single `.md` file
+8. markdown notes are parsed by `ObsidianParser`
+9. notes and folder-indexed attachments become a `VaultSnapshot`
+10. `VaultSnapshot` derives lookup tables and a `NoteGraph`
+11. `AppModel` starts a watcher after a successful folder load
+12. filesystem changes trigger debounced, path-aware reload batches through the same loader boundary
+13. `ContentView` renders the library shell
+14. `ReaderView` renders note content and attachment flows
+15. `GraphView` renders local/global graph exploration
+16. link navigation resolves back through `VaultSnapshot`
 
 ## Top-Level Components
 
@@ -89,8 +92,10 @@ File:
 Responsibilities:
 
 - create the shared `AppModel`
+- parse `--markdown`, `--obsidian`, and path launch inputs
 - define the main window
-- expose command/menu actions for opening and reloading a vault
+- expose command/menu actions for opening and reloading a reading input
+- forward file-open URLs into the same model path used by the picker
 
 ### AppModel
 
@@ -101,7 +106,7 @@ File:
 Responsibilities:
 
 - own the current `VaultSnapshot`
-- track vault URL, loading state, errors, and current selection
+- track input source, profile, root URL, loading state, errors, and current selection
 - manage search input and graph scope state
 - orchestrate choose, restore, and reload flows
 - react to filesystem changes through a watcher service
@@ -111,7 +116,27 @@ Responsibilities:
 Important design choice:
 
 - the UI never reads the filesystem directly
+- the UI does not decide whether something is a Markdown file, Markdown folder, or Obsidian vault
 - platform services are injected through protocols, which keeps orchestration testable without `NSOpenPanel`, `UserDefaults`, or live security-scoped URLs
+
+### Reading Profiles And Input Sources
+
+File:
+
+- `Sources/ObviewerCore/Services/ReadingInput.swift`
+- `Sources/ObviewerMacApp/Services/LaunchReadingInput.swift`
+
+Responsibilities:
+
+- represent the user intent as a `ReadingProfile`
+- represent the selected shape as a `ReadingInputSource`
+- detect folders with `.obsidian` as Obsidian inputs by default
+- treat single `.md` files as focused, document-only Markdown inputs
+- keep command-line profile switches separate from loading and rendering
+
+Single-file Markdown inputs intentionally do not watch or index sibling files. That keeps signed sandbox behavior aligned with the selected security-scoped document grant; users who need relative local images or attachments should open the containing folder instead.
+
+This layer is intentionally small. It is the seam for future ports: another platform can provide a different picker, launcher, or document-open adapter while reusing the same core input and loader contracts.
 
 ### VaultSnapshot And Models
 

@@ -225,6 +225,9 @@ Important:
 
 - `make package-app` refuses unsigned packaging
 - that is intentional because the sandbox/read-only story depends on code signing carrying the entitlements
+- release builds enable the hardened runtime
+- `OBVIEWER_RELEASE_VERSION` can override `MARKETING_VERSION`; a leading `v` is stripped automatically
+- `OBVIEWER_BUILD_NUMBER` or `GITHUB_RUN_NUMBER` can override `CURRENT_PROJECT_VERSION`
 
 Typical local notarized DMG flow:
 
@@ -243,6 +246,8 @@ The current entitlement baseline is intentionally minimal:
 - `com.apple.security.files.user-selected.read-only`
 
 Do not broaden these casually. Any change to permissions should be treated as a product-level decision, not a routine implementation detail.
+
+Release verification also rejects `com.apple.security.files.user-selected.read-write` if it appears in a signed app bundle. Bookmarks are created with read-only security scope, and external attachment opening is presented as an explicit handoff because the default external app may allow edits outside Obviewer's control.
 
 ## Common Failure Modes
 

@@ -101,6 +101,24 @@ final class ObsidianParserTests: XCTestCase {
         })
     }
 
+    func testParserTreatsTagOnlyLinesAsParagraphTagsNotHeadings() {
+        let markdown = """
+        #project
+
+        Body text.
+        """
+
+        let result = ObsidianParser().parse(markdown: markdown, fallbackTitle: "Fallback")
+
+        XCTAssertEqual(result.title, "Fallback")
+        XCTAssertEqual(result.tags, ["project"])
+        XCTAssertTrue(result.tableOfContents.isEmpty)
+        XCTAssertTrue(result.blocks.contains { block in
+            guard case .paragraph(let text) = block else { return false }
+            return text.plainText == "#project"
+        })
+    }
+
     func testParserRecognizesCalloutsAndStandaloneImagesWithSizingHints() {
         let markdown = """
         > [!warning] Handle Carefully

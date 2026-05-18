@@ -3,12 +3,16 @@ import SwiftUI
 enum VisualTheme {
     static let ink = Color(red: 0.11, green: 0.13, blue: 0.15)
     static let softInk = Color(red: 0.28, green: 0.31, blue: 0.33)
+    static let quietInk = Color(red: 0.45, green: 0.48, blue: 0.46)
     static let fern = Color(red: 0.20, green: 0.45, blue: 0.33)
     static let blue = Color(red: 0.18, green: 0.36, blue: 0.63)
     static let ember = Color(red: 0.72, green: 0.38, blue: 0.21)
     static let paper = Color(red: 0.98, green: 0.97, blue: 0.93)
     static let mist = Color(red: 0.90, green: 0.95, blue: 0.94)
     static let clay = Color(red: 0.94, green: 0.88, blue: 0.80)
+    static let cream = Color(red: 0.99, green: 0.98, blue: 0.94)
+    static let moss = Color(red: 0.34, green: 0.46, blue: 0.32)
+    static let brass = Color(red: 0.72, green: 0.55, blue: 0.28)
 
     static var appBackground: some ShapeStyle {
         LinearGradient(
@@ -44,6 +48,54 @@ enum VisualTheme {
             endPoint: .bottomTrailing
         )
     }
+
+    static var sidebarSurface: some ShapeStyle {
+        LinearGradient(
+            colors: [
+                Color.white.opacity(0.70),
+                cream.opacity(0.56),
+                mist.opacity(0.44),
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    static var heroSurface: some ShapeStyle {
+        LinearGradient(
+            colors: [
+                Color.white.opacity(0.92),
+                cream.opacity(0.84),
+                clay.opacity(0.48),
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    static var accentGradient: some ShapeStyle {
+        LinearGradient(
+            colors: [
+                fern,
+                moss,
+                brass.opacity(0.88),
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    static var quietRule: some ShapeStyle {
+        LinearGradient(
+            colors: [
+                Color.black.opacity(0.10),
+                Color.black.opacity(0.025),
+                .clear,
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
 }
 
 struct SoftPanelModifier: ViewModifier {
@@ -71,5 +123,21 @@ struct SoftPanelModifier: ViewModifier {
 extension View {
     func softPanel(cornerRadius: CGFloat = 24, opacity: Double = 0.64) -> some View {
         modifier(SoftPanelModifier(cornerRadius: cornerRadius, opacity: opacity))
+    }
+
+    func premiumPanel(cornerRadius: CGFloat = 28) -> some View {
+        background(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(VisualTheme.sidebarSurface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(Color.white.opacity(0.64), lineWidth: 1)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(Color.black.opacity(0.045), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.055), radius: 24, x: 0, y: 14)
     }
 }

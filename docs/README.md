@@ -27,10 +27,11 @@ If you are new to the project, read the documents in this order:
 - Language: Swift
 - Primary UI technology: SwiftUI with focused AppKit interop
 - Package layout: Swift package plus XcodeGen app-project spec
-- Current release line: `v0.2.5`
+- Current release line: `v0.2.7`
 - Shipping artifact today: source archives on GitHub releases
 - Intended next artifact: signed and notarized sandboxed macOS app distribution
 - Non-negotiable requirement: the app must remain read-only with respect to the user's Obsidian vault
+- Current release-hardening focus: signed hardened-runtime builds, read-only bookmarks, executable packaging entrypoints, and explicit warnings before opening attachments outside Obviewer
 
 ## Repo Map
 

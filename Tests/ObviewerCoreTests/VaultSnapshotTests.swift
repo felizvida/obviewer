@@ -59,6 +59,25 @@ final class VaultSnapshotTests: XCTestCase {
         XCTAssertEqual(resolved, "Projects/Shared/Guide.md")
     }
 
+    func testResolveNoteIDPrefersSourceRelativePathBeforeVaultRootPath() {
+        let snapshot = VaultSnapshot(
+            rootURL: URL(fileURLWithPath: "/tmp/obviewer-tests"),
+            notes: [
+                .fixture(relativePath: "Projects/Area/Current.md", title: "Current"),
+                .fixture(relativePath: "Shared/Guide.md", title: "Root Guide"),
+                .fixture(relativePath: "Projects/Area/Shared/Guide.md", title: "Local Guide"),
+            ],
+            attachments: []
+        )
+
+        let resolved = snapshot.resolveNoteID(
+            for: "Shared/Guide.md",
+            from: "Projects/Area/Current.md"
+        )
+
+        XCTAssertEqual(resolved, "Projects/Area/Shared/Guide.md")
+    }
+
     func testResolveNoteIDPrefersCurrentFolderForDuplicateBasenames() {
         let snapshot = VaultSnapshot(
             rootURL: URL(fileURLWithPath: "/tmp/obviewer-tests"),
@@ -122,6 +141,26 @@ final class VaultSnapshotTests: XCTestCase {
                 .fixture(relativePath: "Projects/Area/Current.md", title: "Current"),
             ],
             attachments: [
+                .fixture(relativePath: "Projects/Area/images/cover.png"),
+            ]
+        )
+
+        let resolved = snapshot.attachment(
+            for: "images/cover.png",
+            from: "Projects/Area/Current.md"
+        )
+
+        XCTAssertEqual(resolved?.relativePath, "Projects/Area/images/cover.png")
+    }
+
+    func testAttachmentLookupPrefersSourceRelativePathBeforeVaultRootPath() {
+        let snapshot = VaultSnapshot(
+            rootURL: URL(fileURLWithPath: "/tmp/obviewer-tests"),
+            notes: [
+                .fixture(relativePath: "Projects/Area/Current.md", title: "Current"),
+            ],
+            attachments: [
+                .fixture(relativePath: "images/cover.png"),
                 .fixture(relativePath: "Projects/Area/images/cover.png"),
             ]
         )

@@ -39,17 +39,44 @@ require_app_bundle() {
 
 verify_signed_app_bundle() {
   local app_path="${1:-$(default_app_path)}"
+  local entitlements_path
 
   require_app_bundle "$app_path"
   codesign --verify --deep --strict "$app_path"
 
-  if ! codesign -d --entitlements :- "$app_path" 2>/dev/null | grep -q "<key>com.apple.security.app-sandbox</key>"; then
-    echo "Expected App Sandbox entitlement is missing from the signed app bundle." >&2
+  if ! codesign -dv --verbose=4 "$app_path" 2>&1 | grep -Eq "flags=.*runtime"; then
+    echo "Expected hardened runtime flag is missing from the signed app bundle." >&2
     exit 1
   fi
 
-  if ! codesign -d --entitlements :- "$app_path" 2>/dev/null | grep -q "<key>com.apple.security.files.user-selected.read-only</key>"; then
-    echo "Expected read-only user-selected file entitlement is missing from the signed app bundle." >&2
+  entitlements_path="$(mktemp "${TMPDIR:-/tmp}/obviewer-entitlements.XXXXXX.plist")"
+  codesign -d --entitlements :- "$app_path" > "$entitlements_path" 2>/dev/null
+
+  require_entitlement_true "$entitlements_path" "com.apple.security.app-sandbox" "App Sandbox"
+  require_entitlement_true "$entitlements_path" "com.apple.security.files.user-selected.read-only" "read-only user-selected file access"
+
+  if /usr/libexec/PlistBuddy -c "Print :com.apple.security.files.user-selected.read-write" "$entitlements_path" >/dev/null 2>&1; then
+    echo "Forbidden read-write user-selected file entitlement is present in the signed app bundle." >&2
+    rm -f "$entitlements_path"
+    exit 1
+  fi
+
+  rm -f "$entitlements_path"
+}
+
+require_entitlement_true() {
+  local plist_path="$1"
+  local key="$2"
+  local label="$3"
+  local value
+
+  if ! value=$(/usr/libexec/PlistBuddy -c "Print :$key" "$plist_path" 2>/dev/null); then
+    echo "Expected $label entitlement is missing from the signed app bundle." >&2
+    exit 1
+  fi
+
+  if [ "$value" != "true" ]; then
+    echo "Expected $label entitlement to be true, but found '$value'." >&2
     exit 1
   fi
 }
