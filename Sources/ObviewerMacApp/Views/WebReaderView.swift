@@ -31,7 +31,7 @@ private struct ReaderUnavailableView: View {
                 .font(.largeTitle)
                 .foregroundStyle(.secondary)
             Text("The reader is missing from this copy of Obviewer.")
-                .font(.headline)
+                .font(.system(size: 17, design: .serif).italic())
             Text("Reinstall Obviewer from the latest release. Your notes are untouched.")
                 .foregroundStyle(.secondary)
         }
@@ -174,7 +174,7 @@ struct FolderAccessBanner: View {
         HStack(spacing: 12) {
             Image(systemName: "folder.badge.questionmark")
                 .font(.title3)
-                .foregroundStyle(VisualTheme.fern)
+                .foregroundStyle(VisualTheme.accent)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Some images or linked notes are next to \(fileName).")
                     .font(.callout.weight(.semibold))
@@ -328,6 +328,7 @@ public struct NoteWindowView: View {
         content
             .frame(minWidth: 560, minHeight: 480)
             .background(VisualTheme.readerBackground)
+            .tint(VisualTheme.accent)
             .toolbar { ReaderToolbarItems(model: model) }
             .navigationTitle(model.selectedNote?.title ?? url?.lastPathComponent ?? "Obviewer")
             .navigationSubtitle(model.readingInput.map { "\($0.profile.displayName) · Read-only" } ?? "")

@@ -52,7 +52,7 @@ struct GraphWorkspaceView: View {
                         .font(.system(size: 38, weight: .bold, design: .serif))
 
                     Text(headerSubtitle)
-                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
 
@@ -102,7 +102,7 @@ struct GraphWorkspaceView: View {
 
     private func graphPill(text: String, systemImage: String) -> some View {
         Label(text, systemImage: systemImage)
-            .font(.system(size: 11, weight: .semibold, design: .rounded))
+            .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(.secondary)
     }
 
@@ -116,21 +116,21 @@ struct GraphWorkspaceView: View {
                 .font(.system(size: 24, weight: .bold, design: .serif))
 
             Text("Select a note or switch to Global to render a real vault map.")
-                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(.secondary)
 
             Label("Graph data is derived from indexed Markdown links only.", systemImage: "lock.shield")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(VisualTheme.quietInk)
         }
         .padding(30)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(VisualTheme.heroSurface)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(VisualTheme.shade.opacity(0.06), lineWidth: 1)
         )
     }
@@ -155,13 +155,10 @@ private struct GraphCanvasPanel: View {
             )
 
             ZStack {
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(VisualTheme.heroSurface)
 
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .stroke(VisualTheme.panel.opacity(0.62), lineWidth: 1)
-
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(VisualTheme.shade.opacity(0.05), lineWidth: 1)
 
                 Canvas { context, size in
@@ -336,7 +333,7 @@ private struct GraphLegendBar: View {
     var body: some View {
         HStack(spacing: 9) {
             Image(systemName: "paintpalette")
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.secondary)
 
             ForEach(buckets.prefix(6)) { bucket in
@@ -352,7 +349,7 @@ private struct GraphLegendBar: View {
 
             if buckets.count > 6 {
                 Text("+\(buckets.count - 6)")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.secondary)
             }
         }
@@ -414,11 +411,11 @@ private struct GraphNodeView: View {
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(node.title)
-                            .font(.system(size: isSelected ? 14 : 12, weight: .bold, design: .rounded))
+                            .font(.system(size: isSelected ? 14 : 12, weight: .bold))
                             .lineLimit(1)
 
                         Text(node.folderPath.isEmpty ? "Vault Root" : node.folderPath)
-                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
@@ -501,13 +498,13 @@ private struct GraphInspectorPanel: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
                 Text("Inspector")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.secondary)
 
                 Spacer()
 
                 Text(graphScope.rawValue)
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(.system(size: 11, weight: .bold))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(
@@ -522,7 +519,7 @@ private struct GraphInspectorPanel: View {
                         .font(.system(size: 28, weight: .bold, design: .serif))
 
                     Text(selectedNode.relativePath)
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.secondary)
 
                     HStack(spacing: 8) {
@@ -557,19 +554,19 @@ private struct GraphInspectorPanel: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Image(systemName: "cursorarrow.rays")
                         .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(VisualTheme.fern)
+                        .foregroundStyle(VisualTheme.accent)
 
                     Text("Choose a node")
                         .font(.system(size: 22, weight: .bold, design: .serif))
 
                     Text("Select a note in the graph to inspect backlinks, outbound links, and open it in the reader.")
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(VisualTheme.panel.opacity(0.52))
                 )
             }
@@ -577,11 +574,11 @@ private struct GraphInspectorPanel: View {
             if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Active Filter")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(.secondary)
 
                     Text(searchText)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(.system(size: 14, weight: .semibold))
                 }
                 .padding(.top, 4)
             }
@@ -590,12 +587,12 @@ private struct GraphInspectorPanel: View {
         }
         .padding(22)
         .frame(width: 310, alignment: .topLeading)
-        .premiumPanel(cornerRadius: 28)
+        .premiumPanel(cornerRadius: 10)
     }
 
     private func statPill(text: String, systemImage: String) -> some View {
         Label(text, systemImage: systemImage)
-            .font(.system(size: 11, weight: .semibold, design: .rounded))
+            .font(.system(size: 11, weight: .semibold))
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
             .background(
@@ -608,12 +605,12 @@ private struct GraphInspectorPanel: View {
     private func connectionsSection(title: String, noteIDs: [String]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(.secondary)
 
             if noteIDs.isEmpty {
                 Text("None")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(noteIDs.prefix(7), id: \.self) { noteID in
@@ -623,10 +620,10 @@ private struct GraphInspectorPanel: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(label)
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .font(.system(size: 13, weight: .semibold))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             Text(noteID)
-                                .font(.system(size: 10, weight: .medium, design: .rounded))
+                                .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }

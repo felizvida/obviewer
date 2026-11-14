@@ -16,7 +16,7 @@ This page records what works and has been checked, what is known to be limited, 
 | --- | --- |
 | Reader | GitHub and Obsidian Markdown render, including callouts with lists, tasks with custom states, footnotes, tables, highlighted code, KaTeX math, and **Mermaid diagrams drawn offline**. The note title appears once. |
 | Safety of note content | A hostile test note (`Fixtures/notes/hostile-html.md`): scripts don't run, there are no form controls or event handlers, `javascript:`/`file:` links are inert, and remote images are blocked and logged by the Content-Security-Policy. Inspected with Safari Web Inspector. |
-| Navigation | Wiki links across notes, same-note `[[#heading]]`, missing-link notice, back/forward (⌘[ ⌘]), the Outline menu and Note › Go to Heading, Find (⌘F, ⌘G, ⇧⌘G), and Linked mentions under each note |
+| Navigation | Wiki links across notes, same-note `[[#heading]]`, missing-link notice, back/forward (⌘[ ⌘]), the Outline menu and Note › Go to Heading, Find (⌘F, ⌘G, ⇧⌘G), and "Mentioned in" (backlinks) under each note |
 | Appearance | Dark mode in the sidebar, reader, code, callouts and diagrams; sidebar resizing; text size (⌘= ⌘- ⌘0) and line length (⌥⌘] ⌥⌘[) |
 | Formats | Folder of Markdown, Obsidian vault (detected by `.obsidian/`), DokuWiki (`data/pages`) with namespaced links and media, and flavor override from the sidebar badge |
 | Finder | Double-click opens a note window, after the user set Obviewer as the `.md` default via Get Info › Open with › Change All. `open -a Obviewer note.md` also works. A single note with relative images shows a banner; granting read-only access to its folder fixes the images. |

@@ -17,6 +17,7 @@ public struct SettingsView: View {
         }
         .frame(width: 520)
         .padding(20)
+        .tint(VisualTheme.accent)
     }
 }
 

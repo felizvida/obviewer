@@ -1,11 +1,12 @@
 import ObviewerCore
-import ObviewerReaderKit
 import SwiftUI
 
+/// The library window: notes on the left, the reader (or graph) on the right.
+/// Native chrome, no decoration: the sidebar is a plain macOS source list and the
+/// detail pane is the same paper as the reader page.
 public struct ContentView: View {
     @ObservedObject var model: AppModel
     @ObservedObject private var router = OpenRequestRouter.shared
-    @State private var hoveredNoteID: String?
     @FocusState private var isSearchFocused: Bool
     @Environment(\.openWindow) private var openWindow
 
@@ -16,12 +17,12 @@ public struct ContentView: View {
     public var body: some View {
         NavigationSplitView {
             sidebar
-                .navigationSplitViewColumnWidth(min: 290, ideal: 340, max: 460)
+                .navigationSplitViewColumnWidth(min: 240, ideal: 290, max: 420)
         } detail: {
             detail
         }
         .navigationSplitViewStyle(.balanced)
-        .background(backgroundGradient)
+        .tint(VisualTheme.accent)
         .focusedSceneObject(model)
         .modifier(ReaderAlertsModifier(model: model))
         .onAppear {
@@ -39,17 +40,15 @@ public struct ContentView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 180)
+                .frame(width: 160)
                 .disabled(model.snapshot == nil || model.isLoading)
             }
 
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    Task {
-                        await model.chooseVault()
-                    }
+                    Task { await model.chooseVault() }
                 } label: {
-                    Label("Open", systemImage: "folder.badge.plus")
+                    Label("Open", systemImage: "folder")
                 }
                 .help("Open a file or folder (⌘O)")
             }
@@ -64,44 +63,116 @@ public struct ContentView: View {
         }
     }
 
-    private var sidebar: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(VisualTheme.sidebarSurface)
-                .padding(10)
-                .shadow(color: Color.black.opacity(0.055), radius: 20, x: 0, y: 10)
+    // MARK: - Sidebar
 
-            VStack(alignment: .leading, spacing: 14) {
-                header
-                search
-                librarySummary
-                noteList
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let input = model.readingInput {
+                SidebarHeader(
+                    input: input,
+                    isLive: model.isLiveReloadEnabled,
+                    onChangeProfile: { model.reopen(with: $0) }
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+                .padding(.bottom, 10)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 22)
-            .padding(.bottom, 12)
+
+            if model.snapshot != nil {
+                search
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 6)
+            }
+
+            noteList
         }
-        .background(backgroundGradient)
     }
+
+    private var search: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            TextField(searchPlaceholder, text: $model.searchText)
+                .textFieldStyle(.plain)
+                .focused($isSearchFocused)
+                .disabled(model.isLoading)
+                .accessibilityLabel("Search notes")
+                .onReceive(NotificationCenter.default.publisher(for: .obviewerFocusSearch)) { notification in
+                    if (notification.object as AnyObject?) === model {
+                        isSearchFocused = true
+                    }
+                }
+
+            if model.searchText.isEmpty == false {
+                Button {
+                    model.searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .help("Clear search")
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .font(.system(size: 12))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.primary.opacity(0.06))
+        )
+    }
+
+    private var noteList: some View {
+        List(selection: $model.selectedNoteID) {
+            ForEach(model.noteSections) { section in
+                Section(section.title) {
+                    ForEach(section.notes) { note in
+                        NoteRow(note: note)
+                            .tag(note.id)
+                    }
+                }
+            }
+        }
+        .listStyle(.sidebar)
+        .overlay {
+            if model.snapshot != nil, model.noteSections.isEmpty {
+                LibraryEmptyState(
+                    query: model.searchText.trimmingCharacters(in: .whitespacesAndNewlines),
+                    onClearSearch: { model.searchText = "" },
+                    onChooseVault: { Task { await model.chooseVault() } }
+                )
+            }
+        }
+    }
+
+    private var searchPlaceholder: String {
+        let count = model.snapshot?.notes.count ?? 0
+        return count == 1 ? "Search 1 note" : "Search \(count) notes"
+    }
+
+    // MARK: - Detail
 
     private var detail: some View {
         ZStack {
-            backgroundGradient
+            VisualTheme.readerBackground
+                .ignoresSafeArea()
 
             if model.isLoading {
-                LoadingVaultState(progress: model.loadingProgress)
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                LoadingVaultState(
+                    name: model.readingInput?.url.lastPathComponent,
+                    progress: model.loadingProgress
+                )
             } else if let snapshot = model.snapshot {
                 switch model.detailMode {
                 case .reader:
                     if let note = model.selectedNote {
                         NoteReaderPane(model: model, note: note)
                     } else {
-                        EmptyReaderState {
-                            Task {
-                                await model.chooseVault()
-                            }
-                        }
+                        NoNoteSelectedState()
                     }
 
                 case .graph:
@@ -116,639 +187,202 @@ public struct ContentView: View {
                         onSelectNote: { model.selectedNoteID = $0 },
                         onOpenReader: { model.detailMode = .reader }
                     )
-                    .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
             } else {
-                EmptyReaderState {
-                    Task {
-                        await model.chooseVault()
-                    }
+                WelcomeState {
+                    Task { await model.chooseVault() }
                 }
-                .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
         }
-        .animation(.easeInOut(duration: 0.22), value: model.isLoading)
-        .animation(.easeInOut(duration: 0.24), value: model.detailMode)
+        .animation(.easeInOut(duration: 0.2), value: model.isLoading)
     }
+}
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 12) {
-                BrandMark()
+// MARK: - Sidebar pieces
 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Obviewer")
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
+/// The open file or folder by name, with its flavor (a menu to re-read it as
+/// another flavor) and a lock that explains the read-only promise.
+private struct SidebarHeader: View {
+    let input: ReadingInputSource
+    let isLive: Bool
+    let onChangeProfile: (ReadingProfile) -> Void
 
-                    Text("Read-only note reader")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundStyle(VisualTheme.fern)
-                }
-            }
-            .accessibilityElement(children: .combine)
-
-            if let readingInput = model.readingInput {
-                HStack(spacing: 6) {
-                    Label(readingInput.url.lastPathComponent, systemImage: inputIcon(for: readingInput))
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(VisualTheme.shade.opacity(0.06))
-                        )
-                        .help(readingInput.url.path)
-
-                    profileBadge(readingInput.profile)
-                    LiveSyncBadge(isEnabled: model.isLiveReloadEnabled)
-                    Spacer(minLength: 0)
-                    ReadOnlyBadge(isLive: model.isLiveReloadEnabled)
-                }
-                .help(profileDescription)
-            } else {
-                Text(profileDescription)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                ReadOnlyAssuranceStrip(isLive: model.isLiveReloadEnabled)
-            }
-        }
-    }
-
-    private var librarySummary: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                summaryPill(text: "\(model.filteredNotes.count) notes", systemImage: "doc.text")
-                if let snapshot = model.snapshot, snapshot.attachments.isEmpty == false {
-                    summaryPill(text: "\(snapshot.attachments.count) files", systemImage: "paperclip")
-                }
-                if model.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                    summaryPill(text: "Filtered", systemImage: "line.3.horizontal.decrease.circle")
-                }
-            }
-
-            if let diagnostics = model.indexDiagnostics {
-                Text("\(diagnostics.folderCount) folders indexed · \(diagnostics.graphEdgeCount) note links")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(VisualTheme.quietInk)
-                    .lineLimit(1)
-            }
-        }
-    }
-
-    private var search: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Library")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.secondary)
-
-                TextField(searchPlaceholder, text: $model.searchText)
-                    .textFieldStyle(.plain)
-                    .focused($isSearchFocused)
-                    .disabled(model.snapshot == nil || model.isLoading)
-                    .accessibilityLabel("Search notes")
-                    .onReceive(NotificationCenter.default.publisher(for: .obviewerFocusSearch)) { notification in
-                        if (notification.object as AnyObject?) === model {
-                            isSearchFocused = true
-                        }
-                    }
-
-                if model.searchText.isEmpty == false {
-                    Button {
-                        clearSearch()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Clear search")
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
-            .softPanel(cornerRadius: 16, opacity: 0.68)
-            .opacity(model.snapshot == nil ? 0.72 : 1)
-        }
-    }
-
-    private var noteList: some View {
-        ZStack(alignment: .topLeading) {
-            List(selection: $model.selectedNoteID) {
-                ForEach(model.noteSections) { section in
-                    Section(section.title) {
-                        ForEach(section.notes) { note in
-                            noteRow(
-                                note,
-                                isSelected: note.id == model.selectedNoteID,
-                                isHovered: note.id == hoveredNoteID
-                            )
-                            .tag(note.id)
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
-                            .onHover { hovering in
-                                hoveredNoteID = hovering ? note.id : nil
-                            }
-                        }
-                    }
-                }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-
-            if model.noteSections.isEmpty {
-                LibraryEmptyState(
-                    hasVault: model.snapshot != nil,
-                    isSearching: model.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
-                    onChooseVault: {
-                        Task {
-                            await model.chooseVault()
-                        }
-                    },
-                    onClearSearch: clearSearch
-                )
-                .padding(.top, 8)
-            }
-        }
-    }
-
-    private func noteRow(_ note: VaultNote, isSelected: Bool, isHovered: Bool) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            RoundedRectangle(cornerRadius: 999, style: .continuous)
-                .fill(isSelected ? AnyShapeStyle(VisualTheme.accentGradient) : AnyShapeStyle(Color.clear))
-                .frame(width: 3, height: 44)
-                .padding(.top, 2)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(note.title)
-                    .font(.system(size: 15, weight: isSelected ? .bold : .semibold, design: .rounded))
-                    .foregroundStyle(VisualTheme.ink)
-                    .lineLimit(2)
-
-                Text(note.previewText)
-                    .font(.system(size: 12, weight: .regular, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-
-                HStack(spacing: 8) {
-                    Text(note.folderPath.isEmpty ? "Vault Root" : note.folderPath)
-                    Text("·")
-                    Text("\(note.readingTimeMinutes)m")
-                }
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(VisualTheme.shade.opacity(0.52))
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(input.url.lastPathComponent)
+                .font(.system(size: 15, weight: .semibold, design: .serif))
                 .lineLimit(1)
+                .truncationMode(.middle)
+                .help(input.url.path)
+
+            HStack(spacing: 6) {
+                Menu {
+                    Picker("Read as", selection: Binding(get: { input.profile }, set: onChangeProfile)) {
+                        ForEach(ReadingProfile.allCases) { option in
+                            Text(option.displayName).tag(option)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    Text(flavorLabel)
+                }
+                .menuStyle(.button)
+                .buttonStyle(.borderless)
+                .menuIndicator(.visible)
+                .fixedSize()
+                .help("Detected flavor. Choose another to re-read this \(input.kind == .folder ? "folder" : "file").")
+                .accessibilityLabel("Flavor: \(input.profile.displayName)")
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "lock")
+                    .help(isLive
+                        ? "Read-only. Obviewer refreshes when the files change, and never writes to them."
+                        : "Read-only. Obviewer never writes to these files.")
+                    .accessibilityLabel(isLive ? "Read-only, live reload on" : "Read-only")
+            }
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var flavorLabel: String {
+        switch (input.profile, input.kind) {
+        case (.obsidian, .folder): return "Obsidian vault"
+        case (.dokuwiki, .folder): return "DokuWiki pages"
+        case (.markdown, .folder): return "Markdown folder"
+        case (let profile, .markdownFile): return "\(profile.displayName) file"
+        }
+    }
+}
+
+private struct NoteRow: View {
+    let note: VaultNote
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(note.title)
+                .font(.system(size: 13, weight: .medium))
+                .lineLimit(1)
+
+            if note.previewText.isEmpty == false, note.previewText != note.title {
+                Text(note.previewText)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
         }
-        .padding(13)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(
-                    isSelected
-                        ? AnyShapeStyle(VisualTheme.selectedSurface)
-                        : AnyShapeStyle(VisualTheme.panel.opacity(isHovered ? 0.62 : 0.0))
-                )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(isSelected ? VisualTheme.fern.opacity(0.24) : VisualTheme.shade.opacity(isHovered ? 0.04 : 0), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(isSelected ? 0.045 : 0), radius: 10, x: 0, y: 6)
-        .animation(.easeInOut(duration: 0.16), value: isHovered)
-        .animation(.easeInOut(duration: 0.18), value: isSelected)
-        .padding(.vertical, 2)
+        .padding(.vertical, 3)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(note.title)
-        .accessibilityValue("\(note.folderPath.isEmpty ? "Vault root" : note.folderPath), \(note.readingTimeMinutes) minute read")
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-    }
-
-    private func summaryPill(text: String, systemImage: String) -> some View {
-        Label(text, systemImage: systemImage)
-            .font(.system(size: 11, weight: .semibold, design: .rounded))
-            .foregroundStyle(VisualTheme.softInk)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(VisualTheme.panel.opacity(0.48))
-            )
-    }
-
-    private func profileBadge(_ profile: ReadingProfile) -> some View {
-        Menu {
-            Picker("Read as", selection: Binding(
-                get: { profile },
-                set: { model.reopen(with: $0) }
-            )) {
-                ForEach(ReadingProfile.allCases) { option in
-                    Text(option.displayName).tag(option)
-                }
-            }
-            .pickerStyle(.inline)
-        } label: {
-            HStack(spacing: 4) {
-                Text(profile.displayName)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .bold))
-            }
-            .font(.system(size: 11, weight: .bold, design: .rounded))
-            .foregroundStyle(VisualTheme.fern)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(VisualTheme.panel.opacity(0.58))
-            )
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Detected flavor. Choose another to re-read this \(model.readingInput?.kind == .folder ? "folder" : "file").")
-        .accessibilityLabel("Flavor: \(profile.displayName)")
-    }
-
-    private var profileDescription: String {
-        guard let readingInput = model.readingInput else {
-            return "A read-only reader for Markdown, Obsidian vaults, and DokuWiki."
-        }
-
-        switch (readingInput.profile, readingInput.kind) {
-        case (.obsidian, _):
-            return "Obsidian vault profile with graph, backlinks, embeds, and tags."
-        case (.markdown, .folder):
-            return "Markdown folder profile with clean local reading and search."
-        case (.markdown, .markdownFile):
-            return "Single Markdown file profile with focused read-only viewing."
-        case (.dokuwiki, _):
-            return "DokuWiki pages with namespaces, media, and wiki links."
-        }
-    }
-
-    private func inputIcon(for input: ReadingInputSource) -> String {
-        switch input.kind {
-        case .folder:
-            switch input.profile {
-            case .obsidian: return "books.vertical"
-            case .dokuwiki: return "text.book.closed"
-            case .markdown: return "folder"
-            }
-        case .markdownFile:
-            return "doc.text"
-        }
-    }
-
-    private var searchPlaceholder: String {
-        model.snapshot == nil ? "Open a file or folder to search" : "Search notes, tags, or paths"
-    }
-
-    private func clearSearch() {
-        withAnimation(.easeInOut(duration: 0.16)) {
-            model.searchText = ""
-        }
-    }
-
-    private var backgroundGradient: some View {
-        Rectangle()
-            .fill(VisualTheme.appBackground)
-        .ignoresSafeArea()
-    }
-}
-
-private struct BrandMark: View {
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(VisualTheme.accentGradient)
-
-            Circle()
-                .fill(VisualTheme.panel.opacity(0.18))
-                .frame(width: 15, height: 15)
-                .offset(x: 9, y: -9)
-
-            Text("O")
-                .font(.system(size: 17, weight: .black, design: .serif))
-                .foregroundStyle(VisualTheme.panel.opacity(0.96))
-        }
-        .frame(width: 34, height: 34)
-        .shadow(color: VisualTheme.fern.opacity(0.18), radius: 8, x: 0, y: 4)
-        .accessibilityHidden(true)
-    }
-}
-
-private struct ReadOnlyAssuranceStrip: View {
-    let isLive: Bool
-
-    var body: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "lock.shield")
-                .foregroundStyle(VisualTheme.fern)
-
-            Text("Read-only by design")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(VisualTheme.ink)
-
-            Text(isLive ? "Live reload watches changes without writing." : "Vault files are opened for reading only.")
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(VisualTheme.panel.opacity(0.52))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(VisualTheme.fern.opacity(0.13), lineWidth: 1)
-        )
-    }
-}
-
-/// Lock chip shown next to the flavor badge once a file or folder is open.
-private struct ReadOnlyBadge: View {
-    let isLive: Bool
-
-    var body: some View {
-        Image(systemName: "lock.shield")
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(VisualTheme.fern)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 6)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(VisualTheme.panel.opacity(0.58))
-            )
-            .help(isLive
-                ? "Read-only by design. Live reload watches for changes without writing."
-                : "Read-only by design. Files are opened for reading only.")
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Read-only")
-    }
-}
-
-private struct LiveSyncBadge: View {
-    let isEnabled: Bool
-    @State private var pulse = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        if isEnabled {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(VisualTheme.fern)
-                    .frame(width: 7, height: 7)
-                    .scaleEffect(pulse ? 1.22 : 0.88)
-                    .opacity(pulse ? 0.48 : 1)
-
-                Text("Live")
-            }
-            .font(.system(size: 11, weight: .bold, design: .rounded))
-            .foregroundStyle(VisualTheme.softInk)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .softPanel(cornerRadius: 999, opacity: 0.58)
-            .help("Live reload: Obviewer refreshes when files change")
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Live reload on")
-            .onAppear {
-                guard reduceMotion == false else { return }
-                withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-                    pulse = true
-                }
-            }
-        }
+        .accessibilityValue("\(note.readingTimeMinutes) minute read")
     }
 }
 
 private struct LibraryEmptyState: View {
-    let hasVault: Bool
-    let isSearching: Bool
-    let onChooseVault: () -> Void
+    let query: String
     let onClearSearch: () -> Void
+    let onChooseVault: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: iconName)
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(VisualTheme.fern)
-
-            Text(title)
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-
-            Text(message)
-                .font(.system(size: 12, weight: .medium, design: .rounded))
+        VStack(spacing: 8) {
+            Text(query.isEmpty ? "No notes here." : "Nothing matches “\(query)”.")
+                .font(.system(size: 13, design: .serif).italic())
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
 
-            Button(action: buttonAction) {
-                Label(buttonTitle, systemImage: buttonIcon)
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+            Button(query.isEmpty ? "Choose Another Folder…" : "Clear Search") {
+                query.isEmpty ? onChooseVault() : onClearSearch()
             }
-            .buttonStyle(.borderless)
-            .foregroundStyle(VisualTheme.fern)
-            .padding(.top, 2)
+            .buttonStyle(.link)
+            .font(.system(size: 12))
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .softPanel(cornerRadius: 20, opacity: 0.66)
+        .padding(20)
     }
+}
 
-    private var iconName: String {
-        if hasVault == false { return "folder.badge.plus" }
-        return isSearching ? "doc.text.magnifyingglass" : "tray"
-    }
+// MARK: - Detail states
 
-    private var title: String {
-        if hasVault == false { return "No vault open" }
-        return isSearching ? "No matching notes" : "No notes found"
-    }
+/// First launch, or nothing open: a title page.
+private struct WelcomeState: View {
+    let action: () -> Void
 
-    private var message: String {
-        if hasVault == false { return "Choose an Obsidian vault, Markdown or DokuWiki folder, or a single note file. Obviewer keeps it read-only." }
-        if isSearching { return "Try a title, folder, #tag, or frontmatter value." }
-        return "This vault opened successfully, but no Markdown notes were indexed."
-    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("\u{269C}\u{FE0E}")
+                .font(.custom("Apple Symbols", size: 34))
+                .foregroundStyle(VisualTheme.gold)
+                .accessibilityHidden(true)
+                .padding(.bottom, 14)
 
-    private var buttonTitle: String {
-        if hasVault == false { return "Open File or Folder" }
-        return isSearching ? "Clear Search" : "Choose Another Vault"
-    }
+            Text("Obviewer")
+                .font(.system(size: 46, weight: .regular, design: .serif).italic())
+                .foregroundStyle(VisualTheme.ink)
+                .padding(.bottom, 14)
 
-    private var buttonIcon: String {
-        if hasVault == false { return "folder.badge.plus" }
-        return isSearching ? "xmark.circle" : "folder"
-    }
+            Text("Open a Markdown file, an Obsidian vault or a DokuWiki folder to read it here. Obviewer only reads; your files are never changed.")
+                .font(.system(size: 15, design: .serif))
+                .foregroundStyle(VisualTheme.softInk)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 24)
 
-    private func buttonAction() {
-        if hasVault == false || isSearching == false {
-            onChooseVault()
-        } else {
-            onClearSearch()
+            Button("Open File or Folder…", action: action)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .keyboardShortcut(.defaultAction)
+
+            Text("You can also double-click a .md file in Finder.")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .padding(.top, 12)
         }
+        .frame(maxWidth: 400, alignment: .leading)
+        .padding(48)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct NoNoteSelectedState: View {
+    var body: some View {
+        Text("Choose a note from the list.")
+            .font(.system(size: 15, design: .serif).italic())
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
 private struct LoadingVaultState: View {
+    let name: String?
     let progress: VaultLoadingProgress?
-    @State private var pulse = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            HStack(alignment: .center, spacing: 16) {
-                ZStack {
-                    Circle()
-                        .stroke(VisualTheme.fern.opacity(0.18), lineWidth: 8)
-                    Circle()
-                        .trim(from: 0, to: 0.72)
-                        .stroke(VisualTheme.fern, style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                        .rotationEffect(.degrees(pulse ? 360 : 0))
-                }
-                .frame(width: 52, height: 52)
+        VStack(spacing: 12) {
+            ProgressView()
+                .controlSize(.small)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Indexing vault")
-                        .font(.system(size: 26, weight: .bold, design: .serif))
+            Text(name.map { "Reading “\($0)”" } ?? "Reading your notes")
+                .font(.system(size: 17, design: .serif).italic())
+                .foregroundStyle(VisualTheme.ink)
 
-                    Text(summaryText)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-            }
+            Text(summary)
+                .font(.system(size: 12))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
 
-            HStack(spacing: 10) {
-                loadingMetric(value: progress?.processedFileCount ?? 0, label: "Files", systemImage: "tray.full")
-                loadingMetric(value: progress?.noteCount ?? 0, label: "Notes", systemImage: "doc.text")
-                loadingMetric(value: progress?.attachmentCount ?? 0, label: "Assets", systemImage: "paperclip")
-            }
-
-            HStack(spacing: 10) {
-                Label("Read-only scan", systemImage: "lock.shield")
-                Text("Large image-heavy vaults can take a moment the first time.")
-            }
-            .font(.system(size: 12, weight: .semibold, design: .rounded))
-            .foregroundStyle(VisualTheme.quietInk)
-
-            if let currentPath = progress?.currentPath, currentPath.isEmpty == false {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Currently scanning")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundStyle(.secondary)
-
-                    Text(currentPath)
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .textSelection(.enabled)
-                        .lineLimit(2)
-                }
-                .frame(maxWidth: 520, alignment: .leading)
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(VisualTheme.shade.opacity(0.035))
-                )
-            }
+            Text("Files are opened for reading only.")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
         }
-        .padding(34)
-        .softPanel(cornerRadius: 30, opacity: 0.76)
-        .onAppear {
-            guard reduceMotion == false else { return }
-            withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
-                pulse = true
-            }
-        }
+        .multilineTextAlignment(.center)
+        .padding(32)
+        .accessibilityElement(children: .combine)
     }
 
-    private func loadingMetric(value: Int, label: String, systemImage: String) -> some View {
-        HStack(spacing: 9) {
-            Image(systemName: systemImage)
-                .foregroundStyle(VisualTheme.fern)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("\(value)")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                Text(label)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.horizontal, 13)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(VisualTheme.panel.opacity(0.68))
-        )
-    }
-
-    private var summaryText: String {
-        guard let progress else {
-            return "Preparing vault scan..."
-        }
-
-        let fileWord = progress.processedFileCount == 1 ? "file" : "files"
-        let noteWord = progress.noteCount == 1 ? "note" : "notes"
-        let attachmentWord = progress.attachmentCount == 1 ? "attachment" : "attachments"
-        return "\(progress.processedFileCount) \(fileWord) scanned, \(progress.noteCount) \(noteWord), \(progress.attachmentCount) \(attachmentWord)"
-    }
-}
-
-private struct EmptyReaderState: View {
-    let action: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            ZStack(alignment: .bottomLeading) {
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .fill(VisualTheme.heroSurface)
-                    .frame(width: 440, height: 190)
-                    .overlay(alignment: .topTrailing) {
-                        Image(systemName: "book.pages")
-                            .font(.system(size: 56, weight: .light))
-                            .foregroundStyle(VisualTheme.fern.opacity(0.24))
-                            .padding(28)
-                    }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("A calmer way into your vault.")
-                        .font(.system(size: 34, weight: .bold, design: .serif))
-                        .frame(maxWidth: 360, alignment: .leading)
-
-                    Text("Choose an Obsidian vault, a Markdown or DokuWiki folder, or a single note to start reading. Or double-click any .md file in Finder.")
-                        .font(.system(size: 16, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(28)
-            }
-            .shadow(color: Color.black.opacity(0.06), radius: 22, x: 0, y: 12)
-
-            HStack(spacing: 10) {
-                featurePill("Local only", "lock.shield")
-                featurePill("Markdown native", "text.book.closed")
-                featurePill("Graph ready", "point.3.connected.trianglepath.dotted")
-            }
-
-            Button(action: action) {
-                Label("Open File or Folder", systemImage: "folder.badge.plus")
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-        }
-        .padding(56)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private func featurePill(_ title: String, _ systemImage: String) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(.system(size: 12, weight: .bold, design: .rounded))
-            .foregroundStyle(VisualTheme.softInk)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .softPanel(cornerRadius: 999, opacity: 0.58)
+    private var summary: String {
+        guard let progress else { return "Getting started…" }
+        let notes = progress.noteCount == 1 ? "1 note" : "\(progress.noteCount) notes"
+        let files = progress.attachmentCount == 1 ? "1 attachment" : "\(progress.attachmentCount) attachments"
+        return "\(notes), \(files) so far"
     }
 }
