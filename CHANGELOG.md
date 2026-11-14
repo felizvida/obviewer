@@ -8,6 +8,7 @@
 - Release builds are arm64 only (`ARCHS = arm64` for the Release configuration).
 - The toolbar's Reload button is gone; File › Reload (⌘R) and live reload remain. The read-only promise now lives in a lock with a tooltip in the sidebar header.
 - **A new look: ink on paper, with a hint of Louisiana.** The reader is set in New York with purple ink links (after LSU purple), an old-gold wash for highlights, Mardi Gras green for tip callouts, and a gold fleur-de-lis closing each note. Metadata is one italic line under the title; backlinks are "Mentioned in". The library uses a plain macOS sidebar (no cards, pills or gradients), a title-page welcome screen, and a quiet loading state.
+- **An app icon.** The Dock showed a blank placeholder because the app had no icon. It is now a page with a purple silk bookmark and a gold fleur-de-lis, drawn by `scripts/generate_app_icon.py`.
 - VoiceOver reads each library row as one item; the Live pulse and loading spinner respect Reduce Motion. The Settings text-size slider now moves in the same 10% steps as Bigger/Smaller Text.
 
 ### Removed

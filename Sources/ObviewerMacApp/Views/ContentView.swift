@@ -309,11 +309,11 @@ private struct WelcomeState: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("\u{269C}\u{FE0E}")
-                .font(.custom("Apple Symbols", size: 34))
-                .foregroundStyle(VisualTheme.gold)
+            FleurDeLis()
+                .fill(VisualTheme.gold)
+                .frame(width: 34, height: 31)
                 .accessibilityHidden(true)
-                .padding(.bottom, 14)
+                .padding(.bottom, 16)
 
             Text("Obviewer")
                 .font(.system(size: 46, weight: .regular, design: .serif).italic())

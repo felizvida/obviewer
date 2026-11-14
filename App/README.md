@@ -8,9 +8,11 @@
 
 All three are gitignored. Regenerate them with `make xcodeproj`.
 
+`App/Assets.xcassets` holds the app icon and is tracked. It is drawn by `scripts/generate_app_icon.py` (Pillow only): a page with a purple bookmark and the gold fleur-de-lis that also closes each note in the reader. Rerun the script after changing the drawing.
+
 The generated project contains:
 
-- static libraries: `ObviewerCore`, `ObviewerReaderKit`, `ObviewerMacApp` and `ObviewerFixtureSupport`, linked into each executable. No frameworks are shipped, because an ad-hoc signed hardened app can't load them.
+- static libraries: `ObviewerCore`, `ObviewerReaderKit` and `ObviewerMacApp`, linked into each executable (`ObviewerFixtureSupport` only into tests and tools). No frameworks are shipped, because an ad-hoc signed hardened app can't load them.
 - the `Obviewer` app, which embeds the `ObviewerQuickLook` app extension. Both bundles carry the `Resources/Reader` folder.
 - test bundles: `ObviewerCoreTests`, `ObviewerReaderKitTests`, `ObviewerMacAppTests`
 
