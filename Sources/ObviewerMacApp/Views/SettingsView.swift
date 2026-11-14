@@ -24,7 +24,7 @@ public struct SettingsView: View {
 private struct ReadingSettings: View {
     @AppStorage(ReaderPreferenceKeys.theme) private var theme = "system"
     @AppStorage(ReaderPreferenceKeys.textScale) private var textScale = 1.0
-    @AppStorage(ReaderPreferenceKeys.measure) private var measure = 68
+    @AppStorage(ReaderPreferenceKeys.measure) private var measure = ReaderMeasure.standard
 
     var body: some View {
         Form {
@@ -37,7 +37,7 @@ private struct ReadingSettings: View {
 
             LabeledContent("Text size") {
                 HStack {
-                    Slider(value: $textScale, in: 0.8...1.5, step: 0.05)
+                    Slider(value: $textScale, in: ReaderTextSize.minimum...ReaderTextSize.maximum, step: ReaderTextSize.step)
                     Text("\(Int((textScale * 100).rounded()))%")
                         .monospacedDigit()
                         .frame(width: 44, alignment: .trailing)
@@ -48,7 +48,7 @@ private struct ReadingSettings: View {
                 HStack {
                     Slider(
                         value: Binding(get: { Double(measure) }, set: { measure = Int($0) }),
-                        in: 52...96,
+                        in: Double(ReaderMeasure.minimum)...Double(ReaderMeasure.maximum),
                         step: 2
                     )
                     Text("\(measure) ch")

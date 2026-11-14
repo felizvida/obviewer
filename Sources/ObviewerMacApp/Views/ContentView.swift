@@ -43,7 +43,7 @@ public struct ContentView: View {
                 .disabled(model.snapshot == nil || model.isLoading)
             }
 
-            ToolbarItemGroup(placement: .primaryAction) {
+            ToolbarItem(placement: .primaryAction) {
                 Button {
                     Task {
                         await model.chooseVault()
@@ -51,15 +51,7 @@ public struct ContentView: View {
                 } label: {
                     Label("Open", systemImage: "folder.badge.plus")
                 }
-
-                Button {
-                    Task {
-                        await model.reloadVault()
-                    }
-                } label: {
-                    Label("Reload", systemImage: "arrow.clockwise")
-                }
-                .disabled(model.vaultURL == nil)
+                .help("Open a file or folder (⌘O)")
             }
         }
     }
@@ -74,18 +66,20 @@ public struct ContentView: View {
 
     private var sidebar: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(VisualTheme.sidebarSurface)
-                .padding(16)
-                .shadow(color: Color.black.opacity(0.055), radius: 26, x: 0, y: 14)
+                .padding(10)
+                .shadow(color: Color.black.opacity(0.055), radius: 20, x: 0, y: 10)
 
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 14) {
                 header
                 search
                 librarySummary
                 noteList
             }
-            .padding(28)
+            .padding(.horizontal, 20)
+            .padding(.top, 22)
+            .padding(.bottom, 12)
         }
         .background(backgroundGradient)
     }
@@ -142,37 +136,43 @@ public struct ContentView: View {
             HStack(alignment: .center, spacing: 12) {
                 BrandMark()
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 1) {
                     Text("Obviewer")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
 
                     Text("Read-only note reader")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
                         .foregroundStyle(VisualTheme.fern)
                 }
             }
-
-            Text(profileDescription)
-                .font(.system(size: 13, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
+            .accessibilityElement(children: .combine)
 
             if let readingInput = model.readingInput {
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     Label(readingInput.url.lastPathComponent, systemImage: inputIcon(for: readingInput))
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
                         .background(
                             Capsule(style: .continuous)
                                 .fill(VisualTheme.shade.opacity(0.06))
                         )
+                        .help(readingInput.url.path)
 
                     profileBadge(readingInput.profile)
                     LiveSyncBadge(isEnabled: model.isLiveReloadEnabled)
+                    Spacer(minLength: 0)
+                    ReadOnlyBadge(isLive: model.isLiveReloadEnabled)
                 }
+                .help(profileDescription)
+            } else {
+                Text(profileDescription)
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                ReadOnlyAssuranceStrip(isLive: model.isLiveReloadEnabled)
             }
-
-            ReadOnlyAssuranceStrip(isLive: model.isLiveReloadEnabled)
         }
     }
 
@@ -284,6 +284,7 @@ public struct ContentView: View {
                 .fill(isSelected ? AnyShapeStyle(VisualTheme.accentGradient) : AnyShapeStyle(Color.clear))
                 .frame(width: 3, height: 44)
                 .padding(.top, 2)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(note.title)
@@ -323,6 +324,10 @@ public struct ContentView: View {
         .animation(.easeInOut(duration: 0.16), value: isHovered)
         .animation(.easeInOut(duration: 0.18), value: isSelected)
         .padding(.vertical, 2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(note.title)
+        .accessibilityValue("\(note.folderPath.isEmpty ? "Vault root" : note.folderPath), \(note.readingTimeMinutes) minute read")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private func summaryPill(text: String, systemImage: String) -> some View {
@@ -420,20 +425,21 @@ public struct ContentView: View {
 private struct BrandMark: View {
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
                 .fill(VisualTheme.accentGradient)
 
             Circle()
                 .fill(VisualTheme.panel.opacity(0.18))
-                .frame(width: 18, height: 18)
-                .offset(x: 11, y: -11)
+                .frame(width: 15, height: 15)
+                .offset(x: 9, y: -9)
 
             Text("O")
-                .font(.system(size: 21, weight: .black, design: .serif))
+                .font(.system(size: 17, weight: .black, design: .serif))
                 .foregroundStyle(VisualTheme.panel.opacity(0.96))
         }
-        .frame(width: 42, height: 42)
-        .shadow(color: VisualTheme.fern.opacity(0.18), radius: 10, x: 0, y: 5)
+        .frame(width: 34, height: 34)
+        .shadow(color: VisualTheme.fern.opacity(0.18), radius: 8, x: 0, y: 4)
+        .accessibilityHidden(true)
     }
 }
 
@@ -467,9 +473,32 @@ private struct ReadOnlyAssuranceStrip: View {
     }
 }
 
+/// Lock chip shown next to the flavor badge once a file or folder is open.
+private struct ReadOnlyBadge: View {
+    let isLive: Bool
+
+    var body: some View {
+        Image(systemName: "lock.shield")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(VisualTheme.fern)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(VisualTheme.panel.opacity(0.58))
+            )
+            .help(isLive
+                ? "Read-only by design. Live reload watches for changes without writing."
+                : "Read-only by design. Files are opened for reading only.")
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Read-only")
+    }
+}
+
 private struct LiveSyncBadge: View {
     let isEnabled: Bool
     @State private var pulse = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if isEnabled {
@@ -487,7 +516,11 @@ private struct LiveSyncBadge: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
             .softPanel(cornerRadius: 999, opacity: 0.58)
+            .help("Live reload: Obviewer refreshes when files change")
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Live reload on")
             .onAppear {
+                guard reduceMotion == false else { return }
                 withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
                     pulse = true
                 }
@@ -566,6 +599,7 @@ private struct LibraryEmptyState: View {
 private struct LoadingVaultState: View {
     let progress: VaultLoadingProgress?
     @State private var pulse = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -625,6 +659,7 @@ private struct LoadingVaultState: View {
         .padding(34)
         .softPanel(cornerRadius: 30, opacity: 0.76)
         .onAppear {
+            guard reduceMotion == false else { return }
             withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
                 pulse = true
             }

@@ -48,7 +48,7 @@ struct WebReaderView: View {
     let note: VaultNote
 
     @AppStorage(ReaderPreferenceKeys.textScale) private var textScale = 1.0
-    @AppStorage(ReaderPreferenceKeys.measure) private var measure = 68
+    @AppStorage(ReaderPreferenceKeys.measure) private var measure = ReaderMeasure.standard
     @AppStorage(ReaderPreferenceKeys.theme) private var theme = "system"
 
     init(model: AppModel, note: VaultNote) {

@@ -7,7 +7,7 @@ public struct ObviewerCommands: Commands {
     @FocusedObject private var model: AppModel?
     @ObservedObject private var recents = RecentItemsStore.shared
     @AppStorage(ReaderPreferenceKeys.textScale) private var textScale = 1.0
-    @AppStorage(ReaderPreferenceKeys.measure) private var measure = 68
+    @AppStorage(ReaderPreferenceKeys.measure) private var measure = ReaderMeasure.standard
 
     public init() {}
 
@@ -85,12 +85,12 @@ public struct ObviewerCommands: Commands {
                 .keyboardShortcut("-", modifiers: [.command])
             Button("Actual Size") {
                 textScale = 1.0
-                measure = 68
+                measure = ReaderMeasure.standard
             }
             .keyboardShortcut("0", modifiers: [.command])
-            Button("Wider Lines") { measure = min(measure + 6, 96) }
+            Button("Wider Lines") { measure = min(measure + ReaderMeasure.menuStep, ReaderMeasure.maximum) }
                 .keyboardShortcut("]", modifiers: [.command, .option])
-            Button("Narrower Lines") { measure = max(measure - 6, 52) }
+            Button("Narrower Lines") { measure = max(measure - ReaderMeasure.menuStep, ReaderMeasure.minimum) }
                 .keyboardShortcut("[", modifiers: [.command, .option])
             Divider()
         }

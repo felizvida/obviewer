@@ -37,6 +37,15 @@ enum ReaderTextSize {
     }
 }
 
+/// Reader line length in characters, shared by the menu, Settings and the reader.
+enum ReaderMeasure {
+    static let standard = 68
+    static let minimum = 52
+    static let maximum = 96
+    /// Step for Wider Lines / Narrower Lines.
+    static let menuStep = 6
+}
+
 /// Handles ⌘= / ⌘+ before the key window's views see them. A focused WKWebView
 /// is offered key equivalents before the main menu, and "+" doesn't match a menu
 /// item registered as "=", so the menu shortcut alone was unreliable.
