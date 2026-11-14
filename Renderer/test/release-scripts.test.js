@@ -21,7 +21,9 @@ const EXT_ENTITLEMENTS = ['com.apple.security.app-sandbox', 'com.apple.security.
 const plist = (keys) => `<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict>${keys.map((k) => `<key>${k}</key><true/>`).join('')}</dict></plist>\n`;
 
 function setup(options = {}) {
-  const root = mkdtempSync(join(tmpdir(), 'release-common-test-'));
+  // The prefix holds option-like words and a space on purpose, so any helper or mock
+  // that matches on paths or forgets to quote them fails every run, not at random.
+  const root = mkdtempSync(join(tmpdir(), 'release common -dv --verify --entitlements -mountpoint Print -'));
   const bin = join(root, 'bin');
   mkdirSync(bin);
   const app = join(root, 'content', 'Obviewer.app');
@@ -47,22 +49,25 @@ function setup(options = {}) {
     return path;
   };
 
-  // codesign: --verify, -dv (flag line on stderr, plus lots of output after it), -d --entitlements :-
+  // codesign: dispatch on the option arguments only, never on "$*": temp paths are random
+  // and once contained "-dv", which sent an entitlements request down the -dv branch.
   tool('codesign', `
-case "$*" in
-  *--verify*) [ "\${MOCK_VERIFY_FAIL:-0}" = 1 ] && { echo "simulated strict signature failure" >&2; exit 1; }; exit 0 ;;
-  *-dv*)
+target="\${@: -1}"
+case "$1 $2" in
+  --verify*) [ "\${MOCK_VERIFY_FAIL:-0}" = 1 ] && { echo "simulated strict signature failure" >&2; exit 1; }; exit 0 ;;
+  "-dv "*)
     [ "\${MOCK_DV_FAIL:-0}" = 1 ] && exit 1
-    echo "Executable=$3" >&2
+    echo "Executable=$target" >&2
     if [ "\${MOCK_NO_RUNTIME:-0}" = 1 ]; then echo "CodeDirectory v=20500 size=1 flags=0x2(adhoc) hashes=1" >&2
     else echo "CodeDirectory v=20500 size=1 flags=0x10002(adhoc,runtime) hashes=1" >&2; fi
     # Long trailing output: a 'grep -q' pipeline would SIGPIPE here.
     for i in $(seq 1 20000); do echo "Hash line $i 0123456789abcdef0123456789abcdef" >&2; done
     exit 0 ;;
-  *--entitlements*)
-    case "$*" in *ObviewerQuickLook.appex*) cat "${join(root, 'ext.plist')}" ;; *) cat "${join(root, 'app.plist')}" ;; esac
+  "-d --entitlements")
+    case "$target" in */ObviewerQuickLook.appex) cat "${join(root, 'ext.plist')}" ;; *) cat "${join(root, 'app.plist')}" ;; esac
     exit 0 ;;
 esac
+echo "mock codesign: unexpected arguments: $*" >&2
 exit 2`);
   tool('plutil', '[ "${MOCK_PLIST_INVALID:-0}" = 1 ] && exit 1; exit 0');
   // PlistBuddy: "Print" lists keys like the real tool; "Print :key" prints a value.

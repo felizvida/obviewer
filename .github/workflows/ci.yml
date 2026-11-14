@@ -79,9 +79,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # GitHub retired every macOS 14 image on November 2, 2026. These are the
+        # supported macOS 15 images for both architectures. The deployment target stays
+        # macOS 14, but no CI job runs on macOS 14.
         runner:
-          - macos-14
-          - macos-15
+          - macos-15        # Apple silicon (arm64)
+          - macos-15-intel  # Intel (x86_64)
     permissions:
       contents: read
 
@@ -93,6 +96,7 @@ jobs:
         run: |
           xcodebuild -version
           swift --version
+          uname -m
 
       - name: Build
         run: swift build

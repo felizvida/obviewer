@@ -79,7 +79,7 @@ Everything pushed to GitHub, and everything attached to a release, is checked by
 
 - **Publication policy:** Ubuntu with tesseract and poppler.
 - **Renderer:** Node 22: `npm ci`, `npm test`, bundle check.
-- **Swift Package:** GitHub's macOS 14 and 15 runners run `swift build` and `swift test`.
+- **Swift Package:** `swift build` and `swift test` on GitHub's macOS 15 runners, Apple silicon (`macos-15`) and Intel (`macos-15-intel`). GitHub retired its macOS 14 runners on November 2, 2026, so nothing in CI runs on macOS 14, even though it is the deployment target.
 - **Scaffolding:** entitlement checks, script syntax, XcodeGen, and an unsigned Xcode compile of the app.
 - **Benchmarks:** the smoke profile is enforced by `Configuration/benchmark-smoke-budget.json`; the integration profile reports only.
 

@@ -8,7 +8,7 @@ This page records what works and has been checked, what is known to be limited, 
 
 - **Automated:** Swift tests (`swift test`: 132 passing on the maintainer's Mac, including packaging, linkage and publication-gate tests) and Node tests (`cd Renderer && npm test`: 86, covering the renderer, the publication check and the release-script gates (run against mock tools)). `node build.mjs --check` confirms that the committed reader bundle matches its source. `node scripts/publication-check.mjs --tracked` passes.
 - **Manual:** the checklist in [`VERIFICATION.md`](./VERIFICATION.md), run on the maintainer's Mac (Apple silicon, macOS 26.7, Xcode 27.2) with a Debug build, using the notes in `Fixtures/notes/` and a generated demo vault.
-- **Not yet run on:** macOS 14 or 15, Intel Macs, or a second Mac with an installed release build. CI compiles on GitHub's macOS 14 and 15 runners but doesn't launch the app.
+- **Not yet run on:** macOS 14 or 15, Intel Macs, or a second Mac with an installed release build. CI builds and runs the Swift tests on GitHub's macOS 15 runners, Apple silicon and Intel, but never launches the app. GitHub no longer offers macOS 14 runners, so macOS 14, the deployment target, is untested.
 
 ## Works and verified on a Mac
 
