@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Resolved once, when this file is sourced, so later `cd`s can't change it.
+OBVIEWER_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 repo_root() {
-  cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd
+  printf '%s\n' "$OBVIEWER_REPO_ROOT"
 }
 
 default_app_path() {
@@ -53,7 +56,7 @@ notarized_dmg_path() {
 #     pipefail reports as a failure (or, inverted, masks a match).
 #   - A tool that fails is a failed check, never "nothing found".
 # Tool paths can be overridden (tests use mocks): CODESIGN, OTOOL, XATTR,
-# PLISTBUDDY, PLUTIL, HDIUTIL, MDUTIL, CMP.
+# PLISTBUDDY, PLUTIL, HDIUTIL, MDUTIL, CMP, FIND, GIT.
 
 : "${CODESIGN:=codesign}"
 : "${OTOOL:=otool}"
@@ -63,6 +66,8 @@ notarized_dmg_path() {
 : "${HDIUTIL:=hdiutil}"
 : "${MDUTIL:=mdutil}"
 : "${CMP:=cmp}"
+: "${FIND:=find}"
+: "${GIT:=git}"
 
 APP_ALLOWED_ENTITLEMENTS="com.apple.security.app-sandbox com.apple.security.files.user-selected.read-only com.apple.security.print com.apple.security.network.client"
 EXTENSION_ALLOWED_ENTITLEMENTS="com.apple.security.app-sandbox com.apple.security.files.user-selected.read-only"
@@ -131,29 +136,47 @@ verify_signed_app_bundle() {
 
 # The shipped icon must be byte-for-byte the committed App/AppIcon.icns, the file
 # the publication check inspects rendition by rendition. A compiled asset catalog
-# (Assets.car) is an undocumented container that check can't inspect, so none may ship.
+# (*.car) is an undocumented container that check can't inspect, so none may ship,
+# in the app or in any bundle inside it. OBVIEWER_SOURCE_ICON is a test hook; with
+# the default, the icon must also match HEAD (no uncommitted, unscanned edits).
 verify_icon_payload() {
   local app_path="$1"
-  local resources="$app_path/Contents/Resources"
-  local source_icon="${OBVIEWER_SOURCE_ICON:-$(repo_root)/App/AppIcon.icns}"
-  if [ -e "$resources/Assets.car" ]; then
-    verification_failed "Compiled asset catalog found at $resources/Assets.car; the publication check cannot inspect it. Ship App/AppIcon.icns instead."
+  local shipped_icon="$app_path/Contents/Resources/AppIcon.icns"
+  local source_icon="${OBVIEWER_SOURCE_ICON:-}"
+  local cars
+  if ! cars="$("$FIND" "$app_path" -name '*.car' -print 2>&1)"; then
+    verification_failed "Could not search $app_path for compiled asset catalogs: $cars"
     return 1
   fi
-  if [ ! -f "$source_icon" ]; then
+  if [ -n "$cars" ]; then
+    verification_failed "Compiled asset catalog found; the publication check cannot inspect it. Ship App/AppIcon.icns instead:
+$cars"
+    return 1
+  fi
+  if [ -z "$source_icon" ]; then
+    source_icon="$(repo_root)/App/AppIcon.icns"
+    local status=0
+    "$GIT" -C "$(repo_root)" diff --quiet HEAD -- App/AppIcon.icns || status=$?
+    case "$status" in
+      0) ;;
+      1) verification_failed "App/AppIcon.icns has uncommitted changes; package only the committed, scanned icon."; return 1 ;;
+      *) verification_failed "Could not confirm App/AppIcon.icns matches HEAD (git exit $status)"; return 1 ;;
+    esac
+  fi
+  if [ ! -f "$source_icon" ] || [ -L "$source_icon" ]; then
     verification_failed "Source icon not found at $source_icon"
     return 1
   fi
-  if [ ! -f "$resources/AppIcon.icns" ]; then
-    verification_failed "App icon not found at $resources/AppIcon.icns"
+  if [ -L "$shipped_icon" ] || [ ! -f "$shipped_icon" ]; then
+    verification_failed "App icon not found at $shipped_icon (or it is a link)"
     return 1
   fi
-  local status=0
-  "$CMP" -s "$source_icon" "$resources/AppIcon.icns" || status=$?
-  case "$status" in
+  local compare=0
+  "$CMP" -s -- "$source_icon" "$shipped_icon" || compare=$?
+  case "$compare" in
     0) ;;
-    1) verification_failed "$resources/AppIcon.icns differs from the committed $source_icon"; return 1 ;;
-    *) verification_failed "Could not compare $resources/AppIcon.icns with $source_icon (cmp exit $status)"; return 1 ;;
+    1) verification_failed "$shipped_icon differs from the committed $source_icon"; return 1 ;;
+    *) verification_failed "Could not compare $shipped_icon with $source_icon (cmp exit $compare)"; return 1 ;;
   esac
 }
 

@@ -17,11 +17,15 @@
 //                  text drawn as paths can't be inspected.
 //   PNG / JPEG     OCR (tesseract) of the pixels + structured metadata chunks
 //   ICNS           Apple icons that hold only PNG renditions, one per known slot,
-//                  each the slot's exact size; every rendition goes through the PNG
-//                  inspector. Anything else in the container (JPEG 2000, legacy
-//                  RLE/ARGB data, TOC, version, name or info chunks, nested dark
-//                  variants, duplicates, bad lengths) is refused. Compiled asset
-//                  catalogs (Assets.car) are not supported and fail closed.
+//                  each the slot's exact size and in a strict profile (8-bit RGBA,
+//                  not interlaced, only IHDR/IDAT/IEND, valid CRCs, nothing after
+//                  IEND), so every byte is pixels. Each rendition is decoded and
+//                  OCRed twice, flattened on white and on black (light text on
+//                  transparency is readable on a dark Dock), enlarged when small.
+//                  Anything else in the container (JPEG 2000, legacy RLE/ARGB data,
+//                  TOC, version, name or info chunks, nested dark variants,
+//                  duplicates, bad lengths) is refused. Compiled asset catalogs
+//                  (Assets.car) are not supported and fail closed.
 //   PDF            text layer (pdftotext), metadata (pdfinfo), and OCR of every
 //                  rendered page (pdftoppm + tesseract)
 //   Mach-O         string sections, symbol table, load-command strings and code
@@ -60,7 +64,7 @@ import { existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, readlink
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { brotliDecompressSync, gunzipSync, inflateRawSync, inflateSync } from 'node:zlib';
+import { brotliDecompressSync, deflateSync, gunzipSync, inflateRawSync, inflateSync } from 'node:zlib';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_POLICY = join(here, '..', 'Configuration', 'publication-policy.json');
@@ -305,6 +309,146 @@ const ICNS_PNG_SLOTS = new Map([
   ['icp4', 16], ['icp5', 32], ['icp6', 64], ['ic07', 128], ['ic08', 256], ['ic09', 512], ['ic10', 1024],
   ['ic11', 32], ['ic12', 64], ['ic13', 256], ['ic14', 512],
 ]);
+
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(buffer) {
+  let c = 0xffffffff;
+  for (const byte of buffer) c = CRC_TABLE[(c ^ byte) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+/**
+ * Decodes a PNG held to the strict ICNS-rendition profile: IHDR (8-bit RGBA, not
+ * interlaced) first and once, IDAT chunks back to back, IEND last with nothing after
+ * it, every CRC valid, no other chunk types. Returns { width, height, pixels } (RGBA).
+ */
+export function strictRGBAPNG(png) {
+  if (png.length < 8 || png.readUInt32BE(0) !== 0x89504e47 || png.readUInt32BE(4) !== 0x0d0a1a0a) {
+    throw new Unsupported('not a PNG');
+  }
+  let offset = 8;
+  let header = null;
+  const idat = [];
+  let sawIEND = false;
+  let previous = '';
+  while (offset < png.length) {
+    if (sawIEND) throw new Unsupported('PNG has data after IEND');
+    if (offset + 12 > png.length) throw new Unsupported('truncated PNG chunk');
+    const length = png.readUInt32BE(offset);
+    if (offset + 12 + length > png.length) throw new Unsupported('PNG chunk runs past the end');
+    const type = png.toString('latin1', offset + 4, offset + 8);
+    const data = png.subarray(offset + 8, offset + 8 + length);
+    if (crc32(png.subarray(offset + 4, offset + 8 + length)) !== png.readUInt32BE(offset + 8 + length)) {
+      throw new Unsupported(`PNG chunk ${JSON.stringify(type)} has a bad CRC`);
+    }
+    if (type === 'IHDR') {
+      if (header || offset !== 8 || length !== 13) throw new Unsupported('PNG IHDR must come first, once');
+      header = {
+        width: data.readUInt32BE(0), height: data.readUInt32BE(4),
+        depth: data[8], color: data[9], compression: data[10], filter: data[11], interlace: data[12],
+      };
+      if (header.depth !== 8 || header.color !== 6 || header.compression !== 0 || header.filter !== 0 || header.interlace !== 0) {
+        throw new Unsupported('icon PNG must be 8-bit RGBA, not interlaced');
+      }
+      if (header.width === 0 || header.height === 0 || header.width > 4096 || header.height > 4096) {
+        throw new Unsupported('icon PNG has unsupported dimensions');
+      }
+    } else if (type === 'IDAT') {
+      if (!header || (idat.length > 0 && previous !== 'IDAT')) throw new Unsupported('PNG IDAT chunks must follow IHDR, back to back');
+      idat.push(data);
+    } else if (type === 'IEND') {
+      if (idat.length === 0 || length !== 0) throw new Unsupported('PNG IEND must close the image data');
+      sawIEND = true;
+    } else {
+      throw new Unsupported(`icon PNG chunk ${JSON.stringify(type)} is not allowed`);
+    }
+    previous = type;
+    offset += 12 + length;
+  }
+  if (!sawIEND) throw new Unsupported('PNG has no IEND');
+
+  const { width, height } = header;
+  const stride = width * 4;
+  const raw = inflateSync(Buffer.concat(idat), { maxOutputLength: (stride + 1) * height + 1 });
+  if (raw.length !== (stride + 1) * height) throw new Unsupported('PNG image data has the wrong size');
+  const pixels = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y += 1) {
+    const filter = raw[y * (stride + 1)];
+    const line = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
+    const out = y * stride;
+    for (let x = 0; x < stride; x += 1) {
+      const a = x >= 4 ? pixels[out + x - 4] : 0;
+      const b = y > 0 ? pixels[out - stride + x] : 0;
+      const c = x >= 4 && y > 0 ? pixels[out - stride + x - 4] : 0;
+      let predictor;
+      switch (filter) {
+        case 0: predictor = 0; break;
+        case 1: predictor = a; break;
+        case 2: predictor = b; break;
+        case 3: predictor = (a + b) >> 1; break;
+        case 4: {
+          const p = a + b - c;
+          const pa = Math.abs(p - a); const pb = Math.abs(p - b); const pc = Math.abs(p - c);
+          predictor = pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+          break;
+        }
+        default: throw new Unsupported('PNG uses an unknown row filter');
+      }
+      pixels[out + x] = (line[x] + predictor) & 0xff;
+    }
+  }
+  return { width, height, pixels };
+}
+
+/**
+ * Flattens RGBA pixels onto a solid background (0 = black, 255 = white) and enlarges
+ * small images by whole-pixel scaling so OCR sees at least `minSide` pixels. Returns a
+ * greyscale-free RGB PNG buffer for the OCR tool.
+ */
+export function flattenedPNG({ width, height, pixels }, background, minSide = 512) {
+  const scale = Math.max(1, Math.ceil(minSide / Math.min(width, height)));
+  const outWidth = width * scale;
+  const outHeight = height * scale;
+  const rows = Buffer.alloc((outWidth * 3 + 1) * outHeight);
+  for (let y = 0; y < outHeight; y += 1) {
+    const sy = Math.floor(y / scale);
+    const rowStart = y * (outWidth * 3 + 1);
+    rows[rowStart] = 0;
+    for (let x = 0; x < outWidth; x += 1) {
+      const source = (sy * width + Math.floor(x / scale)) * 4;
+      const alpha = pixels[source + 3];
+      for (let channel = 0; channel < 3; channel += 1) {
+        rows[rowStart + 1 + x * 3 + channel] = Math.round((pixels[source + channel] * alpha + background * (255 - alpha)) / 255);
+      }
+    }
+  }
+  const chunk = (type, data) => {
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body));
+    return Buffer.concat([length, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(outWidth, 0);
+  ihdr.writeUInt32BE(outHeight, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 2;
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr), chunk('IDAT', deflateSync(rows)), chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
 
 /**
  * Apple icon (.icns) container. Returns its PNG renditions for the PNG inspector,
@@ -699,11 +843,11 @@ export function classify(buffer, name = '') {
   if (buffer.length >= 8 && buffer.readUInt32BE(0) === 0x89504e47) return 'png';
   if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'jpeg';
   if (buffer.length >= 5 && buffer.toString('latin1', 0, 5) === '%PDF-') return 'pdf';
-  if (buffer.length >= 8 && buffer.toString('latin1', 0, 4) === 'icns') return 'icns';
   if (buffer.length >= 4 && buffer.readUInt32LE(0) === 0x04034b50) return 'zip';
   if (buffer.length >= 22 && buffer.readUInt32LE(0) === 0x06054b50) return 'zip';
   if (buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b) return 'gzip';
   if (buffer.length >= 262 && buffer.toString('latin1', 257, 262) === 'ustar') return 'tar';
+  if (buffer.length >= 8 && buffer.toString('latin1', 0, 4) === 'icns' && buffer.readUInt32BE(4) === buffer.length) return 'icns';
   if (buffer.length >= 8 && buffer.toString('latin1', 0, 8) === 'bplist00') return 'bplist';
   if (buffer.length >= 8) {
     const be = buffer.readUInt32BE(0);
@@ -804,7 +948,7 @@ export class Scanner {
           this.withFile(buffer, diskPath, kind === 'png' ? '.png' : '.jpg', (file) => this.scanString(`${label} (image text)`, this.tools.ocr(file)));
           return;
         case 'icns':
-          for (const { type, data } of icnsRenditions(buffer)) this.scanBuffer(data, `${label}#${type}`, depth + 1);
+          this.scanICNS(buffer, label);
           return;
         case 'pdf':
           this.withFile(buffer, diskPath, '.pdf', (file) => {
@@ -841,6 +985,22 @@ export class Scanner {
           throw new Unsupported('unsupported binary format');
       }
     });
+  }
+
+  /** Every ICNS rendition is decoded (strict profile) and OCRed on white and on black. */
+  scanICNS(buffer, label) {
+    for (const { type, data } of icnsRenditions(buffer)) {
+      const where = `${label}#${type}`;
+      this.fileCount += 1;
+      this.guard(where, () => {
+        const image = strictRGBAPNG(data);
+        for (const [name, background] of [['white', 255], ['black', 0]]) {
+          this.withFile(flattenedPNG(image, background), null, '.png', (file) => {
+            this.scanString(`${where} (image text on ${name})`, this.tools.ocr(file));
+          });
+        }
+      });
+    }
   }
 
   withFile(buffer, diskPath, extension, work) {

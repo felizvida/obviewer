@@ -33,10 +33,15 @@ function setup(options = {}) {
   writeFileSync(join(app, 'Contents', 'PlugIns', 'ObviewerQuickLook.appex', 'Contents', 'MacOS', 'ObviewerQuickLook'), 'binary');
   mkdirSync(join(app, 'Contents', 'Resources'), { recursive: true });
   writeFileSync(join(root, 'source.icns'), 'icns committed icon bytes');
-  if (options.icon !== 'missing') {
+  if (options.icon !== 'missing' && !options.iconLink) {
     writeFileSync(join(app, 'Contents', 'Resources', 'AppIcon.icns'), options.icon === 'different' ? 'icns some other bytes' : 'icns committed icon bytes');
   }
   if (options.assetsCar) writeFileSync(join(app, 'Contents', 'Resources', 'Assets.car'), 'BOMStore');
+  if (options.extensionAssetsCar) {
+    mkdirSync(join(app, 'Contents', 'PlugIns', 'ObviewerQuickLook.appex', 'Contents', 'Resources'), { recursive: true });
+    writeFileSync(join(app, 'Contents', 'PlugIns', 'ObviewerQuickLook.appex', 'Contents', 'Resources', 'Assets.car'), 'BOMStore');
+  }
+  if (options.iconLink) symlinkSync(join(root, 'source.icns'), join(app, 'Contents', 'Resources', 'AppIcon.icns'));
   if (options.framework) mkdirSync(join(app, 'Contents', 'Frameworks', 'Bad.framework'), { recursive: true });
   if (options.applicationsLink !== false) symlinkSync('/Applications', join(root, 'content', 'Applications'));
   if (options.readme !== false) writeFileSync(join(root, 'content', 'Read Me First - How to Install.md'), 'guide');
@@ -105,11 +110,18 @@ echo "$2/Contents/MacOS/Obviewer: com.apple.provenance:"
 exit 0`);
   // cmp: compares two files like 'cmp -s' (0 same, 1 different, 2 trouble).
   tool('cmp', `
-[ "$1" = -s ] || { echo "mock cmp: expected -s" >&2; exit 2; }
+[ "$1 $2" = "-s --" ] || { echo "mock cmp: expected -s --" >&2; exit 2; }
 [ "\${MOCK_CMP_FAIL:-0}" = 1 ] && exit 2
-[ -f "$2" ] && [ -f "$3" ] || exit 2
-[ "$(cat "$2")" = "$(cat "$3")" ] && exit 0
+[ -f "$3" ] && [ -f "$4" ] || exit 2
+[ "$(cat "$3")" = "$(cat "$4")" ] && exit 0
 exit 1`);
+  // git: only 'diff --quiet HEAD -- App/AppIcon.icns' is expected; MOCK_GIT_DIFF sets its exit.
+  tool('git', `
+case "$*" in
+  *"diff --quiet HEAD -- App/AppIcon.icns") exit "\${MOCK_GIT_DIFF:-0}" ;;
+esac
+echo "mock git: unexpected arguments: $*" >&2
+exit 2`);
   // mdutil: records its arguments; a unit test must never reach the real Spotlight service.
   tool('mdutil', `echo "$*" >> "${join(root, 'mdutil.log')}"; exit 0`);
   // hdiutil: "attach" populates the mount point from the content folder.
@@ -138,6 +150,7 @@ function run(env, script) {
       HDIUTIL: join(env.bin, 'hdiutil'),
       MDUTIL: join(env.bin, 'mdutil'),
       CMP: join(env.bin, 'cmp'),
+      GIT: join(env.bin, 'git'),
       OBVIEWER_SOURCE_ICON: join(env.root, 'source.icns'),
       OBVIEWER_CODE_SIGN_IDENTITY: '-',
       TMPDIR: env.root,
@@ -202,10 +215,17 @@ const failures = [
   ['Finder information', {}, { MOCK_FINDERINFO: '1' }, /Finder information or resource forks/],
   ['xattr failure', {}, { MOCK_XATTR_FAIL: '1' }, /Could not list extended attributes/],
   ['compiled asset catalog shipped', { assetsCar: true }, {}, /Compiled asset catalog found/],
+  ['asset catalog inside the extension', { extensionAssetsCar: true }, {}, /Compiled asset catalog found[\s\S]*ObviewerQuickLook\.appex/],
+  ['app icon is a link', { iconLink: true }, {}, /App icon not found .*or it is a link/],
   ['app icon missing', { icon: 'missing' }, {}, /App icon not found/],
   ['app icon differs from the committed file', { icon: 'different' }, {}, /differs from the committed/],
   ['icon comparison tool failure', {}, { MOCK_CMP_FAIL: '1' }, /Could not compare .*cmp exit 2/],
   ['committed icon missing', {}, { OBVIEWER_SOURCE_ICON: '/nonexistent/AppIcon.icns' }, /Source icon not found/],
+  ['default source icon: uncommitted icon edits', {}, { OBVIEWER_SOURCE_ICON: '', MOCK_GIT_DIFF: '1' }, /uncommitted changes/],
+  ['default source icon: git failure', {}, { OBVIEWER_SOURCE_ICON: '', MOCK_GIT_DIFF: '128' }, /Could not confirm App\/AppIcon\.icns matches HEAD/],
+  // With the default path (no test hook), the real repository icon is the reference;
+  // the fake bundle's icon differs from it, which proves the default path is used.
+  ['default source icon: shipped icon differs from the repository icon', {}, { OBVIEWER_SOURCE_ICON: '' }, /differs from the committed .*\/App\/AppIcon\.icns/],
 ];
 
 for (const [name, options, extra, reason] of failures) {

@@ -8,9 +8,10 @@ import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { brotliCompressSync, deflateSync, gzipSync } from 'node:zlib';
+import { brotliCompressSync, deflateSync, gzipSync, inflateSync } from 'node:zlib';
 import {
-  DEFAULT_POLICY, Scanner, classify, compilePolicy, fingerprint, fontText, icnsRenditions, imageMetadataText,
+  DEFAULT_POLICY, Scanner, classify, compilePolicy, fingerprint, flattenedPNG, fontText, icnsRenditions, imageMetadataText,
+  strictRGBAPNG,
   loadPolicy, machOText, scanText, tarEntries, wordParts, zipEntries,
 } from '../../scripts/publication-check.mjs';
 
@@ -311,21 +312,40 @@ test('archives: traversal, absolute paths and links are refused, never extracted
 // ---------------------------------------------------------------------------
 // ICNS (app icons)
 
-function pngChunk(type, data) {
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+const crc32 = (buffer) => {
+  let c = 0xffffffff;
+  for (const byte of buffer) c = CRC_TABLE[(c ^ byte) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+};
+
+function pngChunk(type, data, { badCRC = false } = {}) {
   const length = Buffer.alloc(4);
   length.writeUInt32BE(data.length);
-  return Buffer.concat([length, Buffer.from(type, 'latin1'), data, Buffer.alloc(4)]);
+  const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(badCRC ? 0 : crc32(body));
+  return Buffer.concat([length, body, crc]);
 }
 
-function tinyPNG(size, extraChunks = []) {
+/** A valid strict-profile PNG: 8-bit RGBA, transparent except one opaque white pixel. */
+function iconPNG(size, { colorType = 6, interlace = 0, before = [], after = [], trailing = null, badCRC = false } = {}) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(size, 0);
   ihdr.writeUInt32BE(size, 4);
   ihdr[8] = 8;
-  ihdr[9] = 6;
+  ihdr[9] = colorType;
+  ihdr[12] = interlace;
+  const rows = Buffer.alloc((size * 4 + 1) * size);
+  rows.fill(255, 1, 5); // first pixel opaque white
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    pngChunk('IHDR', ihdr), ...extraChunks, pngChunk('IDAT', Buffer.alloc(4)), pngChunk('IEND', Buffer.alloc(0)),
+    pngChunk('IHDR', ihdr), ...before, pngChunk('IDAT', deflateSync(rows), { badCRC }), ...after,
+    pngChunk('IEND', Buffer.alloc(0)), ...(trailing ? [trailing] : []),
   ]);
 }
 
@@ -344,49 +364,94 @@ function icns(chunks, { declaredLength } = {}) {
 
 const cleanOCR = () => 'nothing here';
 
-test('ICNS: every PNG rendition is inspected (metadata and OCR)', () => {
+test('ICNS: every rendition is decoded and OCRed on white and on black', () => {
   const ocrCalls = [];
   const file = icns([
-    { type: 'icp4', data: tinyPNG(16) },
-    { type: 'ic07', data: tinyPNG(128, [pngChunk('tEXt', Buffer.from(`Comment\0${SHORT.toUpperCase()}`, 'latin1'))]) },
-    { type: 'ic12', data: tinyPNG(64) },
+    { type: 'icp4', data: iconPNG(16) },
+    { type: 'ic07', data: iconPNG(128) },
+    { type: 'ic12', data: iconPNG(64) },
   ]);
   assert.equal(classify(file, 'AppIcon.icns'), 'icns');
   assert.deepEqual(icnsRenditions(file).map((r) => r.type), ['icp4', 'ic07', 'ic12']);
-  const scanner = scanBuffer(file, 'AppIcon.icns', { ocr: (path) => { ocrCalls.push(path); return cleanOCR(); } });
-  assert.equal(ocrCalls.length, 3, 'each rendition is OCRed, not only the largest');
-  assert.deepEqual(scanner.findings.map((f) => [f.where, f.rule]), [['AppIcon.icns#ic07 (metadata)', 'A']]);
-  assert.equal(scanner.incomplete.length, 0);
+  const scanner = scanBuffer(file, 'AppIcon.icns', { ocr: (path) => { ocrCalls.push(readFileSync(path)); return cleanOCR(); } });
+  assert.equal(scanner.exitCode, 0, JSON.stringify(scanner.incomplete));
+  assert.equal(ocrCalls.length, 6, 'each rendition is OCRed twice, not only the largest');
+  assert.equal(scanner.fileCount, 4);
 
-  const drawn = scanBuffer(icns([{ type: 'icp4', data: tinyPNG(16) }, { type: 'ic08', data: tinyPNG(256) }]), 'AppIcon.icns', {
-    ocr: () => `DRAWN ${FIVE.toUpperCase()}`,
+  const drawn = scanBuffer(icns([{ type: 'icp4', data: iconPNG(16) }, { type: 'ic08', data: iconPNG(256) }]), 'AppIcon.icns', {
+    ocr: (path) => (readFileSync(path).length > 0 ? `DRAWN ${FIVE.toUpperCase()}` : ''),
   });
-  assert.deepEqual(drawn.findings.map((f) => f.where), ['AppIcon.icns#icp4 (image text)', 'AppIcon.icns#ic08 (image text)']);
+  assert.deepEqual(drawn.findings.map((f) => f.where), [
+    'AppIcon.icns#icp4 (image text on white)', 'AppIcon.icns#icp4 (image text on black)',
+    'AppIcon.icns#ic08 (image text on white)', 'AppIcon.icns#ic08 (image text on black)',
+  ]);
+});
+
+test('ICNS: transparency is flattened on both backgrounds, and small renditions are enlarged', () => {
+  const image = strictRGBAPNG(iconPNG(16));
+  assert.equal(image.width, 16);
+  assert.deepEqual([...image.pixels.subarray(0, 8)], [255, 255, 255, 255, 0, 0, 0, 0]);
+  for (const [background, expected] of [[255, 255], [0, 0]]) {
+    const flat = flattenedPNG(image, background);
+    assert.equal(flat.readUInt32BE(16), 512, 'enlarged for OCR');
+    const ihdrEnd = 8 + 25;
+    const idatLength = flat.readUInt32BE(ihdrEnd);
+    const rows = inflateSync(flat.subarray(ihdrEnd + 8, ihdrEnd + 8 + idatLength));
+    const lastPixel = rows.subarray(rows.length - 3);
+    assert.deepEqual([...lastPixel], [expected, expected, expected], 'a transparent pixel takes the background');
+  }
 });
 
 test('ICNS: anything not completely inspectable fails closed', () => {
   const jpeg2000 = Buffer.from([0, 0, 0, 0x0c, 0x6a, 0x50, 0x20, 0x20, 0x0d, 0x0a, 0x87, 0x0a, ...Buffer.alloc(40)]);
-  const cases = {
+  const one = (data, type = 'ic07') => icns([{ type, data }]);
+  const containers = {
     'empty container': icns([]),
     'legacy RLE data': icns([{ type: 'is32', data: Buffer.alloc(64) }]),
-    'info plist chunk': icns([{ type: 'ic07', data: tinyPNG(128) }, { type: 'info', data: Buffer.from('<plist/>') }]),
-    'table of contents': icns([{ type: 'TOC ', data: Buffer.alloc(8) }, { type: 'ic07', data: tinyPNG(128) }]),
-    'version chunk': icns([{ type: 'icnV', data: Buffer.alloc(4) }, { type: 'ic07', data: tinyPNG(128) }]),
+    'info plist chunk': icns([{ type: 'ic07', data: iconPNG(128) }, { type: 'info', data: Buffer.from('<plist/>') }]),
+    'table of contents': icns([{ type: 'TOC ', data: Buffer.alloc(8) }, { type: 'ic07', data: iconPNG(128) }]),
+    'version chunk': icns([{ type: 'icnV', data: Buffer.alloc(4) }, { type: 'ic07', data: iconPNG(128) }]),
     'JPEG 2000 in a PNG slot': icns([{ type: 'ic10', data: jpeg2000 }]),
-    'wrong size for the slot': icns([{ type: 'ic07', data: tinyPNG(16) }]),
-    '@2x slot at 1x size': icns([{ type: 'ic11', data: tinyPNG(16) }]),
-    'duplicate slot': icns([{ type: 'icp4', data: tinyPNG(16) }, { type: 'icp4', data: tinyPNG(16) }]),
-    'declared length mismatch': icns([{ type: 'icp4', data: tinyPNG(16) }], { declaredLength: 9999 }),
-    'chunk runs past the end': icns([{ type: 'icp4', data: tinyPNG(16), length: 4096 }], { declaredLength: undefined }),
-    'chunk length below 8': icns([{ type: 'icp4', data: tinyPNG(16), length: 4 }]),
-    'trailing partial header': Buffer.concat([icns([{ type: 'icp4', data: tinyPNG(16) }]), Buffer.alloc(3)]),
+    'wrong size for the slot': one(iconPNG(16)),
+    '@2x slot at 1x size': one(iconPNG(16), 'ic11'),
+    'duplicate slot': icns([{ type: 'icp4', data: iconPNG(16) }, { type: 'icp4', data: iconPNG(16) }]),
+    'chunk runs past the end': icns([{ type: 'icp4', data: iconPNG(16), length: 4096 }]),
+    'chunk length below 8': icns([{ type: 'icp4', data: iconPNG(16), length: 4 }]),
   };
-  for (const [name, file] of Object.entries(cases)) {
-    if (name === 'trailing partial header') file.writeUInt32BE(file.length, 4);
+  const truncated = Buffer.concat([icns([{ type: 'icp4', data: iconPNG(16) }]), Buffer.alloc(3)]);
+  truncated.writeUInt32BE(truncated.length, 4);
+  containers['trailing partial header'] = truncated;
+  for (const [name, file] of Object.entries(containers)) {
     const scanner = scanBuffer(file, 'AppIcon.icns', { ocr: cleanOCR });
     assert.equal(scanner.exitCode, 2, name);
     assert.ok(scanner.incomplete.some((i) => i.where === 'AppIcon.icns'), name);
   }
+  // A declared length that doesn't match the file means it isn't treated as ICNS at all.
+  const mismatch = scanBuffer(icns([{ type: 'icp4', data: iconPNG(16) }], { declaredLength: 9999 }), 'AppIcon.icns', { ocr: cleanOCR });
+  assert.equal(mismatch.exitCode, 2);
+  assert.match(mismatch.incomplete[0].reason, /unsupported binary/);
+
+  // Inside a rendition, only IHDR/IDAT/IEND in the strict profile are accepted.
+  const hidden = Buffer.from(`hidden ${SHORT}`);
+  const renditions = {
+    'data after IEND': iconPNG(128, { trailing: hidden }),
+    'private ancillary chunk': iconPNG(128, { before: [pngChunk('prVt', hidden)] }),
+    'text chunk': iconPNG(128, { before: [pngChunk('tEXt', Buffer.concat([Buffer.from('Comment\0'), hidden]))] }),
+    'ICC profile chunk': iconPNG(128, { before: [pngChunk('iCCP', Buffer.concat([hidden, Buffer.from([0, 0])]))] }),
+    'animation frames': iconPNG(128, { before: [pngChunk('acTL', Buffer.alloc(8))], after: [pngChunk('fdAT', Buffer.alloc(30))] }),
+    'bad CRC': iconPNG(128, { badCRC: true }),
+    'palette image': iconPNG(128, { colorType: 3 }),
+    'interlaced image': iconPNG(128, { interlace: 1 }),
+  };
+  for (const [name, png] of Object.entries(renditions)) {
+    const scanner = scanBuffer(one(png), 'AppIcon.icns', { ocr: cleanOCR });
+    assert.equal(scanner.exitCode, 2, name);
+    assert.ok(scanner.incomplete.some((i) => i.where === 'AppIcon.icns#ic07'), name);
+  }
+});
+
+test('text and tar archives that merely start with "icns" are not taken for icons', () => {
+  assert.equal(classify(Buffer.from('icns are small pictures\n'), 'notes.txt'), 'text');
 });
 
 test('compiled asset catalogs (Assets.car) stay unsupported', () => {
