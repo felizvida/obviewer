@@ -16,6 +16,12 @@
 //   text           UTF-8 text (source, docs, JSON, plists in XML). SVG is refused:
 //                  text drawn as paths can't be inspected.
 //   PNG / JPEG     OCR (tesseract) of the pixels + structured metadata chunks
+//   ICNS           Apple icons that hold only PNG renditions, one per known slot,
+//                  each the slot's exact size; every rendition goes through the PNG
+//                  inspector. Anything else in the container (JPEG 2000, legacy
+//                  RLE/ARGB data, TOC, version, name or info chunks, nested dark
+//                  variants, duplicates, bad lengths) is refused. Compiled asset
+//                  catalogs (Assets.car) are not supported and fail closed.
 //   PDF            text layer (pdftotext), metadata (pdfinfo), and OCR of every
 //                  rendered page (pdftoppm + tesseract)
 //   Mach-O         string sections, symbol table, load-command strings and code
@@ -292,6 +298,49 @@ export function imageMetadataText(buffer) {
     return texts.join('\n');
   }
   throw new Unsupported('image metadata format not supported (only PNG and JPEG)');
+}
+
+// ICNS slot type -> pixel size. Only these slots, and only PNG payloads, are accepted.
+const ICNS_PNG_SLOTS = new Map([
+  ['icp4', 16], ['icp5', 32], ['icp6', 64], ['ic07', 128], ['ic08', 256], ['ic09', 512], ['ic10', 1024],
+  ['ic11', 32], ['ic12', 64], ['ic13', 256], ['ic14', 512],
+]);
+
+/**
+ * Apple icon (.icns) container. Returns its PNG renditions for the PNG inspector,
+ * or throws Unsupported for anything that can't be inspected completely.
+ */
+export function icnsRenditions(buffer) {
+  if (buffer.length < 8 || buffer.toString('latin1', 0, 4) !== 'icns') throw new Unsupported('not an ICNS file');
+  if (buffer.readUInt32BE(4) !== buffer.length) throw new Unsupported('ICNS length does not match the file size');
+  const renditions = [];
+  const seen = new Set();
+  let offset = 8;
+  while (offset < buffer.length) {
+    if (offset + 8 > buffer.length) throw new Unsupported('truncated ICNS chunk header');
+    const type = buffer.toString('latin1', offset, offset + 4);
+    const length = buffer.readUInt32BE(offset + 4);
+    const label = JSON.stringify(type);
+    if (length < 8 || offset + length > buffer.length) throw new Unsupported(`ICNS chunk ${label} has a bad length`);
+    const size = ICNS_PNG_SLOTS.get(type);
+    if (size === undefined) throw new Unsupported(`ICNS chunk ${label} cannot be inspected (only PNG icon slots are supported)`);
+    if (seen.has(type)) throw new Unsupported(`ICNS chunk ${label} appears more than once`);
+    seen.add(type);
+    const data = buffer.subarray(offset + 8, offset + length);
+    const isPNG = data.length >= 33
+      && data.readUInt32BE(0) === 0x89504e47 && data.readUInt32BE(4) === 0x0d0a1a0a
+      && data.readUInt32BE(8) === 13 && data.toString('latin1', 12, 16) === 'IHDR';
+    if (!isPNG) throw new Unsupported(`ICNS chunk ${label} is not a PNG (JPEG 2000 and raw icon data cannot be inspected)`);
+    const width = data.readUInt32BE(16);
+    const height = data.readUInt32BE(20);
+    if (width !== size || height !== size) {
+      throw new Unsupported(`ICNS chunk ${label} is ${width}x${height}, expected ${size}x${size}`);
+    }
+    renditions.push({ type, data });
+    offset += length;
+  }
+  if (renditions.length === 0) throw new Unsupported('ICNS file has no icon renditions');
+  return renditions;
 }
 
 const MACHO_TEXT_SECTIONS = new Set([
@@ -650,6 +699,7 @@ export function classify(buffer, name = '') {
   if (buffer.length >= 8 && buffer.readUInt32BE(0) === 0x89504e47) return 'png';
   if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'jpeg';
   if (buffer.length >= 5 && buffer.toString('latin1', 0, 5) === '%PDF-') return 'pdf';
+  if (buffer.length >= 8 && buffer.toString('latin1', 0, 4) === 'icns') return 'icns';
   if (buffer.length >= 4 && buffer.readUInt32LE(0) === 0x04034b50) return 'zip';
   if (buffer.length >= 22 && buffer.readUInt32LE(0) === 0x06054b50) return 'zip';
   if (buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b) return 'gzip';
@@ -752,6 +802,9 @@ export class Scanner {
         case 'jpeg':
           this.scanString(`${label} (metadata)`, imageMetadataText(buffer));
           this.withFile(buffer, diskPath, kind === 'png' ? '.png' : '.jpg', (file) => this.scanString(`${label} (image text)`, this.tools.ocr(file)));
+          return;
+        case 'icns':
+          for (const { type, data } of icnsRenditions(buffer)) this.scanBuffer(data, `${label}#${type}`, depth + 1);
           return;
         case 'pdf':
           this.withFile(buffer, diskPath, '.pdf', (file) => {

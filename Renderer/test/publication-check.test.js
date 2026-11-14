@@ -6,10 +6,11 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { brotliCompressSync, deflateSync, gzipSync } from 'node:zlib';
 import {
-  DEFAULT_POLICY, Scanner, classify, compilePolicy, fingerprint, fontText, imageMetadataText,
+  DEFAULT_POLICY, Scanner, classify, compilePolicy, fingerprint, fontText, icnsRenditions, imageMetadataText,
   loadPolicy, machOText, scanText, tarEntries, wordParts, zipEntries,
 } from '../../scripts/publication-check.mjs';
 
@@ -305,6 +306,103 @@ test('archives: traversal, absolute paths and links are refused, never extracted
   assert.throws(() => tarEntries(tar([{ name: 'evil', type: '2', link: '../../outside' }])), /link/);
   assert.throws(() => tarEntries(tar([{ name: 'dev', type: '3' }])), /special type/);
   assert.equal(tarEntries(tar([{ name: 'ok.txt', data: Buffer.from('fine') }])).length, 1);
+});
+
+// ---------------------------------------------------------------------------
+// ICNS (app icons)
+
+function pngChunk(type, data) {
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  return Buffer.concat([length, Buffer.from(type, 'latin1'), data, Buffer.alloc(4)]);
+}
+
+function tinyPNG(size, extraChunks = []) {
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(size, 0);
+  ihdr.writeUInt32BE(size, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr), ...extraChunks, pngChunk('IDAT', Buffer.alloc(4)), pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+function icns(chunks, { declaredLength } = {}) {
+  const body = Buffer.concat(chunks.map(({ type, data, length }) => {
+    const header = Buffer.alloc(8);
+    header.write(type, 0, 'latin1');
+    header.writeUInt32BE(length ?? data.length + 8, 4);
+    return Buffer.concat([header, data]);
+  }));
+  const header = Buffer.alloc(8);
+  header.write('icns', 0, 'latin1');
+  header.writeUInt32BE(declaredLength ?? body.length + 8, 4);
+  return Buffer.concat([header, body]);
+}
+
+const cleanOCR = () => 'nothing here';
+
+test('ICNS: every PNG rendition is inspected (metadata and OCR)', () => {
+  const ocrCalls = [];
+  const file = icns([
+    { type: 'icp4', data: tinyPNG(16) },
+    { type: 'ic07', data: tinyPNG(128, [pngChunk('tEXt', Buffer.from(`Comment\0${SHORT.toUpperCase()}`, 'latin1'))]) },
+    { type: 'ic12', data: tinyPNG(64) },
+  ]);
+  assert.equal(classify(file, 'AppIcon.icns'), 'icns');
+  assert.deepEqual(icnsRenditions(file).map((r) => r.type), ['icp4', 'ic07', 'ic12']);
+  const scanner = scanBuffer(file, 'AppIcon.icns', { ocr: (path) => { ocrCalls.push(path); return cleanOCR(); } });
+  assert.equal(ocrCalls.length, 3, 'each rendition is OCRed, not only the largest');
+  assert.deepEqual(scanner.findings.map((f) => [f.where, f.rule]), [['AppIcon.icns#ic07 (metadata)', 'A']]);
+  assert.equal(scanner.incomplete.length, 0);
+
+  const drawn = scanBuffer(icns([{ type: 'icp4', data: tinyPNG(16) }, { type: 'ic08', data: tinyPNG(256) }]), 'AppIcon.icns', {
+    ocr: () => `DRAWN ${FIVE.toUpperCase()}`,
+  });
+  assert.deepEqual(drawn.findings.map((f) => f.where), ['AppIcon.icns#icp4 (image text)', 'AppIcon.icns#ic08 (image text)']);
+});
+
+test('ICNS: anything not completely inspectable fails closed', () => {
+  const jpeg2000 = Buffer.from([0, 0, 0, 0x0c, 0x6a, 0x50, 0x20, 0x20, 0x0d, 0x0a, 0x87, 0x0a, ...Buffer.alloc(40)]);
+  const cases = {
+    'empty container': icns([]),
+    'legacy RLE data': icns([{ type: 'is32', data: Buffer.alloc(64) }]),
+    'info plist chunk': icns([{ type: 'ic07', data: tinyPNG(128) }, { type: 'info', data: Buffer.from('<plist/>') }]),
+    'table of contents': icns([{ type: 'TOC ', data: Buffer.alloc(8) }, { type: 'ic07', data: tinyPNG(128) }]),
+    'version chunk': icns([{ type: 'icnV', data: Buffer.alloc(4) }, { type: 'ic07', data: tinyPNG(128) }]),
+    'JPEG 2000 in a PNG slot': icns([{ type: 'ic10', data: jpeg2000 }]),
+    'wrong size for the slot': icns([{ type: 'ic07', data: tinyPNG(16) }]),
+    '@2x slot at 1x size': icns([{ type: 'ic11', data: tinyPNG(16) }]),
+    'duplicate slot': icns([{ type: 'icp4', data: tinyPNG(16) }, { type: 'icp4', data: tinyPNG(16) }]),
+    'declared length mismatch': icns([{ type: 'icp4', data: tinyPNG(16) }], { declaredLength: 9999 }),
+    'chunk runs past the end': icns([{ type: 'icp4', data: tinyPNG(16), length: 4096 }], { declaredLength: undefined }),
+    'chunk length below 8': icns([{ type: 'icp4', data: tinyPNG(16), length: 4 }]),
+    'trailing partial header': Buffer.concat([icns([{ type: 'icp4', data: tinyPNG(16) }]), Buffer.alloc(3)]),
+  };
+  for (const [name, file] of Object.entries(cases)) {
+    if (name === 'trailing partial header') file.writeUInt32BE(file.length, 4);
+    const scanner = scanBuffer(file, 'AppIcon.icns', { ocr: cleanOCR });
+    assert.equal(scanner.exitCode, 2, name);
+    assert.ok(scanner.incomplete.some((i) => i.where === 'AppIcon.icns'), name);
+  }
+});
+
+test('compiled asset catalogs (Assets.car) stay unsupported', () => {
+  const car = Buffer.concat([Buffer.from('BOMStore', 'latin1'), Buffer.from([0, 0, 0, 1, 0xff, 0xfe, 0x80, 0x00]), Buffer.alloc(64)]);
+  const scanner = scanBuffer(car, 'Assets.car', { ocr: cleanOCR });
+  assert.equal(scanner.exitCode, 2);
+  assert.match(scanner.incomplete[0].reason, /unsupported binary/);
+});
+
+test('the committed app icon is a fully inspectable PNG-only ICNS', () => {
+  const file = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'App', 'AppIcon.icns'));
+  const renditions = icnsRenditions(file);
+  assert.equal(renditions.length, 10);
+  const scanner = scanBuffer(file, 'App/AppIcon.icns', { ocr: cleanOCR });
+  assert.equal(scanner.exitCode, 0);
+  assert.equal(scanner.fileCount, 11);
 });
 
 test('git LFS pointers and SVG files are refused as uninspectable', () => {
