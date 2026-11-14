@@ -52,16 +52,19 @@ export function renderHeader(payload, body) {
     parts.push(`<h1 class="note-title">${escapeHtml(payload.title)}</h1>`);
   }
 
+  // One quiet sentence: where the note lives, when it was edited, how long it takes.
+  // The file name itself is left out; the title already names the note.
   const meta = [];
-  if (header.path) meta.push(`<span class="note-path">${escapeHtml(header.path)}</span>`);
-  if (header.readingTime) meta.push(`<span>${escapeHtml(String(header.readingTime))} min read</span>`);
+  const folder = header.path?.includes('/') ? header.path.slice(0, header.path.lastIndexOf('/')) : '';
+  if (folder) meta.push(`<span class="note-path">In ${escapeHtml(folder.split('/').join(' / '))}</span>`);
   if (header.modified) meta.push(`<span>Edited ${escapeHtml(header.modified)}</span>`);
-  if (meta.length) parts.push(`<div class="note-meta">${meta.join('<span class="dot" aria-hidden="true">·</span>')}</div>`);
+  if (header.readingTime) meta.push(`<span>${escapeHtml(String(header.readingTime))} min read</span>`);
+  if (meta.length) parts.push(`<p class="note-meta">${meta.join('. ')}.</p>`);
 
   if (header.tags?.length) {
-    parts.push(`<div class="note-tags">${header.tags
+    parts.push(`<p class="note-tags">${header.tags
       .map((tag) => `<a class="tag" href="#" data-tag="${escapeAttr(tag)}">#${escapeHtml(tag)}</a>`)
-      .join(' ')}</div>`);
+      .join(' ')}</p>`);
   }
 
   if (header.properties?.length) {
@@ -83,7 +86,24 @@ export function renderBacklinks(payload) {
     .map((link) => `<li><a href="#" data-note-id="${escapeAttr(link.noteID)}">${escapeHtml(link.title)}</a>`
       + `${link.path ? ` <span class="backlink-path">${escapeHtml(link.path)}</span>` : ''}</li>`)
     .join('');
-  return `<section class="backlinks" aria-label="Linked mentions"><h2 class="backlinks-title">Linked mentions <span class="count">${backlinks.length}</span></h2><ul>${items}</ul></section>`;
+  return `<section class="backlinks" aria-label="Mentioned in"><h2 class="backlinks-title">Mentioned in</h2><ul>${items}</ul></section>`;
+}
+
+/**
+ * Joins the parts of a built page into the reader's markup. When the note opens
+ * with its own H1, the metadata goes directly under that title, the way a book
+ * sets a subtitle; otherwise the header (with the generated title) comes first.
+ * Each part is passed through `clean` separately (DOMPurify in the live reader).
+ */
+export function composePage(page, clean = (html) => html, { backlinks = true } = {}) {
+  const tail = backlinks ? clean(page.backlinksHTML ?? '') : '';
+  const split = page.startsWithH1 && page.headerHTML ? page.bodyHTML.indexOf('</h1>') : -1;
+  if (split < 0) {
+    return `${clean(page.headerHTML)}<article class="note-body">${clean(page.bodyHTML)}</article>${tail}`;
+  }
+  const end = split + '</h1>'.length;
+  return `<article class="note-body">${clean(page.bodyHTML.slice(0, end))}${clean(page.headerHTML)}`
+    + `${clean(page.bodyHTML.slice(end))}</article>${tail}`;
 }
 
 /** Returns { headerHTML, bodyHTML, backlinksHTML, headings }. Body HTML is unsanitized. */

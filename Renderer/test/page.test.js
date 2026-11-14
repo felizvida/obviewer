@@ -16,11 +16,11 @@ test('header shows metadata, tags and properties; backlinks list linked notes', 
   const page = buildPage({
     ...base,
     source: 'Body',
-    header: { path: 'a.md', readingTime: 3, tags: ['lab'], properties: [{ key: 'status', value: 'draft' }] },
+    header: { path: 'Projects/Alpha/a.md', readingTime: 3, modified: 'Nov 14, 2026', tags: ['lab'], properties: [{ key: 'status', value: 'draft' }] },
     backlinks: [{ noteID: 'b.md', title: 'B', path: 'b.md' }],
   });
   const header = dom(page.headerHTML);
-  assert.match(header.textContent, /3 min read/);
+  assert.equal(header.querySelector('.note-meta').textContent, 'In Projects / Alpha. Edited Nov 14, 2026. 3 min read.');
   assert.equal(header.querySelector('a.tag').getAttribute('data-tag'), 'lab');
   assert.equal(header.querySelector('.note-properties td').textContent, 'draft');
   const backlinks = dom(page.backlinksHTML);
@@ -42,4 +42,16 @@ test('DokuWiki payloads use the DokuWiki renderer', () => {
   const page = buildPage({ ...base, flavor: 'dokuwiki', source: '====== Title ======\n**x**' });
   assert.equal(page.startsWithH1, true);
   assert.match(page.bodyHTML, /<strong>x<\/strong>/);
+});
+
+test('composePage puts the metadata under the note\'s own H1, or first when there is none', async () => {
+  const { composePage } = await import('../src/core/page.js');
+  const header = { path: 'a.md', modified: 'Nov 14, 2026' };
+  const withH1 = dom(composePage(buildPage({ ...base, source: '# My Note\n\nBody', header })));
+  const article = withH1.querySelector('article.note-body');
+  assert.equal(article.children[0].tagName, 'H1');
+  assert.equal(article.children[1].className, 'note-header');
+  assert.equal(article.children[2].tagName, 'P');
+  const withoutH1 = dom(composePage(buildPage({ ...base, source: 'Body', header })));
+  assert.equal(withoutH1.querySelector('header.note-header h1.note-title').textContent, 'My Note');
 });

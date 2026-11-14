@@ -6,7 +6,7 @@
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js/lib/common';
 
-import { buildPage } from './core/page.js';
+import { buildPage, composePage } from './core/page.js';
 import { normalizeHeadingText, slugify } from './core/util.js';
 import { toClipboardHTML, toSlackText } from './core/export.js';
 import { enforceInputPolicy } from './core/sanitize-policy.js';
@@ -92,7 +92,7 @@ async function renderUnchecked(payload) {
   const previousScroll = preserve ? window.scrollY : 0;
 
   const page = buildPage(payload, { hljs });
-  root.innerHTML = `${sanitize(page.headerHTML)}<article class="note-body">${sanitize(page.bodyHTML)}</article>${sanitize(page.backlinksHTML)}`;
+  root.innerHTML = composePage(page, sanitize);
   root.dataset.flavor = payload.flavor ?? 'markdown';
   document.title = payload.title ?? '';
   state.noteID = payload.noteID;
