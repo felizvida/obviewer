@@ -33,18 +33,18 @@ public struct ContentView: View {
         .toolbar {
             ReaderToolbarItems(model: model)
 
-            ToolbarItem(placement: .principal) {
-                Picker("View", selection: $model.detailMode) {
-                    ForEach(DetailMode.allCases) { mode in
-                        Text(mode.rawValue).tag(mode)
-                    }
+            ToolbarItemGroup(placement: .primaryAction) {
+                // The reader is the default; the graph is a toggle, not a second mode to pick.
+                Toggle(isOn: Binding(
+                    get: { model.detailMode == .graph },
+                    set: { model.detailMode = $0 ? .graph : .reader }
+                )) {
+                    Label("Graph", systemImage: "point.3.connected.trianglepath.dotted")
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 160)
+                .toggleStyle(.button)
+                .help("Show the note graph (⌥⌘G)")
                 .disabled(model.snapshot == nil || model.isLoading)
-            }
 
-            ToolbarItem(placement: .primaryAction) {
                 Button {
                     Task { await model.chooseVault() }
                 } label: {

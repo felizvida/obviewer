@@ -44,95 +44,72 @@ struct GraphWorkspaceView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
+    /// One sentence about what the graph shows, a quiet count, the folder colours,
+    /// and a single toggle: the graph is local to the selected note unless
+    /// "Whole Vault" is on.
     private var header: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Note Graph")
-                        .font(.system(size: 38, weight: .bold, design: .serif))
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
+                Text(headerSubtitle)
+                    .font(.system(size: 15, design: .serif).italic())
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                    Text(headerSubtitle)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
+                Spacer(minLength: 12)
 
-                Spacer(minLength: 20)
-
-                Picker("Graph Scope", selection: Binding(
-                    get: { graphScope },
-                    set: onChangeScope
+                Toggle(isOn: Binding(
+                    get: { graphScope == .global },
+                    set: { onChangeScope($0 ? .global : .local) }
                 )) {
-                    ForEach(GraphScope.allCases) { scope in
-                        Text(scope.rawValue).tag(scope)
-                    }
+                    Label("Whole Vault", systemImage: "circle.hexagongrid")
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 220)
+                .toggleStyle(.button)
+                .help("Show every note in the vault instead of only the notes linked to the selected one")
             }
 
-            if let subgraph {
-                HStack(spacing: 10) {
-                    graphPill(text: "\(subgraph.nodes.count) nodes", systemImage: "circle.grid.2x2")
-                    graphPill(text: "\(subgraph.edges.count) edges", systemImage: "point.3.connected.trianglepath.dotted")
-                    if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                        graphPill(text: "Filtered", systemImage: "line.3.horizontal.decrease.circle")
-                    }
+            if let subgraph, subgraph.nodes.isEmpty == false {
+                HStack(spacing: 12) {
+                    Text(countText(for: subgraph))
+                        .font(.system(size: 11))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    GraphLegendBar(subgraph: subgraph)
                 }
-
-                GraphLegendBar(subgraph: subgraph)
             }
         }
+    }
+
+    private func countText(for subgraph: NoteGraphSubgraph) -> String {
+        let notes = subgraph.nodes.count == 1 ? "1 note" : "\(subgraph.nodes.count) notes"
+        let links = subgraph.edges.count == 1 ? "1 link" : "\(subgraph.edges.count) links"
+        return "\(notes), \(links)"
+    }
+
+    private var isFiltered: Bool {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 
     private var headerSubtitle: String {
         switch graphScope {
         case .local:
             if let selectedNode {
-                return "A one-hop neighborhood around \(selectedNode.title), including backlinks and outbound links."
+                return "Notes linked to and from “\(selectedNode.title)”."
             }
-            return "Select a note to inspect its local link neighborhood."
-
+            return "Select a note to see what it links to."
         case .global:
-            if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                return "The full vault graph filtered by your current search query."
-            }
-            return "A vault-wide relationship map grouped visually by folder."
+            return isFiltered
+                ? "Every note matching “\(searchText)”, coloured by folder."
+                : "Every note in the vault, coloured by folder."
         }
-    }
-
-    private func graphPill(text: String, systemImage: String) -> some View {
-        Label(text, systemImage: systemImage)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(.secondary)
     }
 
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Image(systemName: "point.3.connected.trianglepath.dotted")
-                .font(.system(size: 28, weight: .regular))
-                .foregroundStyle(VisualTheme.shade.opacity(0.55))
-
-            Text("No graph to show yet.")
-                .font(.system(size: 24, weight: .bold, design: .serif))
-
-            Text("Select a note or switch to Global to render a real vault map.")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(.secondary)
-
-            Label("Graph data is derived from indexed Markdown links only.", systemImage: "lock.shield")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(VisualTheme.quietInk)
-        }
-        .padding(30)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(VisualTheme.heroSurface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(VisualTheme.shade.opacity(0.06), lineWidth: 1)
-        )
+        Text(graphScope == .local
+            ? "Nothing to draw yet. Select a note, or turn on Whole Vault."
+            : "No links to draw for these notes.")
+            .font(.system(size: 15, design: .serif).italic())
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -331,11 +308,7 @@ private struct GraphLegendBar: View {
     }
 
     var body: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "paintpalette")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(.secondary)
-
+        HStack(spacing: 7) {
             ForEach(buckets.prefix(6)) { bucket in
                 Circle()
                     .fill(bucket.color)
@@ -349,20 +322,12 @@ private struct GraphLegendBar: View {
 
             if buckets.count > 6 {
                 Text("+\(buckets.count - 6)")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 8)
-        .background(
-            Capsule(style: .continuous)
-                .fill(VisualTheme.panel.opacity(0.52))
-        )
-        .overlay(
-            Capsule(style: .continuous)
-                .stroke(VisualTheme.shade.opacity(0.045), lineWidth: 1)
-        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Folder colours: " + buckets.prefix(6).map(\.name).joined(separator: ", "))
     }
 }
 
@@ -496,49 +461,18 @@ private struct GraphInspectorPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Text("Inspector")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Text(graphScope.rawValue)
-                    .font(.system(size: 11, weight: .bold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(VisualTheme.panel.opacity(0.7))
-                    )
-            }
-
             if let selectedNode {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text(selectedNode.title)
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.system(size: 20, weight: .semibold, design: .serif))
+                        .help(selectedNode.relativePath)
 
-                    Text(selectedNode.relativePath)
-                        .font(.system(size: 12, weight: .semibold))
+                    Text(statsText(for: selectedNode))
+                        .font(.system(size: 12, design: .serif).italic())
                         .foregroundStyle(.secondary)
 
-                    HStack(spacing: 8) {
-                        statPill(text: "\(selectedNode.inboundCount) backlinks", systemImage: "arrow.down.left")
-                        statPill(text: "\(selectedNode.outboundCount) links", systemImage: "arrow.up.right")
-                    }
-
-                    HStack(spacing: 8) {
-                        statPill(text: "\(selectedNode.wordCount) words", systemImage: "text.word.spacing")
-                        statPill(text: "\(selectedNode.tagCount) tags", systemImage: "tag")
-                    }
-
-                    Button {
-                        onOpenReader()
-                    } label: {
-                        Label("Open In Reader", systemImage: "book.pages")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    Button("Open in Reader", action: onOpenReader)
+                        .padding(.top, 4)
                 }
 
                 connectionsSection(
@@ -547,98 +481,56 @@ private struct GraphInspectorPanel: View {
                 )
 
                 connectionsSection(
-                    title: "Links From Here",
+                    title: "Links from here",
                     noteIDs: snapshot.noteGraph.outboundNoteIDs(from: selectedNode.id)
                 )
             } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    Image(systemName: "cursorarrow.rays")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(VisualTheme.accent)
-
-                    Text("Choose a node")
-                        .font(.system(size: 22, weight: .bold, design: .serif))
-
-                    Text("Select a note in the graph to inspect backlinks, outbound links, and open it in the reader.")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(VisualTheme.panel.opacity(0.52))
-                )
-            }
-
-            if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Active Filter")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.secondary)
-
-                    Text(searchText)
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                .padding(.top, 4)
+                Text("Select a note in the graph.")
+                    .font(.system(size: 13, design: .serif).italic())
+                    .foregroundStyle(.secondary)
             }
 
             Spacer(minLength: 0)
         }
-        .padding(22)
-        .frame(width: 310, alignment: .topLeading)
+        .padding(20)
+        .frame(width: 270, alignment: .topLeading)
         .premiumPanel(cornerRadius: 10)
     }
 
-    private func statPill(text: String, systemImage: String) -> some View {
-        Label(text, systemImage: systemImage)
-            .font(.system(size: 11, weight: .semibold))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(VisualTheme.panel.opacity(0.72))
-            )
+    private func statsText(for node: NoteGraphNode) -> String {
+        func count(_ value: Int, _ one: String, _ many: String) -> String { value == 1 ? "1 \(one)" : "\(value) \(many)" }
+        return [
+            count(node.inboundCount, "backlink", "backlinks"),
+            count(node.outboundCount, "link", "links"),
+            count(node.wordCount, "word", "words"),
+        ].joined(separator: ", ")
     }
 
     @ViewBuilder
     private func connectionsSection(title: String, noteIDs: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 5) {
             Text(title)
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(size: 12, design: .serif).italic())
                 .foregroundStyle(.secondary)
 
             if noteIDs.isEmpty {
                 Text("None")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.tertiary)
             } else {
                 ForEach(noteIDs.prefix(7), id: \.self) { noteID in
-                    let label = snapshot.note(withID: noteID)?.title ?? noteID
-                    Button {
+                    Button(snapshot.note(withID: noteID)?.title ?? noteID) {
                         onSelectNote(noteID)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(label)
-                                .font(.system(size: 13, weight: .semibold))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            Text(noteID)
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 9)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(VisualTheme.panel.opacity(0.72))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(VisualTheme.shade.opacity(0.06), lineWidth: 1)
-                        )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.link)
+                    .font(.system(size: 13))
+                    .lineLimit(1)
+                    .help(noteID)
+                }
+                if noteIDs.count > 7 {
+                    Text("and \(noteIDs.count - 7) more")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
                 }
             }
         }

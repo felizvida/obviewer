@@ -93,6 +93,13 @@ public struct ObviewerCommands: Commands {
             Button("Narrower Lines") { measure = max(measure - ReaderMeasure.menuStep, ReaderMeasure.minimum) }
                 .keyboardShortcut("[", modifiers: [.command, .option])
             Divider()
+            Button(model?.detailMode == .graph ? "Hide Graph" : "Show Graph") {
+                guard let model else { return }
+                model.detailMode = model.detailMode == .graph ? .reader : .graph
+            }
+            .keyboardShortcut("g", modifiers: [.command, .option])
+            .disabled(model?.snapshot == nil)
+            Divider()
         }
 
         CommandGroup(after: .help) {
