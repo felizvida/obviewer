@@ -333,7 +333,7 @@ function pngChunk(type, data, { badCRC = false } = {}) {
 }
 
 /** A valid strict-profile PNG: 8-bit RGBA, transparent except one opaque white pixel. */
-function iconPNG(size, { colorType = 6, interlace = 0, before = [], after = [], trailing = null, badCRC = false } = {}) {
+function iconPNG(size, { colorType = 6, interlace = 0, before = [], after = [], trailing = null, badCRC = false, idat = null } = {}) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(size, 0);
   ihdr.writeUInt32BE(size, 4);
@@ -344,7 +344,8 @@ function iconPNG(size, { colorType = 6, interlace = 0, before = [], after = [], 
   rows.fill(255, 1, 5); // first pixel opaque white
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    pngChunk('IHDR', ihdr), ...before, pngChunk('IDAT', deflateSync(rows), { badCRC }), ...after,
+    pngChunk('IHDR', ihdr), ...before,
+    ...(idat ? idat(deflateSync(rows)) : [pngChunk('IDAT', deflateSync(rows), { badCRC })]), ...after,
     pngChunk('IEND', Buffer.alloc(0)), ...(trailing ? [trailing] : []),
   ]);
 }
@@ -364,7 +365,7 @@ function icns(chunks, { declaredLength } = {}) {
 
 const cleanOCR = () => 'nothing here';
 
-test('ICNS: every rendition is decoded and OCRed on white and on black', () => {
+test('ICNS: every rendition is decoded and OCRed three ways', () => {
   const ocrCalls = [];
   const file = icns([
     { type: 'icp4', data: iconPNG(16) },
@@ -375,15 +376,15 @@ test('ICNS: every rendition is decoded and OCRed on white and on black', () => {
   assert.deepEqual(icnsRenditions(file).map((r) => r.type), ['icp4', 'ic07', 'ic12']);
   const scanner = scanBuffer(file, 'AppIcon.icns', { ocr: (path) => { ocrCalls.push(readFileSync(path)); return cleanOCR(); } });
   assert.equal(scanner.exitCode, 0, JSON.stringify(scanner.incomplete));
-  assert.equal(ocrCalls.length, 6, 'each rendition is OCRed twice, not only the largest');
+  assert.equal(ocrCalls.length, 9, 'each rendition is OCRed three times, not only the largest');
   assert.equal(scanner.fileCount, 4);
 
   const drawn = scanBuffer(icns([{ type: 'icp4', data: iconPNG(16) }, { type: 'ic08', data: iconPNG(256) }]), 'AppIcon.icns', {
     ocr: (path) => (readFileSync(path).length > 0 ? `DRAWN ${FIVE.toUpperCase()}` : ''),
   });
   assert.deepEqual(drawn.findings.map((f) => f.where), [
-    'AppIcon.icns#icp4 (image text on white)', 'AppIcon.icns#icp4 (image text on black)',
-    'AppIcon.icns#ic08 (image text on white)', 'AppIcon.icns#ic08 (image text on black)',
+    'AppIcon.icns#icp4 (image text on white)', 'AppIcon.icns#icp4 (image text on black)', 'AppIcon.icns#icp4 (image text ignoring transparency)',
+    'AppIcon.icns#ic08 (image text on white)', 'AppIcon.icns#ic08 (image text on black)', 'AppIcon.icns#ic08 (image text ignoring transparency)',
   ]);
 });
 
@@ -442,12 +443,21 @@ test('ICNS: anything not completely inspectable fails closed', () => {
     'bad CRC': iconPNG(128, { badCRC: true }),
     'palette image': iconPNG(128, { colorType: 3 }),
     'interlaced image': iconPNG(128, { interlace: 1 }),
+    'bytes after the zlib stream, inside IDAT': iconPNG(128, { idat: (z) => [pngChunk('IDAT', Buffer.concat([z, hidden]))] }),
+    'bytes after the zlib stream, in an extra IDAT': iconPNG(128, { idat: (z) => [pngChunk('IDAT', z), pngChunk('IDAT', hidden)] }),
+    'a second zlib stream': iconPNG(128, { idat: (z) => [pngChunk('IDAT', Buffer.concat([z, deflateSync(hidden)]))] }),
   };
   for (const [name, png] of Object.entries(renditions)) {
     const scanner = scanBuffer(one(png), 'AppIcon.icns', { ocr: cleanOCR });
     assert.equal(scanner.exitCode, 2, name);
     assert.ok(scanner.incomplete.some((i) => i.where === 'AppIcon.icns#ic07'), name);
   }
+});
+
+test('ICNS: one zlib stream split across several IDAT chunks is fine', () => {
+  const split = iconPNG(128, { idat: (z) => [pngChunk('IDAT', z.subarray(0, 5)), pngChunk('IDAT', z.subarray(5, 9)), pngChunk('IDAT', z.subarray(9))] });
+  const scanner = scanBuffer(icns([{ type: 'ic07', data: split }]), 'AppIcon.icns', { ocr: cleanOCR });
+  assert.equal(scanner.exitCode, 0, JSON.stringify(scanner.incomplete));
 });
 
 test('text and tar archives that merely start with "icns" are not taken for icons', () => {

@@ -19,9 +19,12 @@
 //   ICNS           Apple icons that hold only PNG renditions, one per known slot,
 //                  each the slot's exact size and in a strict profile (8-bit RGBA,
 //                  not interlaced, only IHDR/IDAT/IEND, valid CRCs, nothing after
-//                  IEND), so every byte is pixels. Each rendition is decoded and
-//                  OCRed twice, flattened on white and on black (light text on
-//                  transparency is readable on a dark Dock), enlarged when small.
+//                  IEND, one zlib stream consumed to its last byte), so every byte
+//                  is pixels. Each rendition is decoded and OCRed
+//                  three times: flattened on white, on black (light text on
+//                  transparency is readable on a dark Dock), and with transparency
+//                  ignored (colour under fully transparent pixels); enlarged when
+//                  small. Steganography is out of scope.
 //                  Anything else in the container (JPEG 2000, legacy RLE/ARGB data,
 //                  TOC, version, name or info chunks, nested dark variants,
 //                  duplicates, bad lengths) is refused. Compiled asset catalogs
@@ -378,7 +381,13 @@ export function strictRGBAPNG(png) {
 
   const { width, height } = header;
   const stride = width * 4;
-  const raw = inflateSync(Buffer.concat(idat), { maxOutputLength: (stride + 1) * height + 1 });
+  // Exactly one zlib stream, consumed to its last byte: anything after the stream's
+  // end (in the same IDAT or a later one, or a second stream) would never be decoded.
+  const compressed = Buffer.concat(idat);
+  const { buffer: raw, engine } = inflateSync(compressed, { info: true, maxOutputLength: (stride + 1) * height + 1 });
+  if (engine.bytesWritten !== compressed.length) {
+    throw new Unsupported('PNG image data has bytes after the end of its compressed stream');
+  }
   if (raw.length !== (stride + 1) * height) throw new Unsupported('PNG image data has the wrong size');
   const pixels = Buffer.alloc(stride * height);
   for (let y = 0; y < height; y += 1) {
@@ -414,7 +423,7 @@ export function strictRGBAPNG(png) {
  * small images by whole-pixel scaling so OCR sees at least `minSide` pixels. Returns a
  * greyscale-free RGB PNG buffer for the OCR tool.
  */
-export function flattenedPNG({ width, height, pixels }, background, minSide = 512) {
+export function flattenedPNG({ width, height, pixels }, background, minSide = 512, ignoreAlpha = false) {
   const scale = Math.max(1, Math.ceil(minSide / Math.min(width, height)));
   const outWidth = width * scale;
   const outHeight = height * scale;
@@ -425,7 +434,7 @@ export function flattenedPNG({ width, height, pixels }, background, minSide = 51
     rows[rowStart] = 0;
     for (let x = 0; x < outWidth; x += 1) {
       const source = (sy * width + Math.floor(x / scale)) * 4;
-      const alpha = pixels[source + 3];
+      const alpha = ignoreAlpha ? 255 : pixels[source + 3];
       for (let channel = 0; channel < 3; channel += 1) {
         rows[rowStart + 1 + x * 3 + channel] = Math.round((pixels[source + channel] * alpha + background * (255 - alpha)) / 255);
       }
@@ -987,16 +996,19 @@ export class Scanner {
     });
   }
 
-  /** Every ICNS rendition is decoded (strict profile) and OCRed on white and on black. */
+  /** Every ICNS rendition is decoded (strict profile) and OCRed three ways. */
   scanICNS(buffer, label) {
     for (const { type, data } of icnsRenditions(buffer)) {
       const where = `${label}#${type}`;
       this.fileCount += 1;
       this.guard(where, () => {
         const image = strictRGBAPNG(data);
-        for (const [name, background] of [['white', 255], ['black', 0]]) {
-          this.withFile(flattenedPNG(image, background), null, '.png', (file) => {
-            this.scanString(`${where} (image text on ${name})`, this.tools.ocr(file));
+        // On white and on black (light or dark text over transparency), and with
+        // transparency ignored (colour hidden under fully transparent pixels).
+        const passes = [['on white', 255, false], ['on black', 0, false], ['ignoring transparency', 255, true]];
+        for (const [name, background, ignoreAlpha] of passes) {
+          this.withFile(flattenedPNG(image, background, 512, ignoreAlpha), null, '.png', (file) => {
+            this.scanString(`${where} (image text ${name})`, this.tools.ocr(file));
           });
         }
       });
