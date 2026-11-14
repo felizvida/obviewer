@@ -1,0 +1,5 @@
+====== Safety Training ======
+
+===== PPE =====
+
+Wear gloves and goggles. Back to [[lab:protocols]].

@@ -2,131 +2,58 @@
 
 [![CI](https://github.com/felizvida/obviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/felizvida/obviewer/actions/workflows/ci.yml)
 
-Obviewer is a native macOS reader for local Obsidian vaults built around one non-negotiable promise: the app must remain read-only with respect to the user's notes.
+Obviewer is a read-only reader for Markdown and wiki text on the Mac. Double-click a `.md` file and it appears fully rendered: GitHub and Obsidian syntax, note embeds, Mermaid diagrams and math. Open a folder, an Obsidian vault or a DokuWiki to search, follow wiki links, see backlinks and browse a graph. Press Space in Finder for a quick static preview.
 
-The project is already a working prototype, not just a sketch. It has a portable core, a macOS app shell, a reader-first interface, a graph workspace, a generated demo vault, documentation screenshots, and green GitHub CI. It is not yet a fully shipped consumer app because signed/notarized app distribution, parser fidelity, accessibility, and large-vault performance still need dedicated modernization work.
+Obviewer never changes your notes, and macOS enforces that. To edit, press ⌘E and the note opens in your editor (Sublime Text by default); Obviewer refreshes each time you save. To share, copy the note as rich text or for Slack, print it, or open it as a PDF in Preview.
 
-## Start Here
+> **Status:** 0.3.0 is a pre-release. It was verified on one Mac (Apple silicon, macOS 26). See [`docs/STATUS.md`](./docs/STATUS.md) for exactly what has and hasn't been checked, and the known limitations.
 
-- [`QUICKSTART.md`](./QUICKSTART.md) for the fastest local run
-- [`docs/VISUAL_TOUR.md`](./docs/VISUAL_TOUR.md) for the current UI and design language
-- [`docs/README.md`](./docs/README.md) for the zero-memory documentation index
-- [`docs/HANDOFF.md`](./docs/HANDOFF.md) for the current project state and maintainer context
-- [`docs/MODERNIZATION_PLAN.md`](./docs/MODERNIZATION_PLAN.md) for the phased roadmap to turn the prototype into a modern shipping product
+![The Obviewer 0.3 reader showing a note with a callout, tasks, a Mermaid diagram, math and a table](docs/images/reader-v0.3.png)
 
-[![Obviewer visual tour](./docs/images/visual-tour-library-home.png)](./docs/VISUAL_TOUR.md)
+*The 0.3 Release build, reading a synthetic sample note.*
 
-## What Works Today
+## Install
 
-- Native SwiftUI macOS app shell with `NavigationSplitView`
-- Portable `ObviewerCore` module for parsing, lookup, vault indexing, and graph construction
-- macOS-specific `ObviewerMacApp` module for security-scoped access, bookmarks, app state, and UI
-- Local vault loading with progress reporting, live vault watching, and path-aware selective reloads
-- Warm-start snapshot cache that persists parsed notes, attachment metadata, a file manifest, and reusable lookup/graph index state so unchanged cold launches can short-circuit most snapshot reconstruction
-- Search by title, path, tags, preview text, aliases, and frontmatter metadata through a core precomputed search index
-- Obsidian-aware parsing for frontmatter, links, tables, headings, ordered/task/nested lists, footnotes, tags, callouts, image embeds, and graceful fallback blocks for Mermaid/math/media embeds
-- Inline image rendering with size hints plus a lightbox for image attachments
-- Reader workspace with metadata, linked-note navigation, and a contents rail
-- Graph workspace with local and global graph views
-- Rich synthetic-vault tooling for realistic manual testing
-- Large-vault benchmark tooling with index diagnostics for cold load, warm reload, selective reload, search, and graph query profiling
-- CI benchmark profiling for smoke and integration fixtures, with the smoke profile enforced by a checked-in budget
-- Documentation screenshot generation from the real app
-- Green CI on `macos-14` and `macos-15`
+Follow [`docs/INSTALL.md`](./docs/INSTALL.md). Releases are ad-hoc signed, without an Apple Developer ID, so macOS asks you to approve the app once.
 
-## Safety Model
+## What it reads
 
-The UI being "view only" is not enough. The guarantee comes from platform boundaries and the code structure:
+| Source | What you get |
+| --- | --- |
+| A single `.md` / `.markdown` file | The rendered note, refreshed live when it changes. A banner offers read-only folder access when the note uses images or links stored next to it. |
+| A Markdown folder | A searchable library, `[[wiki links]]`, backlinks and a graph |
+| An Obsidian vault (contains `.obsidian/`) | Everything above, plus embeds (`![[Note]]`, `#heading`, `^block`), callouts, `==highlights==`, `%%comments%%` and tags |
+| A DokuWiki (`data/pages`) | `====== headings ======`, `//italic//`, `[[ns:page]]` links, `{{media}}`, tables and footnotes |
 
-1. The shipping app must run with App Sandbox enabled.
-2. The app must request only `com.apple.security.files.user-selected.read-only`.
-3. Vault access must come from user-selected folders, not broad filesystem exceptions.
-4. Vault reads must flow through the reader layer, with no write API.
-5. Release packaging must preserve the sandbox entitlements through code signing.
+Single files and plain folders open in the Markdown flavor, where Obsidian-only syntax (`==highlights==`, `%%comments%%`, `#tags`) stays as written; switch the badge to Obsidian to render it. Every Markdown flavor gets CommonMark and GitHub Flavored Markdown: tables, task lists, strikethrough, autolinks, footnotes and `> [!NOTE]` alerts. It also gets `$math$` via KaTeX, Mermaid diagrams and highlighted code. The flavor is detected automatically and shown as a badge you can change.
 
-The current entitlement baseline lives in [`Configuration/Obviewer.entitlements`](/Users/liux17/codex/obviewer/Configuration/Obviewer.entitlements).
+## Safety
 
-## Quick Start
+- **Your notes are read-only, enforced by macOS.** The app is sandboxed and its only file permission is read-only access to what you choose. It writes only to its own container and the clipboard.
+- **Note content is contained.** HTML in notes is sanitized, scripts can't run, and the reader loads only bundled files and files from your folder.
+- **Network.** WebKit, which draws the notes, needs the "outgoing network" permission to start inside the sandbox, so the app holds it. Obviewer itself makes no network requests, and the reader blocks remote loads. That blocking is enforced by the app, not by macOS. The Quick Look extension has no network permission.
+- **Handing off is explicit.** Editors, Preview and share services you choose run outside the sandbox. Obviewer asks before opening attachments or app links, and never opens apps or scripts from a note.
 
-The shortest local trial path is:
+Details and enforcement points: [`docs/READER_ARCHITECTURE.md`](./docs/READER_ARCHITECTURE.md).
+
+## Build from source
+
+You need macOS 14 or later, Xcode 15 or later, and XcodeGen (`brew install xcodegen`). Node 20 or later is only needed to change the renderer. [`QUICKSTART.md`](./QUICKSTART.md) has the short version; [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md) has the full workflow.
 
 ```bash
-git clone https://github.com/felizvida/obviewer.git
-cd obviewer
-make try-local
+make try-local          # check Xcode, install XcodeGen if needed, generate and open the project
+swift test              # Swift tests
+make renderer-test      # renderer tests (after `cd Renderer && npm ci --ignore-scripts`)
+make package-adhoc      # ad-hoc signed DMG
 ```
 
-If you want a realistic vault without touching your own notes:
+## Documentation
 
-```bash
-make demo-vault
-```
-
-That generates `build/SampleVault`, which includes nested folders, duplicate filenames, shared and local attachments, tags, tables, links, images, and graph-friendly note relationships.
-
-If you want a repeatable performance read on the synthetic large-vault path:
-
-```bash
-make benchmark-vault
-```
-
-That runs the benchmark fixture profile and prints index diagnostics plus timings for cold load, warm reload, selective reload, search, and graph queries.
-
-For the same path that CI enforces, use:
-
-```bash
-PROFILE=smoke BUDGET=Configuration/benchmark-smoke-budget.json make benchmark-vault
-```
-
-CI also publishes `smoke` and `integration` benchmark artifacts on every run, and each job now writes a readable benchmark summary directly into the GitHub Actions run page.
-
-## Current Distribution State
-
-Today the GitHub release workflow always publishes source archives and checksums. It is now also prepared to publish a signed `.dmg` once Apple signing and notarization secrets are configured in GitHub.
-
-The Phase 1 distribution foundation now includes:
-
-- `project.yml` for XcodeGen app-project generation
-- `scripts/build_app.sh` for signed app builds
-- `scripts/notarize_release_app.sh` for app notarization and stapling
-- `scripts/package_release_app.sh` for signed release zip packaging
-- `scripts/package_release_dmg.sh` for signed DMG packaging, with optional notarization
-- `.github/workflows/release.yml` for tag-driven release automation that can publish a signed/notarized DMG when secrets are present
-
-The next distribution milestone is to configure the Apple credentials in GitHub and validate the first fully notarized public download.
-
-## Architecture Snapshot
-
-The codebase is split into three primary targets:
-
-- `ObviewerCore`
-  Portable models and services for notes, attachments, parser output, graph data, and vault indexing
-- `ObviewerMacApp`
-  macOS app state, platform integrations, SwiftUI/AppKit views, and documentation rendering
-- `Obviewer`
-  Thin executable entry point that launches the app
-
-This separation keeps the vault and parser logic easier to test, debug, and eventually reuse in another shell.
-
-## Modernization Priorities
-
-The project should modernize in this order:
-
-1. Ship the production-grade app container and distribution path
-2. Upgrade markdown and Obsidian fidelity without weakening the read-only boundary
-3. Deepen live refresh into truly change-aware indexing, caching, and large-vault performance work
-4. Deepen navigation, graph, media, and accessibility polish
-5. Add observability and maintenance workflows that keep the project healthy over time
-
-The detailed roadmap is in [`docs/MODERNIZATION_PLAN.md`](./docs/MODERNIZATION_PLAN.md).
-
-## Repository Health
-
-- CI runs on pushes to `main` and `codex/**`, on pull requests, and on manual dispatch
-- Releases are tag-driven through `.github/workflows/release.yml`
-- The repo includes issue templates, CODEOWNERS, contribution guidance, and security/support docs
-- The current release line is green after `v0.2.5`
+- [`docs/README.md`](./docs/README.md): index and reading order
+- [`docs/STATUS.md`](./docs/STATUS.md): what's verified, what's limited, what's unverified
+- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) and [`docs/READER_ARCHITECTURE.md`](./docs/READER_ARCHITECTURE.md): how it works
+- [`CHANGELOG.md`](./CHANGELOG.md): release history
 
 ## License
 
-This repository is licensed under Apache 2.0. See [LICENSE](./LICENSE).
+Apache 2.0. Third-party software bundled in the reader (markdown-it, Mermaid, KaTeX, highlight.js, DOMPurify and their dependencies) is listed with its licenses in `Sources/ObviewerReaderKit/Resources/Reader/THIRD_PARTY_NOTICES.txt`.

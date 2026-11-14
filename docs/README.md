@@ -1,60 +1,29 @@
-# Documentation Index
+# Documentation
 
-This repository is documented for zero-memory handoff.
+Start with the [`README`](../README.md). Then read in this order:
 
-Assume the reader:
+1. [`INSTALL.md`](./INSTALL.md): installing and using the release build
+2. [`STATUS.md`](./STATUS.md): what's verified, what's limited, what hasn't been checked yet
+3. [`HANDOFF.md`](./HANDOFF.md): the invariants and traps, for anyone taking over
+4. [`PRODUCT.md`](./PRODUCT.md): who it's for and what's in and out of scope
+5. [`ARCHITECTURE.md`](./ARCHITECTURE.md): modules and data flow
+6. [`READER_ARCHITECTURE.md`](./READER_ARCHITECTURE.md): the WebKit reader and where each safety guarantee is enforced
+7. [`DEVELOPMENT.md`](./DEVELOPMENT.md): building, testing, CI, the publication policy and releases
+8. [`VERIFICATION.md`](./VERIFICATION.md): the manual checklist for a build on a real Mac
+9. [`REDESIGN_PLAN.md`](./REDESIGN_PLAN.md): why the v0.3 decisions were made
 
-- has never seen the project before
-- does not know the original conversation history
-- should not need to ask the previous maintainer for missing context
+Also: [`../QUICKSTART.md`](../QUICKSTART.md) to run from source, and [`../CHANGELOG.md`](../CHANGELOG.md) for release history.
 
-If you are new to the project, read the documents in this order:
+## Quick facts
 
-1. [`../QUICKSTART.md`](../QUICKSTART.md) to run the app locally with the fewest steps
-2. [`VISUAL_TOUR.md`](./VISUAL_TOUR.md) to understand the current product feel quickly
-3. [`HANDOFF.md`](./HANDOFF.md) for the current project state, invariants, and takeover guidance
-4. [`STATUS.md`](./STATUS.md) for the current implementation baseline and known gaps
-5. [`PRODUCT.md`](./PRODUCT.md) for product scope and design intent
-6. [`ARCHITECTURE.md`](./ARCHITECTURE.md) for module boundaries and runtime flow
-7. [`DEVELOPMENT.md`](./DEVELOPMENT.md) for setup, test, and release workflow
-8. [`MODERNIZATION_PLAN.md`](./MODERNIZATION_PLAN.md) for the phased roadmap from prototype to modern shipping app
+| | |
+| --- | --- |
+| Version | 0.3.0, pre-release `v0.3.0-beta.1` |
+| Platform | macOS 14 or later; verified on macOS 26, Apple silicon |
+| Languages | Swift (SwiftUI, AppKit, WebKit, JavaScriptCore); JavaScript for the renderer |
+| Distribution | Ad-hoc signed DMG on GitHub Releases (not notarized) |
+| Permissions | App: sandbox, read-only user-selected files, print, outgoing network (for WebKit). Quick Look: sandbox, read-only user-selected files. |
 
-## Quick Facts
+## History
 
-- Project name: `Obviewer`
-- Repository URL: `https://github.com/felizvida/obviewer`
-- Platform target: macOS 14+
-- Language: Swift
-- Primary UI technology: SwiftUI with focused AppKit interop
-- Package layout: Swift package plus XcodeGen app-project spec
-- Current release line: `v0.2.5`
-- Shipping artifact today: source archives on GitHub releases
-- Intended next artifact: signed and notarized sandboxed macOS app distribution
-- Non-negotiable requirement: the app must remain read-only with respect to the user's Obsidian vault
-
-## Repo Map
-
-- `Sources/Obviewer/ObviewerApp.swift`
-  Thin app entry point
-- `Sources/ObviewerCore/`
-  Portable models and services for notes, parsing, graph construction, and vault indexing
-- `Sources/ObviewerMacApp/`
-  macOS app state, platform services, documentation rendering, and SwiftUI/AppKit UI
-- `Sources/ObviewerFixtureSupport/`
-  Synthetic vault generator used by tests and demo tooling
-- `Sources/ObviewerFixtureTool/`
-  CLI entry point for generating demo vaults
-- `Sources/ObviewerDocsTool/`
-  CLI entry point for generating documentation screenshots
-- `Tests/ObviewerCoreTests/`
-  Parser, lookup, graph, and vault-reader tests
-- `Tests/ObviewerMacAppTests/`
-  AppModel and view-support tests
-- `.github/workflows/`
-  CI and tag-driven release automation
-- `Configuration/Obviewer.entitlements`
-  Minimum sandbox entitlements for the shipping app
-
-## Important Note
-
-The architectural read-only model is already strong, but the strongest guarantee only exists when the app is shipped as a signed sandboxed macOS app with the entitlements in this repo. The Swift package itself is a development shape, not the final trust boundary.
+[`history/`](./history/) holds the v0.2.8-era status, handoff, product notes, architecture, development guide, roadmap and visual tour. They're kept for context and aren't maintained. In [`images/`](./images/), `reader-v0.3.png` shows the current reader (0.3 Release build). The `visual-tour-*.png` screenshots belong to the historical visual tour and show the **v0.2.8 native reader**.

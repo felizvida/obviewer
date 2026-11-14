@@ -1,243 +1,74 @@
-# Current Status
-
-This document records the implementation baseline so a future maintainer can orient quickly without diff archaeology.
-
-## Summary
-
-The repository is best described as:
-
-- a working prototype with real product behavior
-- a healthy codebase for continued iteration
-- not yet a finished shipping app
-
-The project has moved past "scaffold only" status. It is now strong enough for real product work, but it still needs distribution, fidelity, performance, and accessibility modernization.
-
-## Implemented Today
-
-### Application Shell
-
-- SwiftUI app entry point exists
-- core and macOS shell logic are split into separate targets
-- split-view library and reader workspace exists
-- graph workspace exists
-- toolbar and command actions exist for opening and reloading a vault
-- empty, loading, and error states exist
-
-### Vault Access
-
-- vault selection uses `NSOpenPanel`
-- security-scoped bookmark persistence exists
-- security-scoped access is started and swapped through dedicated services
-- vault enumeration is centralized and read-oriented
-- live loading progress is surfaced to the UI
-
-### Note Processing
-
-- markdown files are discovered
-- supported attachments are indexed
-- notes are parsed into a render model with inline runs
-- structured frontmatter is extracted and carried into the note model
-- search over title, path, tags, preview text, aliases, and frontmatter metadata is implemented
-- note links, attachment links, and heading anchors are classified
-- relative note and attachment resolution is source-aware
-- headings are collected into a table of contents
-- a note graph is derived from outbound links
-
-### Reading UI
-
-- metadata header exists
-- frontmatter metadata summary cards render in the reader
-- paragraph, heading, list, quote, callout, code, divider, and image blocks render
-- inline images render with sizing hints
-- tables render in the reader
-- inline note and attachment links render inside note content
-- linked-note navigation exists
-- a right-side contents rail exists for long notes
-- local image lightbox behavior exists
-
-### Graph UI
-
-- local and global graph views exist
-- graph inspector exists
-- search-aware graph filtering exists
-- folder grouping contributes to visual identity
-
-### Quality Tooling
-
-- synthetic demo vault generation exists
-- documentation screenshot generation exists
-- core and app-model regression tests exist
-- view-support tests exist
-
-### Repository Operations
-
-- GitHub repository is configured
-- CI is green on `macos-14` and `macos-15`
-- tag-driven GitHub release automation exists
-- issue templates and contributor docs exist
-- XcodeGen project generation exists
-- signing-aware packaging scripts exist
-- Apache 2.0 licensing is in place
-
-## Partially Implemented
-
-### Obsidian Compatibility
-
-Present:
-
-- frontmatter extraction for scalar values and arrays
-- wiki links
-- ordered lists
-- nested list fidelity
-- task lists
-- footnotes with inline references and rendered note sections
-- tags
-- tables
-- callouts
-- headings and anchors
-- image embeds and size hints
-- graceful fallback blocks for Mermaid, math-like fenced blocks, and standalone non-image embeds
-
-Still incomplete:
-
-- full CommonMark coverage
-- rendered Mermaid previews
-- rendered math
-- embedded PDF/audio/video surfaces
-- nested frontmatter objects and richer typed semantics
-
-### Read-Only Guarantee
-
-Architecturally present:
-
-- no write API
-- reader-only file access path
-- read-only entitlement baseline exists
-- unsigned release packaging is blocked
-
-Still incomplete:
-
-- no published signed/notarized app artifact yet
-- no end-user distribution path that fully demonstrates the trust story
-
-### Distribution
-
-Present:
-
-- source releases
-- signing-aware build scripts
-- XcodeGen app-project generation
-- notarization-ready DMG packaging scripts
-- release workflow hooks for signed/notarized DMG publishing when secrets are configured
-
-Still incomplete:
-
-- production Apple signing secrets configured in GitHub
-- first published notarized GitHub `.dmg`
-- Mac App Store path
-- auto-update channel
-
-### Performance
-
-Present:
-
-- acceptable behavior on the synthetic demo vault
-- loading progress visibility
-- live vault watching on macOS
-- selective incremental reload that applies changed, added, and removed file paths while reusing untouched note models
-- persistent warm-start snapshot cache that reuses parsed notes, attachment metadata, a persisted file manifest, and validated lookup/graph index state across relaunches
-- precomputed core search corpus for title/path/tag/preview/frontmatter matching
-- large-vault benchmark tooling with index diagnostics for cold load, warm reload, selective reload, search, and graph queries
-- smoke-profile benchmark budget enforcement in CI with a published JSON report artifact
-- integration-profile benchmark reporting in CI for larger-fixture visibility without hard timing budgets yet
-- markdown benchmark summaries in CI job pages for faster maintainer review
-
-Still incomplete:
-
-- truly selective directory-level or file-level reindexing
-- persistent state beyond the current snapshot cache, manifest seed, and lookup/graph seed, such as larger indexed stores, ranking data, or richer file metadata
-- broader performance budgets beyond the smoke profile and historical benchmark tracking
-- caching and smarter search ranking
-
-## Not Implemented Yet
-
-- notarized `.app` or `.dmg` release artifacts
-- App Store distribution
-- automated large-vault performance guardrails
-- UI snapshot testing
-- accessibility audit and VoiceOver tuning
-- PDF/audio/video reader surfaces
-- Mermaid rendering or preview
-- crash/reporting or telemetry strategy
-- in-app onboarding for first-run distribution builds
-
-## Known Risks
-
-### Risk 1: Parser fidelity gap
-
-The parser is increasingly capable, but still incomplete enough that unsupported syntax can look like a rendering bug.
-
-### Risk 2: Distribution gap
-
-The repo is release-automated, but the published artifact is still source-only. That keeps the strongest user-facing trust story incomplete.
-
-### Risk 3: Performance ceiling
-
-The new watcher, selective reload path, manifest-backed warm-start snapshot cache, persisted lookup/graph seed state, precomputed search corpus, and benchmark tooling improve both visibility and behavior, but the app still lacks deeper persistent indexing and automated performance guardrails for truly large vaults.
-
-### Risk 4: UI verification gap
-
-Most confidence comes from core and orchestration tests, not visual regression or accessibility validation.
-
-## Recommended Next Milestones
-
-### Milestone 1: Shipping Distribution
-
-Goal:
-
-- publish a signed, notarized macOS app distribution without broadening file permissions
-
-Why first:
-
-- it completes the trust story for real users
-
-### Milestone 2: Content Fidelity
-
-Goal:
-
-- improve markdown and Obsidian support enough that real vaults render predictably
-
-Why next:
-
-- reader quality depends on faithful content rendering
-
-### Milestone 3: Scale And Live Refresh
-
-Goal:
-
-- improve indexing, caching, and change observation for larger vaults
-
-### Milestone 4: Polish And Accessibility
-
-Goal:
-
-- refine graph UX, media handling, visual consistency, and accessibility
-
-The detailed execution plan is in [`MODERNIZATION_PLAN.md`](./MODERNIZATION_PLAN.md).
-
-## What A New Maintainer Should Verify First
-
-1. the project builds and tests with full Xcode
-2. the app can open a real vault and the synthetic demo vault
-3. bookmark restore works after relaunch
-4. the entitlement baseline stays read-only
-5. current docs still match the real release and runtime behavior
-
-## When To Update This Document
-
-Update this file whenever:
-
-- shipping readiness changes
-- a major feature becomes solid
-- a major risk is removed or discovered
-- the recommended modernization sequence changes
+# Status
+
+Last updated: November 14, 2026. Version: **0.3.0**, first published as the pre-release `v0.3.0-beta.1`.
+
+This page records what works and has been checked, what is known to be limited, and what hasn't been verified. The other documents summarize; this one is the ledger.
+
+## How it was checked
+
+- **Automated:** Swift tests (`swift test`: 132 passing on the maintainer's Mac, including packaging, linkage and publication-gate tests) and Node tests (`cd Renderer && npm test`: 86, covering the renderer, the publication check and the release-script gates (run against mock tools)). `node build.mjs --check` confirms that the committed reader bundle matches its source. `node scripts/publication-check.mjs --tracked` passes.
+- **Manual:** the checklist in [`VERIFICATION.md`](./VERIFICATION.md), run on the maintainer's Mac (Apple silicon, macOS 26.7, Xcode 27.2) with a Debug build, using the notes in `Fixtures/notes/` and a generated demo vault.
+- **Not yet run on:** macOS 14 or 15, Intel Macs, or a second Mac with an installed release build. CI compiles on GitHub's macOS 14 and 15 runners but doesn't launch the app.
+
+## Works and verified on a Mac
+
+| Area | What was checked |
+| --- | --- |
+| Reader | GitHub and Obsidian Markdown render, including callouts with lists, tasks with custom states, footnotes, tables, highlighted code, KaTeX math, and **Mermaid diagrams drawn offline**. The note title appears once. |
+| Safety of note content | A hostile test note (`Fixtures/notes/hostile-html.md`): scripts don't run, there are no form controls or event handlers, `javascript:`/`file:` links are inert, and remote images are blocked and logged by the Content-Security-Policy. Inspected with Safari Web Inspector. |
+| Navigation | Wiki links across notes, same-note `[[#heading]]`, missing-link notice, back/forward (⌘[ ⌘]), the Outline menu and Note › Go to Heading, Find (⌘F, ⌘G, ⇧⌘G), and Linked mentions under each note |
+| Appearance | Dark mode in the sidebar, reader, code, callouts and diagrams; sidebar resizing; text size (⌘= ⌘- ⌘0) and line length (⌥⌘] ⌥⌘[) |
+| Formats | Folder of Markdown, Obsidian vault (detected by `.obsidian/`), DokuWiki (`data/pages`) with namespaced links and media, and flavor override from the sidebar badge |
+| Finder | Double-click opens a note window, after the user set Obviewer as the `.md` default via Get Info › Open with › Change All. `open -a Obviewer note.md` also works. A single note with relative images shows a banner; granting read-only access to its folder fixes the images. |
+| Quick Look | Space bar preview in Finder, rendered as static HTML; raw HTML in the note is shown as text |
+| Edit in… (⌘E) | Opens Sublime Text. Saving there refreshes Obviewer in under a second, in both folder and single-file mode, and keeps the scroll position. |
+| Copy as Rich Text (⌥⌘C) | Pasted into Apple Mail and Microsoft Word: headings, emphasis, links, nested lists, the table and the diagram (as an image) survive. Task boxes come through as ☐/☑; this was retested in Word only. Mail changes the code font. Local images become "[image: …]" placeholders. |
+| Copy for Slack (⇧⌘C) | Pasted into Slack: the text, code and table content arrive, but see Known limitations |
+| Print and PDF | Print (⌘P) shows paginated previews. Open as PDF in Preview (⌥⌘P) produces a paginated PDF with math and diagrams. Share as PDF opens the share sheet. |
+| Permissions | The signed app holds only the sandbox, read-only user-selected files, print, and outgoing network permissions. The Quick Look extension holds only the sandbox and read-only files. Checked on the built Debug app, and enforced by tests and the release scripts. |
+
+## Measured
+
+- **Indexing benchmark** (`make benchmark-vault PROFILE=integration`, the maintainer's Mac): a synthetic vault of 201 notes and 17 attachments, with 327 links. Results: cold load 781 ms, warm reload 27 ms, search 1.8 ms, global graph 1.2 ms, selective reload 36 ms. This measures the Swift indexer, not WebKit rendering.
+- **Release build and DMG:** the universal (arm64 + x86_64) Release app builds and signs ad-hoc. For `v0.3.0-beta.1` (build 3), a clean `make package-adhoc` passed every packaging gate on the staged app, the writable image volume and the mounted final DMG. Separately from those scripts, the mounted app and Quick Look extension were checked: both pass strict signature verification, have the hardened runtime and exactly the allowed entitlements, and carry no Finder info or resource forks. The image root holds only the expected entries. The app, launched from inside the mounted DMG, rendered a sample note with a callout, tasks, a Mermaid diagram and math. Quick Look was checked with the Release extension confirmed as the running provider (build 2, same source). The publication check of the mounted DMG and notes found 0 prohibited references and 0 unreadable files. Details in [`VERIFICATION.md`](./VERIFICATION.md).
+
+## Known limitations
+
+- **Slack paste formatting.** Slack turns headings and bold into italics and flattens nested bullets. Code and table text survive.
+- **No "Save as PDF" in the print dialog.** Saving needs a save panel, which a read-only sandbox can't show. Use ⌥⌘P, or the print dialog's PDF › Open in Preview, and save from Preview.
+- **Network blocking is enforced by the app, not by macOS.** WebKit refuses to start in a sandboxed app without the outgoing-network permission, so the app holds it. The reader blocks every non-local load itself. See [`READER_ARCHITECTURE.md`](./READER_ARCHITECTURE.md).
+- **Quick Look is static.** Mermaid diagrams appear as source with a hint, images are placeholders, and math uses the system's MathML rendering.
+- **Remote images never load,** by design. Audio, video and PDF embeds appear as cards that open in their default app after a confirmation.
+- **Plugin content isn't run.** Dataview and similar query blocks appear as code with a note.
+- **Obsidian syntax needs the Obsidian flavor.** Single files and plain folders open as Markdown, where `==highlights==`, `%%comments%%` and `#tags` stay literal; switch with the badge. Custom task states such as `[/]` display as checked boxes. The renderer covers common Obsidian syntax, not full Obsidian parity.
+- **PDF pagination is plain.** A short last section, such as footnotes, can land alone on its own page.
+- **Ad-hoc signature.** The app isn't notarized by Apple. macOS asks once to allow it, may ask again after each update, and managed Macs may refuse it. See [`INSTALL.md`](./INSTALL.md).
+- **The classic native reader** is still available under Settings › Reading for one release. It can't draw diagrams, math or embeds.
+
+## Not yet verified
+
+- Installing the ad-hoc signed DMG on a second Mac, and whether folder access survives an update
+- Performance on very long notes (thousands of lines) and very large vaults (thousands of notes) in the new reader. The indexer's benchmarks still run in CI.
+- An accessibility pass (VoiceOver, keyboard-only use, contrast)
+- Pasting rich text into Outlook or Teams; actually sending through share-sheet services
+- Settings › Finder › "Make Obviewer the Default" (Get Info was used instead), and Open Recent
+- Running on macOS 14 or 15
+
+## Recently fixed during verification
+
+These were found on the Mac during November 13–14, 2026 testing, then fixed and retested:
+
+- a blank reader, because WebKit needs the outgoing-network permission in the sandbox
+- stray footnote lists in callout titles
+- a stray `<input>` surviving sanitization
+- Outline menu items not responding
+- ⌘= not enlarging text
+- folder live reload missing in-place saves (such as Sublime Text's)
+- an impossible "Save as PDF" path
+- Word dropping task boxes
+- two indexer and renderer disagreements, caught by the shared fixtures
+- the ad-hoc Release app not launching: library validation refused its ad-hoc frameworks, so the modules are now linked statically
+- Finder info left on files inside the DMG, which failed strict signature checks; the DMG is now built by copying into a fresh APFS image and verified as mounted
+- file-event logs and Finder info written into the image while it was being built; the build now tells macOS not to index or log the writable volume, cleans it before sealing, and the final image is checked against an allow-list
+
+History before v0.3: [`history/STATUS_v0.2.8.md`](./history/STATUS_v0.2.8.md).

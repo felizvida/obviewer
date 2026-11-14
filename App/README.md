@@ -1,33 +1,40 @@
-# App Packaging Notes
+# App packaging notes
 
-This directory exists to support generation of a real macOS app project from `project.yml`.
+`project.yml` is the XcodeGen spec for the real macOS app. It generates:
 
-## Current Approach
-
-The repository still keeps the source code in Swift package layout, but it now also includes an `XcodeGen` project spec so a maintainer can generate an actual `.xcodeproj` without rebuilding that structure from memory.
-
-The generated project mirrors the package split:
-
-- `ObviewerCore`
-- `ObviewerMacApp`
-- `Obviewer`
-
-Generated assets:
-
-- `App/Info.plist`
 - `Obviewer.xcodeproj`
+- `App/Info.plist`
+- `Configuration/ObviewerQuickLook-Info.plist`
 
-These are intentionally generated rather than checked in.
+All three are gitignored. Regenerate them with `make xcodeproj`.
 
-## Typical Flow
+The generated project contains:
+
+- static libraries: `ObviewerCore`, `ObviewerReaderKit`, `ObviewerMacApp` and `ObviewerFixtureSupport`, linked into each executable. No frameworks are shipped, because an ad-hoc signed hardened app can't load them.
+- the `Obviewer` app, which embeds the `ObviewerQuickLook` app extension. Both bundles carry the `Resources/Reader` folder.
+- test bundles: `ObviewerCoreTests`, `ObviewerReaderKitTests`, `ObviewerMacAppTests`
+
+## Builds
 
 ```bash
-brew install xcodegen
-export OBVIEWER_CODE_SIGN_IDENTITY="Developer ID Application: Example Corp (TEAMID1234)"
+make package-adhoc     # ad-hoc signed Release app + DMG (no Apple account needed)
+
+# Developer ID (signed; notarized when OBVIEWER_NOTARY_KEYCHAIN_PROFILE is set)
+export OBVIEWER_CODE_SIGN_IDENTITY="Developer ID Application: Example (TEAMID1234)"
 export OBVIEWER_DEVELOPMENT_TEAM="TEAMID1234"
-make xcodeproj
-make build-app
-make package-app
+make package-dmg
 ```
 
-The packaging scripts now require code signing and verify that the sandbox entitlements are present in the resulting app bundle before zipping it.
+Every packaging path verifies the app three times: in the staging folder, on the writable image volume before it is sealed, and inside the finished, read-only-mounted DMG. Each time it checks:
+
+- the strict signature
+- the hardened runtime flag
+- the sandbox and read-only file entitlements, on both the app and the extension
+- that no read-write, server-network or debugger (`get-task-allow`) entitlement is present
+- that the extension has no network entitlement
+- that executables depend only on system libraries, with no bundled frameworks or dylibs
+- that no Finder info or resource forks are present
+
+The finished image may contain only the app, the Applications link, the install guide and two empty markers that keep Spotlight indexes and file-event logs out of it.
+
+See [`docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md) for the release workflow.

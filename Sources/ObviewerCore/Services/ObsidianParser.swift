@@ -259,6 +259,9 @@ public struct ObsidianParser: Sendable {
     private func parseHeading(from line: String) -> (level: Int, text: String)? {
         let hashes = line.prefix { $0 == "#" }
         guard hashes.isEmpty == false, hashes.count <= 6 else { return nil }
+        guard hashes.count < line.count else { return nil }
+        let separatorIndex = line.index(line.startIndex, offsetBy: hashes.count)
+        guard line[separatorIndex].isWhitespace else { return nil }
         let text = line.dropFirst(hashes.count).trimmingCharacters(in: .whitespaces)
         guard text.isEmpty == false else { return nil }
         return (hashes.count, text)
@@ -817,9 +820,33 @@ public struct ObsidianParser: Sendable {
             working.removeLast()
         }
 
-        let cells = working.split(separator: "|", omittingEmptySubsequences: false).map {
-            $0.trimmingCharacters(in: .whitespaces)
+        // Split on unescaped pipes; "\|" stays inside the cell as a literal pipe
+        // (GitHub tables and Obsidian [[link\|alias]] both rely on this).
+        var cells = [String]()
+        var current = ""
+        var iterator = working.makeIterator()
+        while let character = iterator.next() {
+            if character == "\\" {
+                if let next = iterator.next() {
+                    if next == "|" {
+                        current.append("|")
+                    } else {
+                        current.append(character)
+                        current.append(next)
+                    }
+                } else {
+                    current.append(character)
+                }
+                continue
+            }
+            if character == "|" {
+                cells.append(current.trimmingCharacters(in: .whitespaces))
+                current = ""
+                continue
+            }
+            current.append(character)
         }
+        cells.append(current.trimmingCharacters(in: .whitespaces))
         return cells.count >= 2 ? cells : nil
     }
 
@@ -865,6 +892,16 @@ public struct ObsidianParser: Sendable {
         }
 
         while index < normalized.endIndex {
+            // Backslash escapes: "\[[" is not a link, "\*" is not emphasis.
+            if normalized[index] == "\\" {
+                let next = normalized.index(after: index)
+                if next < normalized.endIndex, "[]*_`#|!\\~=".contains(normalized[next]) {
+                    appendText(String(normalized[next]))
+                    index = normalized.index(after: next)
+                    continue
+                }
+            }
+
             if normalized[index...].hasPrefix("![["),
                let close = normalized[index...].range(of: "]]") {
                 let rawTarget = String(normalized[normalized.index(index, offsetBy: 3)..<close.lowerBound])
@@ -892,6 +929,7 @@ public struct ObsidianParser: Sendable {
             if normalized[index...].hasPrefix("[["),
                let close = normalized[index...].range(of: "]]") {
                 let rawTarget = String(normalized[normalized.index(index, offsetBy: 2)..<close.lowerBound])
+                    .replacingOccurrences(of: "\\|", with: "|")
                 let parts = rawTarget.split(separator: "|", maxSplits: 1).map(String.init)
                 let targetPart = parts[0]
                 let label = parts.count > 1 ? parts[1] : targetPart
@@ -1029,7 +1067,7 @@ public struct ObsidianParser: Sendable {
     }
 
     private func classifyLinkDestination(_ destination: String) -> LinkDestination {
-        let trimmed = destination.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = stripLinkTitle(destination)
         let lowered = trimmed.lowercased()
         if lowered.contains("://") || lowered.hasPrefix("mailto:") {
             return .external(trimmed)
@@ -1049,6 +1087,21 @@ public struct ObsidianParser: Sendable {
         }
 
         return .attachment(target)
+    }
+
+    /// Removes an optional CommonMark link title (`path "Title"`) and angle brackets (`<a b.png>`).
+    private func stripLinkTitle(_ destination: String) -> String {
+        let trimmed = destination.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("<"), let close = trimmed.firstIndex(of: ">") {
+            return String(trimmed[trimmed.index(after: trimmed.startIndex)..<close])
+        }
+        if let space = trimmed.firstIndex(where: { $0 == " " || $0 == "\t" }) {
+            let rest = trimmed[space...].trimmingCharacters(in: .whitespaces)
+            if let first = rest.first, first == "\"" || first == "'" || first == "(" {
+                return String(trimmed[..<space])
+            }
+        }
+        return trimmed
     }
 
     private func isTagBoundary(in text: String, at index: String.Index) -> Bool {

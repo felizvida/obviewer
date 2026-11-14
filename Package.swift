@@ -17,6 +17,10 @@ let package = Package(
             targets: ["ObviewerFixtureSupport"]
         ),
         .library(
+            name: "ObviewerReaderKit",
+            targets: ["ObviewerReaderKit"]
+        ),
+        .library(
             name: "ObviewerMacApp",
             targets: ["ObviewerMacApp"]
         ),
@@ -45,8 +49,15 @@ let package = Package(
             name: "ObviewerFixtureSupport"
         ),
         .target(
+            name: "ObviewerReaderKit",
+            dependencies: ["ObviewerCore"],
+            resources: [
+                .copy("Resources/Reader"),
+            ]
+        ),
+        .target(
             name: "ObviewerMacApp",
-            dependencies: ["ObviewerCore"]
+            dependencies: ["ObviewerCore", "ObviewerReaderKit"]
         ),
         .executableTarget(
             name: "ObviewerFixtureTool",
@@ -69,8 +80,12 @@ let package = Package(
             dependencies: ["ObviewerCore", "ObviewerFixtureSupport"]
         ),
         .testTarget(
+            name: "ObviewerReaderKitTests",
+            dependencies: ["ObviewerReaderKit", "ObviewerCore"]
+        ),
+        .testTarget(
             name: "ObviewerMacAppTests",
-            dependencies: ["ObviewerMacApp", "ObviewerCore", "ObviewerFixtureSupport"]
+            dependencies: ["ObviewerMacApp", "ObviewerReaderKit", "ObviewerCore", "ObviewerFixtureSupport"]
         ),
     ]
 )

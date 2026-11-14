@@ -1,0 +1,378 @@
+{
+  "version": 1,
+  "description": "Publication policy fingerprints. Each rule is the SHA-256 of a normalized term (lowercase, NFKC, alphanumerics only). The terms are deliberately not stored in the repository. Token rules match whole words and camelCase/acronym parts; stream rules match separator-free text starting at a word boundary. Generate rules with: node scripts/publication-check.mjs --fingerprint --mode token|stream < terms.txt (keep terms.txt out of the repository).",
+  "rules": [
+    {
+      "id": "T1",
+      "mode": "token",
+      "length": 3,
+      "sha256": "6183842e9dfc52f4347dc185a133b872b1a29104990d2c9f2bb6b40f01ad6945"
+    },
+    {
+      "id": "T2",
+      "mode": "token",
+      "length": 4,
+      "sha256": "6f7b72a9101d91637d5ae9b1ec56febbbcb1cd532cd86261a9827f8df966b5fe"
+    },
+    {
+      "id": "T3",
+      "mode": "token",
+      "length": 6,
+      "sha256": "0408e4e185d65e5988e4dc8927c2a52d58db649fc9f933c4a323d337f0d01a78"
+    },
+    {
+      "id": "T4",
+      "mode": "token",
+      "length": 3,
+      "sha256": "4c53f2ab9f173a6986775647e862ee64c896585a4a244cf551f784899dad29d2"
+    },
+    {
+      "id": "T5",
+      "mode": "token",
+      "length": 3,
+      "sha256": "27f96233ad90b365afc8d68251ac4b5b8c424c50c70e9f1e92dfcd88a03967c5"
+    },
+    {
+      "id": "T6",
+      "mode": "token",
+      "length": 3,
+      "sha256": "4f15b924e81641ed266dba70ba18ada6b0d0a32f1f495714864808406499a908"
+    },
+    {
+      "id": "T7",
+      "mode": "token",
+      "length": 5,
+      "sha256": "77f3dd8406eb67dcdc4938b3fb28f333423550d856a1bbcc8f609ea7be9aac6b"
+    },
+    {
+      "id": "T8",
+      "mode": "token",
+      "length": 5,
+      "sha256": "9fd60c63294cb3e71bf4d5eed755e19111992d58b945759d30b43621c51cd09e"
+    },
+    {
+      "id": "T9",
+      "mode": "token",
+      "length": 3,
+      "sha256": "b660ea361904c6e0b9c9f120141e8ab671e3dc650ade8b20d5e8e3fc0d3edca5"
+    },
+    {
+      "id": "T10",
+      "mode": "token",
+      "length": 5,
+      "sha256": "3adc321cbcefa568b728a35f89540ef2b2fbe8038d945b9902cc947c1ec299ac"
+    },
+    {
+      "id": "T11",
+      "mode": "token",
+      "length": 5,
+      "sha256": "4a3301edaf651b8cf885a46d01c40444f474fb8c67817abe60f8a91da5308a86"
+    },
+    {
+      "id": "T12",
+      "mode": "token",
+      "length": 5,
+      "sha256": "3b705678332c07a63bbf695e54f1cc781d28716184db4dc89a3f01d4ae5ff1d2"
+    },
+    {
+      "id": "T13",
+      "mode": "token",
+      "length": 5,
+      "sha256": "7d30dd53eff5acebb92111fd2a6069ae4b4138b8686b3c6a74931e0f87532c9f"
+    },
+    {
+      "id": "T14",
+      "mode": "token",
+      "length": 5,
+      "sha256": "b2e610e5e2bc39abcc14c982ff3b9c4cd21de693711daf5b8aed79d4b82124ff"
+    },
+    {
+      "id": "T15",
+      "mode": "token",
+      "length": 5,
+      "sha256": "f77887a47965084a933c8d53f14980ddbef90dc2fbadcb43b9e7451aa4737418"
+    },
+    {
+      "id": "T16",
+      "mode": "token",
+      "length": 5,
+      "sha256": "120558a9fc6a6b3e57f5b2cf94fb325a9e2be511e33fb2fe5d6f0d35947629b7"
+    },
+    {
+      "id": "T17",
+      "mode": "token",
+      "length": 5,
+      "sha256": "934f158daef735f4b2f8a805f10ab2a162e3c353c4d04ba4f25cef59ba966d9e"
+    },
+    {
+      "id": "T18",
+      "mode": "token",
+      "length": 4,
+      "sha256": "32b68d81b593aa72053dc27e24adcbc5c34fc6bf4ce81d74d41e0ec4e407a1f6"
+    },
+    {
+      "id": "T19",
+      "mode": "token",
+      "length": 5,
+      "sha256": "25de5b19a95cf72f7d703057d4aafde2deda6d1f1eccb31b09fb188cc31ac89c"
+    },
+    {
+      "id": "T20",
+      "mode": "token",
+      "length": 5,
+      "sha256": "513082ee3c35453753ace9505061f83cbd192754464cd4b95d7df3bdfc31ca92"
+    },
+    {
+      "id": "T21",
+      "mode": "token",
+      "length": 4,
+      "sha256": "f2dc245ae117a6944fdf2db2421673f43738013af3c78e13dd20086f33e22217"
+    },
+    {
+      "id": "T22",
+      "mode": "token",
+      "length": 5,
+      "sha256": "a8baf590256784acf9940dd236fa91d05984648a6f2312e359047e69f33a1abc"
+    },
+    {
+      "id": "T23",
+      "mode": "token",
+      "length": 5,
+      "sha256": "8d009e301375bce07bd76c6fad1082209b041be8dab9cab4763a3eb5ad3b0ff6"
+    },
+    {
+      "id": "T24",
+      "mode": "token",
+      "length": 4,
+      "sha256": "a1bfb5e250842eed2c124f1a4ec7caa292aba94e54d675289979ce731f7509a0"
+    },
+    {
+      "id": "T25",
+      "mode": "token",
+      "length": 5,
+      "sha256": "4284653199533a2f3cdd16fb5b95b8e4139b8221267802b32560a6b5d68fd396"
+    },
+    {
+      "id": "T26",
+      "mode": "token",
+      "length": 5,
+      "sha256": "3316c02359f76e5c77b43d837d81cb824ac0dbf5ab7d49824abe0c426db78f33"
+    },
+    {
+      "id": "T27",
+      "mode": "token",
+      "length": 7,
+      "sha256": "c347289646c60a7fd24be155dd442dc16858f41d8d2ca8731c36ca1dc037f5ca"
+    },
+    {
+      "id": "T28",
+      "mode": "token",
+      "length": 5,
+      "sha256": "ab4aeada152495bb241bdc9b09a61324c04bf4f78601134bacd75c8d4fc3f8ad"
+    },
+    {
+      "id": "S1",
+      "mode": "stream",
+      "length": 6,
+      "sha256": "73a8ec9c2cc64f775a8094b90e9271fb32457da99c2d034d7580e88d8c41e22a"
+    },
+    {
+      "id": "S2",
+      "mode": "stream",
+      "length": 26,
+      "sha256": "a9856df239edb509644c3d128109a5b739840232170f2b4e49b585149372b7df"
+    },
+    {
+      "id": "S3",
+      "mode": "stream",
+      "length": 25,
+      "sha256": "aa01d26521aca898b03beb80d8049e9baf706a82daa15e49fda02a2a82c8b6e1"
+    },
+    {
+      "id": "S4",
+      "mode": "stream",
+      "length": 41,
+      "sha256": "74f6126bc35681c63370316fb3e5b42d46ecb679cc9fb7bf38152d0e3b485197"
+    },
+    {
+      "id": "S5",
+      "mode": "stream",
+      "length": 23,
+      "sha256": "59a47f70de436ffdaa629abde01ea58191de3ff27fbfc3c75ff36ddd5d3205c9"
+    },
+    {
+      "id": "S6",
+      "mode": "stream",
+      "length": 20,
+      "sha256": "333fc88cdd99d763af2782b6c602eb403d356d6d97feacd1d275f2d5bbea2b85"
+    },
+    {
+      "id": "S7",
+      "mode": "stream",
+      "length": 34,
+      "sha256": "bd4e631ce97e032fa47e569aef06427c90a8b131cae2f148711ebea771b5baed"
+    },
+    {
+      "id": "S8",
+      "mode": "stream",
+      "length": 36,
+      "sha256": "56373759def21a823ff05cddc403292494c09c9afe80884b31c49c31bd9fe698"
+    },
+    {
+      "id": "S9",
+      "mode": "stream",
+      "length": 24,
+      "sha256": "3d750c61b75055aefc58b0e11d35afb6042ac919ea27b0583816f9890463e800"
+    },
+    {
+      "id": "S10",
+      "mode": "stream",
+      "length": 44,
+      "sha256": "3ae0464ee174043c422337a0df05b1c7457e0426172a1bb11a23fd97fd56ea4e"
+    },
+    {
+      "id": "S11",
+      "mode": "stream",
+      "length": 47,
+      "sha256": "f4218fbea6f0065459a17fb252f2f16c0401ec51c75832ad4a4566d9632088d0"
+    },
+    {
+      "id": "S12",
+      "mode": "stream",
+      "length": 61,
+      "sha256": "31790e635f233332801207089031a585c1e65421a802fbe694de747f9b11d172"
+    },
+    {
+      "id": "S13",
+      "mode": "stream",
+      "length": 53,
+      "sha256": "d72e212d9ef7ce472e82cf61050af79fe7c364149a2258f89e1ac46e0ccca749"
+    },
+    {
+      "id": "S14",
+      "mode": "stream",
+      "length": 49,
+      "sha256": "962938af2962110386d62628db2243597e19b0de70c1311c01222b8c7d5495c6"
+    },
+    {
+      "id": "S15",
+      "mode": "stream",
+      "length": 20,
+      "sha256": "ae5ba807ede5b6a68e93cfce328a1e65e6130093ec40d0415d36f66a07b5fdfd"
+    },
+    {
+      "id": "S16",
+      "mode": "stream",
+      "length": 57,
+      "sha256": "afb6b8a4472582979e5ae9a65c70a2a1a9806feb5a2903f01c13ac7c2d15ff31"
+    },
+    {
+      "id": "S17",
+      "mode": "stream",
+      "length": 48,
+      "sha256": "8bab0a4b06af21288d79360b0318f764799aabd771f88aad555798d71761ef20"
+    },
+    {
+      "id": "S18",
+      "mode": "stream",
+      "length": 56,
+      "sha256": "8e37c3b7d068ca1d0676989c2a4cefbc90e2da8b3f7604dde130295ef7e7dd8a"
+    },
+    {
+      "id": "S19",
+      "mode": "stream",
+      "length": 28,
+      "sha256": "8ee02a4b354697c0516c0efb4b1a683ae3463efac48d3623f5f2c7928b8943fc"
+    },
+    {
+      "id": "S20",
+      "mode": "stream",
+      "length": 46,
+      "sha256": "7c331d3ec006d2c00ff18f273808de3407f641528e4c3b1ea6a26a0229722797"
+    },
+    {
+      "id": "S21",
+      "mode": "stream",
+      "length": 46,
+      "sha256": "ff9519f28989e0c915be761a1ea31da8326bcc1471da89ec9d0efce78b45ea08"
+    },
+    {
+      "id": "S22",
+      "mode": "stream",
+      "length": 41,
+      "sha256": "27d5087752078c029185acace8970cd9cddb1ee87716b8e01ab5f470a8952069"
+    },
+    {
+      "id": "S23",
+      "mode": "stream",
+      "length": 31,
+      "sha256": "982796fe2c1a35b8ce1b998806d2a0cafd0265bf5c90dc01ae0d314e13613df7"
+    },
+    {
+      "id": "S24",
+      "mode": "stream",
+      "length": 53,
+      "sha256": "933fde9ba3b3242f27dce510b02cce5906d227d0325c4cfccf92cad51e34ec04"
+    },
+    {
+      "id": "S25",
+      "mode": "stream",
+      "length": 49,
+      "sha256": "b2a450c41f6b8695b71041573eff0915ac48b1e170396ec850c7522c485c8fc9"
+    },
+    {
+      "id": "S26",
+      "mode": "stream",
+      "length": 34,
+      "sha256": "5c633f6d197d0d37c805bda5c6772c296ebbea37b29eabf8bf67cf2f35facbe9"
+    },
+    {
+      "id": "S27",
+      "mode": "stream",
+      "length": 47,
+      "sha256": "bb45d603744ed2bd3c8f44891a4458d1ccdd32246e2d1bc9adfe01c83fd2c177"
+    },
+    {
+      "id": "S28",
+      "mode": "stream",
+      "length": 50,
+      "sha256": "0fccc0198a6199dbe6c933459bf42a9e90c247bc5258f1f4dccc557488e43698"
+    },
+    {
+      "id": "S29",
+      "mode": "stream",
+      "length": 26,
+      "sha256": "be1b924fdcce1b751c3823789d9807eb25df1b1bff824ccc8d5e2bc8399afe6b"
+    },
+    {
+      "id": "S30",
+      "mode": "stream",
+      "length": 9,
+      "sha256": "30002e290df4c3d5a19d2ec5b1f6f0f8046fdca8109925c7816f7ab23e96225d"
+    },
+    {
+      "id": "S31",
+      "mode": "stream",
+      "length": 17,
+      "sha256": "412969962cc833c9a7a1ce51854766513077f5426310cca4e9c32fb5ad1bd712"
+    },
+    {
+      "id": "S32",
+      "mode": "stream",
+      "length": 11,
+      "sha256": "8abf89466c20549bb5f49b45213f98e3931ca417483641a201e20acf39332327"
+    },
+    {
+      "id": "S33",
+      "mode": "stream",
+      "length": 13,
+      "sha256": "21db1c3e481f133a7bb1faf0a3de5d2516a0fc2319c5217274e5539a57a278df"
+    },
+    {
+      "id": "S34",
+      "mode": "stream",
+      "length": 10,
+      "sha256": "c718938d3546974522bcaf34c575b39a3be281431cdd070e4ed598ccc41b6bb3"
+    }
+  ]
+}

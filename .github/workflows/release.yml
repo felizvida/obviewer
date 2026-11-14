@@ -17,6 +17,7 @@ jobs:
     runs-on: macos-15
     env:
       HAS_SIGNING_SECRETS: ${{ secrets.OBVIEWER_DEVELOPER_ID_CERT_P12_BASE64 != '' && secrets.OBVIEWER_DEVELOPER_ID_CERT_PASSWORD != '' && secrets.OBVIEWER_CODE_SIGN_IDENTITY != '' && secrets.OBVIEWER_DEVELOPMENT_TEAM != '' && 'true' || 'false' }}
+      HAS_ANY_SIGNING_SECRET: ${{ (secrets.OBVIEWER_DEVELOPER_ID_CERT_P12_BASE64 != '' || secrets.OBVIEWER_DEVELOPER_ID_CERT_PASSWORD != '' || secrets.OBVIEWER_CODE_SIGN_IDENTITY != '' || secrets.OBVIEWER_DEVELOPMENT_TEAM != '') && 'true' || 'false' }}
       HAS_NOTARY_SECRETS: ${{ secrets.OBVIEWER_NOTARY_APPLE_ID != '' && secrets.OBVIEWER_NOTARY_APP_PASSWORD != '' && secrets.OBVIEWER_DEVELOPMENT_TEAM != '' && 'true' || 'false' }}
       NOTARY_PROFILE_NAME: obviewer-notary
 
@@ -32,11 +33,121 @@ jobs:
           swift --version
           gh --version
 
+      # Release gates: decide everything about the release before building anything.
+      - name: Check tag, version, notes and signing mode
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          BASE_VERSION="${TAG#v}"
+          BASE_VERSION="${BASE_VERSION%%-*}"
+          PROJECT_VERSION="$(sed -n 's/^ *MARKETING_VERSION: *//p' project.yml | head -n 1 | tr -d '"')"
+          if [ "$BASE_VERSION" != "$PROJECT_VERSION" ]; then
+            echo "Tag $TAG (version $BASE_VERSION) does not match MARKETING_VERSION $PROJECT_VERSION in project.yml." >&2
+            exit 1
+          fi
+          NOTES="docs/RELEASE_NOTES_${TAG}.md"
+          if [ ! -s "$NOTES" ]; then
+            echo "Reviewed release notes are required at $NOTES." >&2
+            exit 1
+          fi
+          # The channel is declared explicitly in the reviewed notes, never inferred.
+          CHANNEL="$(sed -n 's/^<!-- release-channel: *\([a-z]*\) *-->$/\1/p' "$NOTES" | head -n 1)"
+          case "$CHANNEL" in
+            prerelease) PRERELEASE=true ;;
+            stable) PRERELEASE=false ;;
+            *)
+              echo "$NOTES must declare <!-- release-channel: prerelease --> or <!-- release-channel: stable -->." >&2
+              exit 1
+              ;;
+          esac
+          case "$TAG" in
+            *-*)
+              if [ "$PRERELEASE" != "true" ]; then
+                echo "Tag $TAG looks like a pre-release, but the notes declare a stable release." >&2
+                exit 1
+              fi
+              ;;
+          esac
+          # Never fall back silently: either all Developer ID secrets or none.
+          if [ "$HAS_SIGNING_SECRETS" = "true" ]; then
+            MODE=developer-id
+          elif [ "$HAS_ANY_SIGNING_SECRET" = "true" ]; then
+            echo "Developer ID signing secrets are incomplete. Provide all four or remove them for an ad-hoc release." >&2
+            exit 1
+          else
+            MODE=adhoc
+          fi
+          {
+            echo "RELEASE_NOTES=$NOTES"
+            echo "SIGNING_MODE=$MODE"
+            echo "IS_PRERELEASE=$PRERELEASE"
+          } >> "$GITHUB_ENV"
+          echo "Release $TAG: signing=$MODE prerelease=$PRERELEASE notes=$NOTES"
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Renderer/package-lock.json
+
+      - name: Renderer tests and bundle check
+        working-directory: Renderer
+        run: |
+          npm ci --ignore-scripts
+          npm test
+          node build.mjs --check
+
+      # Publication policy, part 1: nothing is built from a tree that fails the policy.
+      # OCR and PDF tools are required; the check fails closed without them.
+      - name: Install publication-check tools
+        run: brew install tesseract poppler
+
+      # Scope of this gate: the tagged tree, the reviewed notes, the release title, the tag
+      # name, tagger identity and message, and the messages and identities of every commit
+      # since the previous release tag. History contents are checked before push by the
+      # maintainer's local guard; CI cannot un-publish history that is already pushed.
+      - name: Publication policy (source tree, notes, tag, commit metadata)
+        run: |
+          set -euo pipefail
+          node scripts/publication-check.mjs --tracked
+          node scripts/publication-check.mjs "$RELEASE_NOTES"
+          node scripts/publication-check.mjs \
+            --text "$GITHUB_REF_NAME" \
+            --text "Obviewer $GITHUB_REF_NAME" \
+            --text "$(git for-each-ref --format='%(taggername) %(taggeremail) %(contents)' "refs/tags/$GITHUB_REF_NAME")"
+          PREVIOUS_TAG="$(git describe --tags --abbrev=0 "${GITHUB_SHA}^" 2>/dev/null || true)"
+          if [ -n "$PREVIOUS_TAG" ]; then
+            node scripts/publication-check.mjs --git-range "${PREVIOUS_TAG}..${GITHUB_SHA}"
+          else
+            node scripts/publication-check.mjs --git-range "$GITHUB_SHA"
+          fi
+
       - name: Validate entitlements
-        run: plutil -lint Configuration/Obviewer.entitlements
+        run: |
+          plutil -lint Configuration/Obviewer.entitlements
+          test "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.app-sandbox' Configuration/Obviewer.entitlements)" = "true"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.files.user-selected.read-only' Configuration/Obviewer.entitlements)" = "true"
+          ! /usr/libexec/PlistBuddy -c 'Print :com.apple.security.files.user-selected.read-write' Configuration/Obviewer.entitlements
+          ! /usr/libexec/PlistBuddy -c 'Print :com.apple.security.network.server' Configuration/Obviewer.entitlements
+          ! /usr/libexec/PlistBuddy -c 'Print :com.apple.security.network.client' Configuration/ObviewerQuickLook.entitlements
+          test "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.app-sandbox' Configuration/ObviewerQuickLook.entitlements)" = "true"
+          ! /usr/libexec/PlistBuddy -c 'Print :com.apple.security.files.user-selected.read-write' Configuration/ObviewerQuickLook.entitlements
 
       - name: Validate packaging scripts
-        run: bash -n scripts/build_app.sh scripts/generate_xcode_project.sh scripts/notarize_release_app.sh scripts/package_release_app.sh scripts/package_release_dmg.sh scripts/release_common.sh
+        run: |
+          bash -n scripts/build_app.sh scripts/generate_xcode_project.sh scripts/notarize_release_app.sh scripts/package_release_app.sh scripts/package_release_dmg.sh scripts/release_common.sh
+          test -x scripts/build_app.sh
+          test -x scripts/generate_xcode_project.sh
+          test -x scripts/notarize_release_app.sh
+          test -x scripts/package_release_app.sh
+          test -x scripts/package_release_dmg.sh
+
+      - name: Validate release hardening settings
+        run: |
+          grep -q "ENABLE_HARDENED_RUNTIME: YES" project.yml
+          grep -q "securityScopeAllowOnlyReadAccess" Sources/ObviewerMacApp/Services/BookmarkStore.swift
+          grep -q "flags=.*runtime" scripts/release_common.sh
 
       - name: Build
         run: swift build
@@ -61,7 +172,7 @@ jobs:
             > "dist/obviewer-${GITHUB_REF_NAME}-sha256.txt"
 
       - name: Import Developer ID certificate
-        if: env.HAS_SIGNING_SECRETS == 'true'
+        if: env.SIGNING_MODE == 'developer-id'
         env:
           OBVIEWER_DEVELOPER_ID_CERT_P12_BASE64: ${{ secrets.OBVIEWER_DEVELOPER_ID_CERT_P12_BASE64 }}
           OBVIEWER_DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.OBVIEWER_DEVELOPER_ID_CERT_PASSWORD }}
@@ -95,7 +206,7 @@ jobs:
             --password "$OBVIEWER_NOTARY_APP_PASSWORD"
 
       - name: Build signed release DMG
-        if: env.HAS_SIGNING_SECRETS == 'true'
+        if: env.SIGNING_MODE == 'developer-id'
         env:
           OBVIEWER_CODE_SIGN_IDENTITY: ${{ secrets.OBVIEWER_CODE_SIGN_IDENTITY }}
           OBVIEWER_DEVELOPMENT_TEAM: ${{ secrets.OBVIEWER_DEVELOPMENT_TEAM }}
@@ -105,6 +216,23 @@ jobs:
           ./scripts/package_release_dmg.sh
           cp build/Obviewer-${GITHUB_REF_NAME}-macOS-*.dmg dist/
           shasum -a 256 build/Obviewer-${GITHUB_REF_NAME}-macOS-*.dmg > "dist/obviewer-${GITHUB_REF_NAME}-dmg-sha256.txt"
+
+      - name: Build ad-hoc signed release DMG
+        if: env.SIGNING_MODE == 'adhoc'
+        env:
+          OBVIEWER_CODE_SIGN_IDENTITY: "-"
+          OBVIEWER_RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          ./scripts/package_release_dmg.sh
+          cp build/Obviewer-${GITHUB_REF_NAME}-macOS-adhoc.dmg dist/
+          cp docs/INSTALL.md "dist/INSTALL-${GITHUB_REF_NAME}.md"
+          shasum -a 256 build/Obviewer-${GITHUB_REF_NAME}-macOS-adhoc.dmg > "dist/obviewer-${GITHUB_REF_NAME}-dmg-sha256.txt"
+
+      # Publication policy, part 2: every file that will be uploaded, including the
+      # DMG (mounted read-only and scanned file by file), source archives, checksums
+      # and the install guide copy.
+      - name: Publication policy (release payload)
+        run: node scripts/publication-check.mjs dist "$RELEASE_NOTES"
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v7
@@ -116,10 +244,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            # A release created by hand (e.g. a reviewed draft) keeps its notes; just attach artifacts.
             gh release upload "${GITHUB_REF_NAME}" dist/* --clobber
           else
+            # bash 3.2 on macOS runners: guard empty-array expansion under set -u.
+            FLAGS=()
+            if [ "$IS_PRERELEASE" = "true" ]; then FLAGS+=(--prerelease); fi
             gh release create "${GITHUB_REF_NAME}" dist/* \
-              --generate-notes \
-              --title "${GITHUB_REF_NAME}"
+              --notes-file "$RELEASE_NOTES" \
+              --title "Obviewer ${GITHUB_REF_NAME}" \
+              --verify-tag \
+              ${FLAGS[@]+"${FLAGS[@]}"}
           fi

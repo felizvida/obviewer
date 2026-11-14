@@ -43,6 +43,15 @@ public enum DocumentationScreenshotRenderer {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.prohibited)
 
+        // cacheDisplay can't capture WKWebView content, so these offscreen renders use the
+        // classic reader. Real screenshots of the web reader come from the running app
+        // (see docs/VERIFICATION.md).
+        let previousClassicSetting = UserDefaults.standard.object(forKey: ReaderPreferenceKeys.useClassicReader)
+        UserDefaults.standard.set(true, forKey: ReaderPreferenceKeys.useClassicReader)
+        defer {
+            UserDefaults.standard.set(previousClassicSetting, forKey: ReaderPreferenceKeys.useClassicReader)
+        }
+
         for spec in specs {
             let model = AppModel(
                 bookmarkStore: DocumentationBookmarkStore(),

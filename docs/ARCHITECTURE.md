@@ -1,334 +1,75 @@
 # Architecture
 
-This document explains how the repository is structured today, why it is structured that way, and where the current pressure points are.
-
-## Architectural Goals
-
-The architecture is optimized for five things:
-
-1. preserving a read-only vault access model
-2. keeping vault access and parsing separate from UI rendering
-3. making the reader experience feel native and premium on macOS
-4. keeping the core logic portable and testable
-5. supporting future modernization without rewriting the entire app
-
-## Module Layout
-
-The package is split into these primary products:
-
-1. `ObviewerCore`
-2. `ObviewerFixtureSupport`
-3. `ObviewerMacApp`
-4. `ObviewerFixtureTool`
-5. `ObviewerDocsTool`
-6. `Obviewer`
-
-### `ObviewerCore`
-
-Portable models and services:
-
-- vault models and snapshot lookup
-- note graph generation
-- markdown parsing
-- vault indexing and progress reporting
-
-### `ObviewerFixtureSupport`
-
-Shared tooling for synthetic vault generation. This is intentionally separate so tests, manual smoke runs, and documentation tooling can all use the same fixtures.
-
-### `ObviewerMacApp`
-
-macOS shell and UI:
-
-- `AppModel`
-- security-scoped access lifecycle
-- bookmark persistence
-- vault picker integration
-- SwiftUI/AppKit views
-- documentation screenshot renderer
-
-### `ObviewerFixtureTool`
-
-CLI for generating rich sample vaults.
-
-### `ObviewerDocsTool`
-
-CLI for generating the screenshots used by the docs.
-
-### `Obviewer`
-
-Thin executable that launches the macOS app.
-
-## High-Level Data Flow
-
-The main runtime flow is:
-
-1. the app launches and creates `AppModel`
-2. `AppModel` attempts bookmark restore if applicable
-3. the user chooses a vault through `VaultPicker`
-4. security-scoped access starts
-5. `VaultReader` enumerates files and emits loading progress
-6. markdown notes are parsed by `ObsidianParser`
-7. notes and attachments become a `VaultSnapshot`
-8. `VaultSnapshot` derives lookup tables and a `NoteGraph`
-9. `AppModel` starts a vault watcher after a successful load
-10. filesystem changes trigger debounced, path-aware reload batches through the same loader boundary
-11. `ContentView` renders the library shell
-12. `ReaderView` renders note content and attachment flows
-13. `GraphView` renders local/global graph exploration
-14. link navigation resolves back through `VaultSnapshot`
-
-## Top-Level Components
-
-### Application Entry Point
-
-File:
-
-- `Sources/Obviewer/ObviewerApp.swift`
-
-Responsibilities:
-
-- create the shared `AppModel`
-- define the main window
-- expose command/menu actions for opening and reloading a vault
-
-### AppModel
-
-File:
-
-- `Sources/ObviewerMacApp/AppModel.swift`
-
-Responsibilities:
-
-- own the current `VaultSnapshot`
-- track vault URL, loading state, errors, and current selection
-- manage search input and graph scope state
-- orchestrate choose, restore, and reload flows
-- react to filesystem changes through a watcher service
-- seed cold loads from a persisted snapshot cache, file manifest, and reusable lookup/graph index state when safe to do so
-- bridge UI actions into core lookup/navigation behavior
-
-Important design choice:
-
-- the UI never reads the filesystem directly
-- platform services are injected through protocols, which keeps orchestration testable without `NSOpenPanel`, `UserDefaults`, or live security-scoped URLs
-
-### VaultSnapshot And Models
-
-File:
-
-- `Sources/ObviewerCore/Models/VaultModels.swift`
-
-Responsibilities:
-
-- define `VaultSnapshot`, `VaultNote`, `VaultAttachment`, render models, and graph models
-- normalize note and attachment references
-- resolve links source-relatively
-- provide precomputed note-search matching in core
-- build the note graph and graph subgraphs
-- serialize reusable lookup and graph index state for warm-start cache reuse
-
-Important design choices:
-
-- the render model is intentionally presentation-oriented rather than a full markdown AST
-- note and attachment lookup prefer source-relative resolution to handle duplicate filenames sanely
-- note search is derived in core from a precomputed per-note search corpus instead of ad hoc UI filtering
-- graph data is derived and stored with the snapshot instead of being recomputed in the UI
-- persistent cache payloads can carry validated lookup and graph state so cold loads can skip more reconstruction work
-
-### VaultReader
-
-File:
-
-- `Sources/ObviewerCore/Services/VaultReader.swift`
-
-Responsibilities:
-
-- enumerate vault contents
-- classify notes and attachments
-- read note contents through read-only APIs
-- emit progress updates
-- reuse unchanged notes and patch only affected files during watched reloads
-- accept warm-start seed snapshots from persistent cache storage
-- produce the final snapshot
-
-Important design choices:
-
-- hidden files and package descendants are skipped
-- attachments are indexed broadly even if only some kinds get rich rendering today
-- file access stays in one service boundary, which is important for the read-only guarantee
-
-Pressure points:
-
-- the current persistent cache stores parsed notes, attachment metadata, manifests, and reusable lookup/graph state, but not richer ranking or directory-level index state
-- reloads are path-aware now, but there is still no deeper persistent index for very large vaults
-- frontmatter is still intentionally shallow and does not yet model nested YAML objects
-
-### ObsidianParser
-
-File:
-
-- `Sources/ObviewerCore/Services/ObsidianParser.swift`
-
-Responsibilities:
-
-- convert markdown into render blocks and inline runs
-- extract title, preview text, tags, headings, and outbound links
-- classify note links, attachment links, and heading anchors
-- parse image embeds and sizing hints
-
-Supported constructs today include:
-
-- frontmatter extraction for scalar values and arrays
-- headings and heading anchors
-- paragraphs
-- ordered, unordered, nested, and task lists
-- block quotes
-- Obsidian callouts
-- fenced code blocks
-- inline wiki links
-- inline markdown links
-- inline code, emphasis, and strong emphasis
-- image embeds and size hints
-- footnotes
-- GFM-style tables
-- horizontal rules
-- inline tags
-- graceful fallback blocks for Mermaid, math-like fenced blocks, and standalone non-image embeds
-
-Pressure points:
-
-- still not full CommonMark plus full Obsidian fidelity
-- advanced nested formatting is limited
-- rendered Mermaid, rendered math, and embedded media still need deeper work even though fallback rendering now exists
-
-### Reader Surfaces
-
-Files:
-
-- `Sources/ObviewerMacApp/Views/ContentView.swift`
-- `Sources/ObviewerMacApp/Views/ReaderView.swift`
-- `Sources/ObviewerMacApp/Views/RichTextView.swift`
-
-Responsibilities:
-
-- render the split-view shell
-- render note metadata and block content
-- handle inline navigation
-- render inline images and richer attachment actions
-- provide table-of-contents navigation and image lightbox behavior
-
-Design intent:
-
-- the UI should feel editorial and calm rather than utilitarian
-- the reading surface should stay primary even when the graph and sidebar are visible
-
-### Graph Workspace
-
-File:
-
-- `Sources/ObviewerMacApp/Views/GraphView.swift`
-
-Responsibilities:
-
-- render local and global graph views
-- provide graph inspector details
-- compute view positions from graph data
-- reflect search scope and current note context
-
-Important design choice:
-
-- graph rendering is intentionally derived from `NoteGraphSubgraph`, not from ad hoc UI-only graph calculations
-
-Pressure points:
-
-- the graph is useful today but still early in UX maturity
-- large-graph performance, layout polish, filtering, and interaction depth still need work
-
-### Platform Services
-
-Files:
-
-- `Sources/ObviewerMacApp/Services/BookmarkStore.swift`
-- `Sources/ObviewerMacApp/Services/SecurityScopedAccessController.swift`
-- `Sources/ObviewerMacApp/Services/VaultPicker.swift`
-- `Sources/ObviewerMacApp/Services/VaultWatcher.swift`
-- `Sources/ObviewerMacApp/Services/VaultNoteCacheStore.swift`
-
-Responsibilities:
-
-- persist and restore vault bookmarks
-- own the security-scoped access lifecycle
-- bridge to `NSOpenPanel`
-- observe vault directories and notify the app model about filesystem changes
-- persist warm-start snapshot seeds outside the vault for cold-load reuse
-
-Why this matters:
-
-- these services are part of the actual safety story, not just convenience code
-
-### Documentation And Fixture Tooling
-
-Files:
-
-- `Sources/ObviewerFixtureSupport/DemoVaultBuilder.swift`
-- `Sources/ObviewerFixtureTool/main.swift`
-- `Sources/ObviewerMacApp/Documentation/DocumentationScreenshotRenderer.swift`
-- `Sources/ObviewerDocsTool/main.swift`
-
-Responsibilities:
-
-- generate realistic vaults for manual and automated testing
-- render documentation screenshots from the actual app
-
-Why it matters:
-
-- this tooling keeps docs, testing, and product discussion anchored to real UI and real data shapes
-
-## Testing Strategy
-
-Test targets:
-
-- `Tests/ObviewerCoreTests`
-- `Tests/ObviewerMacAppTests`
-
-What is covered well:
-
-- parser behavior
-- note and attachment resolution
-- note graph behavior
-- vault enumeration against real temporary directories
-- app-model orchestration and state transitions
-- selected view-support utilities
-
-What is not covered enough yet:
-
-- SwiftUI snapshot or visual regression tests
-- accessibility behavior
-- performance benchmarks for very large vaults
-- signed distribution validation
-
-## Architectural Strengths
-
-- clear separation between core domain logic and macOS shell concerns
-- strong testability for non-UI logic
-- read-only mental model is reinforced in the structure, not just the marketing
-- fixture and docs tooling reduce hand-wavy product discussion
-
-## Architectural Pressure Points
-
-- parser and render model are becoming feature-rich enough to deserve a more formal structure
-- large-vault performance will need incremental indexing, caching, and observation
-- the graph stack needs clearer layout and interaction abstractions as it matures
-- shipping distribution is still adjacent to the codebase rather than fully integrated into product delivery
-
-## Modernization Direction
-
-The next architectural moves should be:
-
-1. strengthen the shipping app container and distribution path
-2. formalize parser/renderer boundaries before content fidelity expands too far
-3. add indexing and observation infrastructure for scale
-4. harden UI quality with accessibility and snapshot-style regression coverage
-
-Those steps are sequenced in [`MODERNIZATION_PLAN.md`](./MODERNIZATION_PLAN.md).
+This page describes how Obviewer 0.3 is built. The reader itself (WebKit host, renderer, and where each safety guarantee is enforced) is covered in more depth in [`READER_ARCHITECTURE.md`](./READER_ARCHITECTURE.md). The pre-redesign architecture is preserved in [`history/ARCHITECTURE_v0.2.8.md`](./history/ARCHITECTURE_v0.2.8.md).
+
+## Goals
+
+1. **Notes stay read-only,** enforced by the macOS sandbox rather than by convention.
+2. **Faithful rendering** of GitHub, Obsidian and DokuWiki text, including diagrams and math, offline.
+3. **A native shell:** SwiftUI windows, menus, Finder and Quick Look integration.
+4. **Testable layers:** indexing and link rules have no UI dependency, and the renderer runs in Node tests.
+
+## Modules
+
+| Module | Kind | Responsibility |
+| --- | --- | --- |
+| `ObviewerCore` | Swift library | Indexing: notes, frontmatter, tags, links, search, the note graph, and the snapshot model. Flavor detection (`ReadingInput`), `VaultReader` (Markdown or DokuWiki formats), and `WikiSyntax`/`DokuWikiSyntax` link rules shared in spirit with the renderer. `ObsidianParser` also produces blocks for the classic reader. |
+| `ObviewerReaderKit` | Swift library + resources | Hosts the renderer: `ReaderWebController` (WKWebView with locked-down configuration), `ReaderSchemeHandler` (`obviewer-asset://`), `VaultAssetResolver`, `ReaderPayloadBuilder` (embeds, backlinks, resolved links), `StaticPreviewRenderer` (JavaScriptCore, for Quick Look). `Resources/Reader/` is the built bundle. |
+| `ObviewerMacApp` | Swift library | The app: `AppModel` (+`AppModel+Reader`) for state, history, link routing, find, sharing, Edit in…, live reload. Views: `ContentView`, `WebReaderView`, `NoteWindowView`, graph, settings, commands. Services: watchers, bookmarks, recents, `OpenRequestRouter`, `EditorHandoff`. |
+| `Obviewer` | Executable | The SwiftUI `App`: a single library `Window`, a `WindowGroup` of note windows, Settings |
+| `ObviewerQuickLook` | App extension (Xcode only) | Data-based Quick Look preview: renders static HTML via `StaticPreviewRenderer` |
+| `Renderer/` | JavaScript (not a Swift module) | markdown-it + plugins, DokuWiki renderer, Slack/rich-text export, page assembly. `build.mjs` bundles it into `ObviewerReaderKit/Resources/Reader`. |
+| `ObviewerFixtureSupport`, `ObviewerFixtureTool`, `ObviewerBenchmarkTool`, `ObviewerDocsTool` | Tooling | Demo vault generation, indexing benchmarks, and offscreen screenshots. The docs tool renders the classic reader only, because offscreen capture can't draw WebKit. |
+
+`Package.swift` builds everything except the Quick Look extension. `project.yml` (XcodeGen) generates the Xcode project. There, the internal modules are **static libraries** linked into the app and the extension (see [`DEVELOPMENT.md`](./DEVELOPMENT.md#why-the-modules-are-static-libraries)), and the reader bundle is copied into each of those bundles.
+
+## Opening something
+
+1. A URL arrives from one of: File › Open, Open Recent, Finder (`ObviewerAppDelegate` → `OpenRequestRouter`), a launch argument, or the saved bookmark. Folders go to the library window; note files get their own `NoteWindowView`, each with its own `AppModel`.
+2. `DefaultReadingInputAdapter` makes a `ReadingInputSource`: folder or single file, plus a profile.
+   - Obsidian if the folder has `.obsidian/`.
+   - DokuWiki if it finds `data/pages` (or `pages` + `media`), or for a `.txt` inside a `data/pages` tree.
+   - Markdown otherwise.
+3. `AppModel` starts security-scoped access and runs `VaultReader` off the main thread. Folders are scanned; for DokuWiki only `pages` and `media` are scanned. A single file becomes a one-note snapshot.
+4. The `VaultSnapshot` builds lookup tables (paths, names, titles, aliases) and the `NoteGraph`. Folder snapshots are cached in the app container to speed up the next launch.
+5. Watching:
+   - Folders use directory kqueues plus a file-level FSEvents stream, which catches in-place saves. Changes trigger debounced, path-aware selective reloads.
+   - Single files use `SingleFileWatcher`, which follows atomic replacement.
+6. Each load bumps `renderRevision`, and the reader re-renders the selected note while keeping the scroll position.
+
+## Rendering a note
+
+`AppModel.refreshReader` builds a `ReaderRenderPayload` off the main thread with `ReaderPayloadBuilder`:
+
+- the note source, read with `NoteSourceLoader` (16 MB cap, non-UTF-8 tolerant)
+- header metadata and backlinks
+- which wiki links resolve
+- the tree of pre-resolved `![[embeds]]`: depth 4, 64 per note, 6 MB total, cycle detection
+
+The payload goes to `window.obviewer.render` in the WebKit page. The page renders, sanitizes and posts events back, such as link clicks, outline headings and asset errors, which `AppModel` routes. See [`READER_ARCHITECTURE.md`](./READER_ARCHITECTURE.md).
+
+## Two parsers, one set of rules
+
+The Swift indexer and the JS renderer each recognize links. `Fixtures/notes/expectations.json` lists the links each fixture note contains. Both `Renderer/test/fixtures.test.js` and `Tests/ObviewerCoreTests/SharedFixtureLinkTests.swift` check it, so any disagreement fails a test. Add a fixture case whenever you change either side.
+
+## Windows and commands
+
+- **The library window** is a single `Window` scene that owns the app-wide `AppModel` and its web reader.
+- **Note windows** are a `WindowGroup(for: NoteWindowRequest.self)`. Each request carries a read-only security-scoped bookmark, so restored windows keep access after relaunch.
+- **Menu commands** act on the focused window's model through `@FocusedObject`.
+- **⌘= / ⌘+** are handled by a local key monitor, because a focused WKWebView sees key equivalents before the menu does.
+
+## Testing
+
+- Renderer: `cd Renderer && npm test` (renderer, Quick Look bundle, export, DokuWiki, shared fixtures, publication check). `node build.mjs --check` verifies the committed bundle.
+- Swift: `swift test` (tests across `ObviewerCoreTests`, `ObviewerReaderKitTests`, `ObviewerMacAppTests`). Highlights:
+  - shared fixture link agreement
+  - payload builder with embeds and cycles
+  - asset path containment
+  - page event parsing
+  - bundle presence, CSP and content rules
+  - the JavaScriptCore static preview
+  - the real file watcher (in-place, atomic and new-file saves)
+  - history, editor choice, text-size steps
+  - entitlement allow-lists
+- Manual: [`VERIFICATION.md`](./VERIFICATION.md). Results: [`STATUS.md`](./STATUS.md).

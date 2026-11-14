@@ -37,6 +37,9 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: macOS version, Xcode version, and any relevant vault details.
+      description: |
+        macOS version, Apple silicon or Intel, Obviewer version (or commit, if built from source),
+        and what you opened (single file, Markdown folder, Obsidian vault, DokuWiki).
+        If the reader misbehaved, paste Help › Copy Reader Diagnostics. Remove anything private.
     validations:
       required: true

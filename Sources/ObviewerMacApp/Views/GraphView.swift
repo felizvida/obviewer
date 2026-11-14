@@ -110,24 +110,28 @@ struct GraphWorkspaceView: View {
         VStack(alignment: .leading, spacing: 16) {
             Image(systemName: "point.3.connected.trianglepath.dotted")
                 .font(.system(size: 28, weight: .regular))
-                .foregroundStyle(Color.black.opacity(0.55))
+                .foregroundStyle(VisualTheme.shade.opacity(0.55))
 
             Text("No graph to show yet.")
                 .font(.system(size: 24, weight: .bold, design: .serif))
 
-            Text("Open a vault and select a note to render a real note graph.")
+            Text("Select a note or switch to Global to render a real vault map.")
                 .font(.system(size: 15, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
+
+            Label("Graph data is derived from indexed Markdown links only.", systemImage: "lock.shield")
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(VisualTheme.quietInk)
         }
         .padding(30)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white.opacity(0.58))
+                .fill(VisualTheme.heroSurface)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                .stroke(VisualTheme.shade.opacity(0.06), lineWidth: 1)
         )
     }
 }
@@ -152,13 +156,13 @@ private struct GraphCanvasPanel: View {
 
             ZStack {
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .fill(VisualTheme.readerSurface)
+                    .fill(VisualTheme.heroSurface)
 
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .stroke(Color.white.opacity(0.62), lineWidth: 1)
+                    .stroke(VisualTheme.panel.opacity(0.62), lineWidth: 1)
 
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .stroke(Color.black.opacity(0.05), lineWidth: 1)
+                    .stroke(VisualTheme.shade.opacity(0.05), lineWidth: 1)
 
                 Canvas { context, size in
                     drawCanvasBackground(context: &context, size: size)
@@ -219,7 +223,7 @@ private struct GraphCanvasPanel: View {
 
         context.stroke(
             gridPath,
-            with: .color(Color.black.opacity(0.025)),
+            with: .color(VisualTheme.shade.opacity(0.025)),
             lineWidth: 1
         )
 
@@ -232,7 +236,7 @@ private struct GraphCanvasPanel: View {
         context.fill(
             Path(ellipseIn: glowRect),
             with: .radialGradient(
-                Gradient(colors: [Color.white.opacity(0.32), .clear]),
+                Gradient(colors: [VisualTheme.panel.opacity(0.32), .clear]),
                 center: CGPoint(x: glowRect.midX, y: glowRect.midY),
                 startRadius: 12,
                 endRadius: max(glowRect.width, glowRect.height) / 2
@@ -267,7 +271,7 @@ private struct GraphCanvasPanel: View {
                         ? Color(red: 0.30, green: 0.45, blue: 0.72).opacity(0.45)
                         : isHighlightedEdge
                             ? Color(red: 0.36, green: 0.51, blue: 0.38).opacity(0.28)
-                            : Color.black.opacity(0.08)
+                            : VisualTheme.shade.opacity(0.08)
                 ),
                 style: StrokeStyle(
                     lineWidth: isSelectedEdge ? 2.2 : 1,
@@ -341,7 +345,7 @@ private struct GraphLegendBar: View {
                     .frame(width: 11, height: 11)
                     .overlay(
                         Circle()
-                            .stroke(Color.white.opacity(0.7), lineWidth: 1)
+                            .stroke(VisualTheme.panel.opacity(0.7), lineWidth: 1)
                     )
                     .help("\(bucket.name): \(bucket.count) notes")
             }
@@ -354,7 +358,14 @@ private struct GraphLegendBar: View {
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 8)
-        .softPanel(cornerRadius: 999, opacity: 0.46)
+        .background(
+            Capsule(style: .continuous)
+                .fill(VisualTheme.panel.opacity(0.52))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(VisualTheme.shade.opacity(0.045), lineWidth: 1)
+        )
     }
 }
 
@@ -416,7 +427,7 @@ private struct GraphNodeView: View {
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color.white.opacity(isSelected ? 0.96 : 0.88))
+                        .fill(VisualTheme.panel.opacity(isSelected ? 0.96 : 0.88))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -459,12 +470,12 @@ private struct GraphNodeView: View {
 
     private var nodeStroke: Color {
         if isSelected {
-            return Color.black.opacity(0.82)
+            return VisualTheme.shade.opacity(0.82)
         }
         if isHighlighted {
             return color
         }
-        return Color.black.opacity(0.28)
+        return VisualTheme.shade.opacity(0.28)
     }
 
     private var nodeDiameter: CGFloat {
@@ -501,7 +512,7 @@ private struct GraphInspectorPanel: View {
                     .padding(.vertical, 6)
                     .background(
                         Capsule(style: .continuous)
-                            .fill(Color.white.opacity(0.7))
+                            .fill(VisualTheme.panel.opacity(0.7))
                     )
             }
 
@@ -543,9 +554,24 @@ private struct GraphInspectorPanel: View {
                     noteIDs: snapshot.noteGraph.outboundNoteIDs(from: selectedNode.id)
                 )
             } else {
-                Text("Select a note in the graph to inspect its connections and jump back into the reader.")
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 12) {
+                    Image(systemName: "cursorarrow.rays")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(VisualTheme.fern)
+
+                    Text("Choose a node")
+                        .font(.system(size: 22, weight: .bold, design: .serif))
+
+                    Text("Select a note in the graph to inspect backlinks, outbound links, and open it in the reader.")
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(VisualTheme.panel.opacity(0.52))
+                )
             }
 
             if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
@@ -564,7 +590,7 @@ private struct GraphInspectorPanel: View {
         }
         .padding(22)
         .frame(width: 310, alignment: .topLeading)
-        .softPanel(cornerRadius: 28, opacity: 0.58)
+        .premiumPanel(cornerRadius: 28)
     }
 
     private func statPill(text: String, systemImage: String) -> some View {
@@ -574,7 +600,7 @@ private struct GraphInspectorPanel: View {
             .padding(.vertical, 7)
             .background(
                 Capsule(style: .continuous)
-                    .fill(Color.white.opacity(0.72))
+                    .fill(VisualTheme.panel.opacity(0.72))
             )
     }
 
@@ -608,11 +634,11 @@ private struct GraphInspectorPanel: View {
                         .padding(.vertical, 9)
                         .background(
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color.white.opacity(0.72))
+                                .fill(VisualTheme.panel.opacity(0.72))
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                                .stroke(VisualTheme.shade.opacity(0.06), lineWidth: 1)
                         )
                     }
                     .buttonStyle(.plain)

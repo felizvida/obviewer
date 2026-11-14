@@ -116,6 +116,11 @@ public enum DemoVaultBuilder {
         profile: DemoVaultProfile = .showcase
     ) throws -> DemoVaultManifest {
         try ensureEmptyDirectory(at: rootURL)
+        // Mark it as an Obsidian vault so flavor detection picks the Obsidian profile.
+        // Hidden, so it isn't indexed or counted.
+        let obsidianFolder = rootURL.appendingPathComponent(".obsidian", isDirectory: true)
+        try FileManager.default.createDirectory(at: obsidianFolder, withIntermediateDirectories: true)
+        try Data("{}\n".utf8).write(to: obsidianFolder.appendingPathComponent("app.json"))
 
         var writer = VaultFixtureWriter(rootURL: rootURL)
 

@@ -89,6 +89,158 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
+    func testChooseMarkdownFileUsesMarkdownProfileAndFocusedSelection() async {
+        let fileURL = URL(fileURLWithPath: "/tmp/obviewer-tests/docs/Guide.md")
+        let rootURL = fileURL.deletingLastPathComponent()
+        let snapshot = VaultSnapshot(
+            rootURL: rootURL,
+            notes: [
+                .fixture(
+                    relativePath: "Guide.md",
+                    title: "Guide",
+                    tags: [],
+                    modifiedAt: .distantPast
+                ),
+            ],
+            attachments: []
+        )
+        let bookmarkStore = BookmarkStoreSpy()
+        let cache = VaultNoteCacheSpy(snapshot: nil)
+        let loader = ReadingInputLoaderSpy(result: .success(snapshot))
+        let securityScope = SecurityScopeSpy()
+        let watcher = VaultWatcherSpy()
+        let fileWatcher = SingleFileWatcherSpy()
+        let model = AppModel(
+            bookmarkStore: bookmarkStore,
+            picker: VaultPickerStub(url: fileURL),
+            reader: loader,
+            securityScopeManager: securityScope,
+            noteCache: cache,
+            watcher: watcher,
+            fileWatcher: fileWatcher
+        )
+
+        await model.chooseVault()
+
+        XCTAssertEqual(model.readingInput?.url, fileURL.standardizedFileURL)
+        XCTAssertEqual(model.readingInput?.kind, .markdownFile)
+        XCTAssertEqual(model.readingProfile, .markdown)
+        XCTAssertEqual(model.vaultURL, rootURL.standardizedFileURL)
+        XCTAssertEqual(model.selectedNoteID, "Guide.md")
+        XCTAssertEqual(bookmarkStore.savedURLs, [fileURL.standardizedFileURL])
+        XCTAssertEqual(securityScope.activatedURLs, [fileURL.standardizedFileURL])
+        XCTAssertEqual(loader.recordedInputs.map(\.kind), [.markdownFile])
+        XCTAssertTrue(cache.loadedURLs.isEmpty)
+        XCTAssertTrue(cache.savedRootURLs.isEmpty)
+        XCTAssertTrue(watcher.startedURLs.isEmpty)
+        // Single files are watched on their own so saves from an external editor show up live.
+        XCTAssertEqual(fileWatcher.startedURLs, [fileURL.standardizedFileURL])
+        XCTAssertTrue(model.isLiveReloadEnabled)
+    }
+
+    @MainActor
+    func testHistoryRecordsSelectionChangesAndSupportsBackAndForward() {
+        let model = AppModel(
+            bookmarkStore: BookmarkStoreSpy(),
+            picker: VaultPickerStub(url: nil),
+            reader: ReadingInputLoaderSpy(result: .failure(CocoaError(.fileNoSuchFile))),
+            securityScopeManager: SecurityScopeSpy(),
+            fileWatcher: SingleFileWatcherSpy()
+        )
+        model.selectedNoteID = "A.md"
+        model.selectedNoteID = "B.md"
+        model.selectedNoteID = "C.md"
+        XCTAssertEqual(model.backStack, ["A.md", "B.md"])
+
+        model.goBack()
+        XCTAssertEqual(model.selectedNoteID, "B.md")
+        XCTAssertEqual(model.forwardStack, ["C.md"])
+
+        model.goForward()
+        XCTAssertEqual(model.selectedNoteID, "C.md")
+        XCTAssertTrue(model.forwardStack.isEmpty)
+
+        model.goBack()
+        model.selectedNoteID = "D.md"
+        XCTAssertTrue(model.forwardStack.isEmpty, "A new navigation clears forward history")
+        XCTAssertEqual(model.backStack, ["A.md", "B.md"])
+    }
+
+    @MainActor
+    func testAutomaticEditorNeverPicksSpyder() {
+        XCTAssertFalse(EditorHandoff.isAcceptableAutomaticEditor(URL(fileURLWithPath: "/Applications/Spyder.app")))
+        XCTAssertFalse(EditorHandoff.isAcceptableAutomaticEditor(URL(fileURLWithPath: "/Applications/Spyder 6.app")))
+        XCTAssertTrue(EditorHandoff.isAcceptableAutomaticEditor(URL(fileURLWithPath: "/Applications/Sublime Text.app")))
+        XCTAssertEqual(EditorHandoff.knownEditors.first?.name, "Sublime Text")
+    }
+
+    func testReaderTextSizeStepsClampsAndRecognisesShortcuts() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "ReaderTextSizeTests-\(UUID().uuidString)"))
+        XCTAssertEqual(ReaderTextSize.current(in: defaults), 1.0)
+        ReaderTextSize.increase(in: defaults)
+        XCTAssertEqual(ReaderTextSize.current(in: defaults), 1.1)
+        for _ in 0..<10 { ReaderTextSize.increase(in: defaults) }
+        XCTAssertEqual(ReaderTextSize.current(in: defaults), 1.5)
+        for _ in 0..<20 { ReaderTextSize.decrease(in: defaults) }
+        XCTAssertEqual(ReaderTextSize.current(in: defaults), 0.8)
+
+        XCTAssertTrue(ReaderTextSize.isBiggerTextShortcut(characters: "=", modifierFlags: .command))
+        XCTAssertTrue(ReaderTextSize.isBiggerTextShortcut(characters: "+", modifierFlags: [.command, .shift]))
+        XCTAssertFalse(ReaderTextSize.isBiggerTextShortcut(characters: "=", modifierFlags: [.command, .option]))
+        XCTAssertFalse(ReaderTextSize.isBiggerTextShortcut(characters: "=", modifierFlags: []))
+        XCTAssertFalse(ReaderTextSize.isBiggerTextShortcut(characters: "-", modifierFlags: .command))
+    }
+
+    func testExternalHandOffRefusesExecutables() {
+        XCTAssertFalse(AppModel.isSafeToHandOff(URL(fileURLWithPath: "/tmp/run.command")))
+        XCTAssertFalse(AppModel.isSafeToHandOff(URL(fileURLWithPath: "/Applications/Calculator.app")))
+        XCTAssertFalse(AppModel.isSafeToHandOff(URL(fileURLWithPath: "/tmp/setup.pkg")))
+        XCTAssertTrue(AppModel.isSafeToHandOff(URL(fileURLWithPath: "/tmp/paper.pdf")))
+        XCTAssertEqual(AppModel.normalizeRelativePath("a/./b/../c.md"), "a/c.md")
+        XCTAssertNil(AppModel.normalizeRelativePath("../escape.md"))
+    }
+
+    @MainActor
+    func testLaunchInputIsConsumedOnceAndSkipsBookmarkRestore() async {
+        let restoredURL = URL(fileURLWithPath: "/tmp/obviewer-tests/restored-vault")
+        let fileURL = URL(fileURLWithPath: "/tmp/obviewer-tests/docs/Launch.md")
+        let snapshot = VaultSnapshot(
+            rootURL: fileURL.deletingLastPathComponent(),
+            notes: [
+                .fixture(
+                    relativePath: "Launch.md",
+                    title: "Launch",
+                    tags: [],
+                    modifiedAt: .distantPast
+                ),
+            ],
+            attachments: []
+        )
+        let bookmarkStore = BookmarkStoreSpy(restoredURL: restoredURL)
+        let loader = ReadingInputLoaderSpy(result: .success(snapshot))
+        let model = AppModel(
+            bookmarkStore: bookmarkStore,
+            picker: VaultPickerStub(url: nil),
+            reader: loader,
+            securityScopeManager: SecurityScopeSpy()
+        )
+
+        await model.openLaunchInputOrRestore(
+            LaunchReadingInputRequest(url: fileURL, preferredProfile: .markdown)
+        )
+        await model.openLaunchInputOrRestore(
+            LaunchReadingInputRequest(url: fileURL, preferredProfile: .markdown)
+        )
+        await model.restoreVaultIfNeeded()
+
+        XCTAssertEqual(model.readingInput?.url, fileURL.standardizedFileURL)
+        XCTAssertEqual(model.readingProfile, .markdown)
+        XCTAssertEqual(model.selectedNoteID, "Launch.md")
+        XCTAssertEqual(bookmarkStore.savedURLs, [fileURL.standardizedFileURL])
+        XCTAssertEqual(loader.recordedInputs.map(\.url), [fileURL.standardizedFileURL])
+    }
+
+    @MainActor
     func testRestoreVaultLoadsOnlyOnce() async {
         let vaultURL = URL(fileURLWithPath: "/tmp/obviewer-tests/restored")
         let bookmarkStore = BookmarkStoreSpy(restoredURL: vaultURL)
@@ -539,6 +691,77 @@ final class AppModelTests: XCTestCase {
             ["Root.md", "Journal/Today.md", "Projects/Plan.md"]
         )
     }
+
+    @MainActor
+    func testOlderConcurrentVaultLoadCannotOverwriteNewerLoad() async {
+        let firstURL = URL(fileURLWithPath: "/tmp/obviewer-tests/first-vault")
+        let secondURL = URL(fileURLWithPath: "/tmp/obviewer-tests/second-vault")
+        let firstSnapshot = VaultSnapshot(
+            rootURL: firstURL,
+            notes: [
+                .fixture(
+                    relativePath: "First.md",
+                    title: "First Vault",
+                    tags: [],
+                    modifiedAt: Date(timeIntervalSince1970: 1)
+                ),
+            ],
+            attachments: []
+        )
+        let secondSnapshot = VaultSnapshot(
+            rootURL: secondURL,
+            notes: [
+                .fixture(
+                    relativePath: "Second.md",
+                    title: "Second Vault",
+                    tags: [],
+                    modifiedAt: Date(timeIntervalSince1970: 2)
+                ),
+            ],
+            attachments: []
+        )
+        let firstStarted = expectation(description: "first load started")
+        let secondStarted = expectation(description: "second load started")
+        let loader = OutOfOrderVaultLoader(
+            firstSnapshot: firstSnapshot,
+            secondSnapshot: secondSnapshot,
+            firstStarted: firstStarted,
+            secondStarted: secondStarted
+        )
+        let bookmarkStore = BookmarkStoreSpy()
+        let cache = VaultNoteCacheSpy(snapshot: nil)
+        let model = AppModel(
+            bookmarkStore: bookmarkStore,
+            picker: SequencedVaultPicker(urls: [firstURL, secondURL]),
+            reader: loader,
+            securityScopeManager: SecurityScopeSpy(),
+            noteCache: cache
+        )
+
+        let firstLoad = Task { @MainActor in
+            await model.chooseVault()
+        }
+        await fulfillment(of: [firstStarted], timeout: 1)
+
+        let secondLoad = Task { @MainActor in
+            await model.chooseVault()
+        }
+        await fulfillment(of: [secondStarted], timeout: 1)
+        await secondLoad.value
+
+        XCTAssertEqual(model.vaultURL, secondURL)
+        XCTAssertEqual(model.snapshot?.notes.map { $0.id }, ["Second.md"])
+        XCTAssertEqual(bookmarkStore.savedURLs, [secondURL])
+        XCTAssertEqual(cache.savedRootURLs, [secondURL])
+
+        loader.releaseFirstLoad()
+        await firstLoad.value
+
+        XCTAssertEqual(model.vaultURL, secondURL)
+        XCTAssertEqual(model.snapshot?.notes.map { $0.id }, ["Second.md"])
+        XCTAssertEqual(bookmarkStore.savedURLs, [secondURL])
+        XCTAssertEqual(cache.savedRootURLs, [secondURL])
+    }
 }
 
 @MainActor
@@ -571,6 +794,23 @@ private struct VaultPickerStub: VaultChoosing {
 
     func chooseVault() -> URL? {
         url
+    }
+}
+
+@MainActor
+private final class SequencedVaultPicker: VaultChoosing {
+    private var urls: [URL]
+
+    init(urls: [URL]) {
+        self.urls = urls
+    }
+
+    func chooseVault() -> URL? {
+        guard urls.isEmpty == false else {
+            return nil
+        }
+
+        return urls.removeFirst()
     }
 }
 
@@ -610,6 +850,35 @@ private struct VaultNoteCacheSpy: VaultNoteCaching {
     }
 
     func removeSeedSnapshot(for vaultURL: URL) {}
+}
+
+private final class ReadingInputLoaderSpy: @unchecked Sendable, ReadingInputLoading {
+    private let lock = NSLock()
+    private var results: [Result<VaultSnapshot, Error>]
+    private var inputs = [ReadingInputSource]()
+
+    init(result: Result<VaultSnapshot, Error>) {
+        self.results = [result]
+    }
+
+    var recordedInputs: [ReadingInputSource] {
+        lock.lock()
+        defer { lock.unlock() }
+        return inputs
+    }
+
+    func reloadInput(
+        _ input: ReadingInputSource,
+        previousSnapshot: VaultSnapshot?,
+        changes: VaultReloadChanges?,
+        progress: (@Sendable (VaultLoadingProgress) -> Void)?
+    ) throws -> VaultSnapshot {
+        lock.lock()
+        inputs.append(input)
+        let current = results.count > 1 ? results.removeFirst() : results[0]
+        lock.unlock()
+        return try current.get()
+    }
 }
 
 private final class VaultLoaderSpy: @unchecked Sendable, VaultLoading {
@@ -687,6 +956,60 @@ private final class VaultLoaderSpy: @unchecked Sendable, VaultLoading {
     }
 }
 
+private final class OutOfOrderVaultLoader: @unchecked Sendable, VaultLoading {
+    private let lock = NSLock()
+    private let firstSnapshot: VaultSnapshot
+    private let secondSnapshot: VaultSnapshot
+    private let firstStarted: XCTestExpectation
+    private let secondStarted: XCTestExpectation
+    private let releaseFirstSemaphore = DispatchSemaphore(value: 0)
+    private var callCount = 0
+
+    init(
+        firstSnapshot: VaultSnapshot,
+        secondSnapshot: VaultSnapshot,
+        firstStarted: XCTestExpectation,
+        secondStarted: XCTestExpectation
+    ) {
+        self.firstSnapshot = firstSnapshot
+        self.secondSnapshot = secondSnapshot
+        self.firstStarted = firstStarted
+        self.secondStarted = secondStarted
+    }
+
+    func loadVault(
+        at url: URL,
+        progress: (@Sendable (VaultLoadingProgress) -> Void)?
+    ) throws -> VaultSnapshot {
+        try reloadVault(at: url, previousSnapshot: nil, changes: nil, progress: progress)
+    }
+
+    func reloadVault(
+        at url: URL,
+        previousSnapshot: VaultSnapshot?,
+        changes: VaultReloadChanges?,
+        progress: (@Sendable (VaultLoadingProgress) -> Void)?
+    ) throws -> VaultSnapshot {
+        lock.lock()
+        let callIndex = callCount
+        callCount += 1
+        lock.unlock()
+
+        if callIndex == 0 {
+            firstStarted.fulfill()
+            releaseFirstSemaphore.wait()
+            return firstSnapshot
+        }
+
+        secondStarted.fulfill()
+        return secondSnapshot
+    }
+
+    func releaseFirstLoad() {
+        releaseFirstSemaphore.signal()
+    }
+}
+
 private enum FixtureError: LocalizedError {
     case sample
 
@@ -713,6 +1036,16 @@ private final class LockedBox<Value>: @unchecked Sendable {
         lock.lock()
         update(&storage)
         lock.unlock()
+    }
+}
+
+@MainActor
+private final class SingleFileWatcherSpy: SingleFileWatching {
+    private(set) var startedURLs = [URL]()
+
+    func beginWatching(fileURL: URL, onChange: @escaping @Sendable () -> Void) -> any VaultWatchSession {
+        startedURLs.append(fileURL.standardizedFileURL)
+        return VaultWatchSessionSpy(onChange: { _ in onChange() })
     }
 }
 

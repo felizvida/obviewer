@@ -1,3 +1,5 @@
+> **Historical document.** This describes Obviewer as of v0.2.8 (spring 2026), before the v0.3 redesign. It is kept for context only and is not maintained. For the current state, see [`../README.md`](../README.md).
+
 # Modernization Plan
 
 This document is the operational roadmap for taking Obviewer from a strong prototype to a modern shipping macOS product.

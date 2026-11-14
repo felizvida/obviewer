@@ -9,49 +9,76 @@ configs:
   Debug: debug
   Release: release
 
+settings:
+  base:
+    # Swift 5 language mode for every target (the code isn't Swift 6 strict-concurrency clean yet).
+    SWIFT_VERSION: "5.0"
+  configs:
+    Release:
+      # Never ship the debugger entitlement (get-task-allow). Xcode injects it when
+      # signing to run locally, which includes ad-hoc ("-") signing.
+      CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+
+# Internal modules are static libraries linked into each executable (app, Quick Look
+# extension, tests). Ad-hoc signatures carry no Team ID, and the hardened runtime's
+# library validation refuses to load separately signed ad-hoc frameworks, so the
+# app ships no frameworks of its own. Resources (the reader bundle) therefore live
+# in each bundle that runs the code: ReaderAssets resolves them with Bundle(for:).
 targets:
   ObviewerCore:
-    type: framework
+    type: library.static
     platform: macOS
     deploymentTarget: "14.0"
     sources:
       - path: Sources/ObviewerCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer.core
         PRODUCT_NAME: ObviewerCore
         DEFINES_MODULE: YES
-        GENERATE_INFOPLIST_FILE: YES
         SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
 
-  ObviewerMacApp:
-    type: framework
+  ObviewerReaderKit:
+    type: library.static
     platform: macOS
     deploymentTarget: "14.0"
     dependencies:
       - target: ObviewerCore
     sources:
+      - path: Sources/ObviewerReaderKit
+        excludes:
+          - "Resources/**"
+    settings:
+      base:
+        PRODUCT_NAME: ObviewerReaderKit
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+
+  ObviewerMacApp:
+    type: library.static
+    platform: macOS
+    deploymentTarget: "14.0"
+    dependencies:
+      - target: ObviewerCore
+      - target: ObviewerReaderKit
+    sources:
       - path: Sources/ObviewerMacApp
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer.macapp
         PRODUCT_NAME: ObviewerMacApp
         DEFINES_MODULE: YES
-        GENERATE_INFOPLIST_FILE: YES
         SKIP_INSTALL: YES
 
   ObviewerFixtureSupport:
-    type: framework
+    type: library.static
     platform: macOS
     deploymentTarget: "14.0"
     sources:
       - path: Sources/ObviewerFixtureSupport
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer.fixturesupport
         PRODUCT_NAME: ObviewerFixtureSupport
         DEFINES_MODULE: YES
-        GENERATE_INFOPLIST_FILE: YES
         SKIP_INSTALL: YES
 
   Obviewer:
@@ -60,16 +87,54 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - path: Sources/Obviewer
+      - path: Sources/ObviewerReaderKit/Resources/Reader
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: ObviewerMacApp
+      - target: ObviewerReaderKit
+      - target: ObviewerCore
+      - target: ObviewerQuickLook
     scheme:
       testTargets:
         - ObviewerCoreTests
+        - ObviewerReaderKitTests
         - ObviewerMacAppTests
     info:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: Obviewer
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Markdown Document
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - net.daringfireball.markdown
+              - public.markdown
+              - org.commonmark.markdown
+          - CFBundleTypeName: Folder
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: None
+            LSItemContentTypes:
+              - public.folder
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: net.daringfireball.markdown
+            UTTypeDescription: Markdown Document
+            UTTypeConformsTo:
+              - public.plain-text
+            UTTypeReferenceURL: https://daringfireball.net/projects/markdown/
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - md
+                - markdown
+                - mdown
+                - mkd
+                - mkdn
+                - mdwn
+              public.mime-type:
+                - text/markdown
         LSApplicationCategoryType: public.app-category.productivity
         NSPrincipalClass: NSApplication
         NSHighResolutionCapable: true
@@ -77,12 +142,78 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer
         PRODUCT_NAME: Obviewer
-        SWIFT_VERSION: "5.10"
+        SWIFT_VERSION: "5.0"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         CODE_SIGN_ENTITLEMENTS: Configuration/Obviewer.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
         GENERATE_INFOPLIST_FILE: NO
-        MARKETING_VERSION: 0.2.3
+        MARKETING_VERSION: 0.3.0
         CURRENT_PROJECT_VERSION: 1
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+
+  ObviewerQuickLook:
+    type: app-extension
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/ObviewerQuickLook
+      - path: Sources/ObviewerReaderKit/Resources/Reader
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: ObviewerReaderKit
+      - target: ObviewerCore
+      - sdk: Quartz.framework
+      - sdk: JavaScriptCore.framework
+    info:
+      path: Configuration/ObviewerQuickLook-Info.plist
+      properties:
+        CFBundleDisplayName: Obviewer Quick Look
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSHumanReadableCopyright: "Read-only Markdown preview"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.quicklook.preview
+          NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).PreviewProvider"
+          NSExtensionAttributes:
+            QLIsDataBasedPreview: true
+            QLSupportsSearchableItems: false
+            QLSupportedContentTypes:
+              - net.daringfireball.markdown
+              - public.markdown
+              - org.commonmark.markdown
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer.quicklook
+        PRODUCT_NAME: ObviewerQuickLook
+        SWIFT_VERSION: "5.0"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        CODE_SIGN_ENTITLEMENTS: Configuration/ObviewerQuickLook.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        GENERATE_INFOPLIST_FILE: NO
+        APPLICATION_EXTENSION_API_ONLY: YES
+        MARKETING_VERSION: 0.3.0
+        CURRENT_PROJECT_VERSION: 1
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks"
+
+  ObviewerReaderKitTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Tests/ObviewerReaderKitTests
+      - path: Sources/ObviewerReaderKit/Resources/Reader
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: ObviewerReaderKit
+      - target: ObviewerCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer.readerkittests
+        PRODUCT_NAME: ObviewerReaderKitTests
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
 
   ObviewerCoreTests:
     type: bundle.unit-test
@@ -108,6 +239,7 @@ targets:
       - path: Tests/ObviewerMacAppTests
     dependencies:
       - target: ObviewerMacApp
+      - target: ObviewerReaderKit
       - target: ObviewerCore
       - target: ObviewerFixtureSupport
     settings:

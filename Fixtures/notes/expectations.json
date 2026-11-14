@@ -1,0 +1,19 @@
+{
+  "obsidian-basics.md": {
+    "flavor": "obsidian",
+    "links": ["Project Plan", "folder/Deep Note", "Glossary"]
+  },
+  "gfm-readme.md": {
+    "flavor": "markdown",
+    "links": ["docs/guide", "notes/Meeting Notes"]
+  },
+  "tricky-emphasis.md": {
+    "flavor": "markdown",
+    "links": ["Glossary"]
+  },
+  "dokuwiki/data/pages/lab/protocols.txt": {
+    "flavor": "dokuwiki",
+    "pagesBase": "dokuwiki/data/pages",
+    "links": ["lab:start", "safety:training", "lab:reagents", "lab:storage"]
+  }
+}

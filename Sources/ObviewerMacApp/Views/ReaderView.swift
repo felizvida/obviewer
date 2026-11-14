@@ -10,10 +10,47 @@ struct ReaderView: View {
     let pendingAnchorID: String?
     let onConsumePendingAnchor: () -> Void
     @State private var presentedImage: PresentedAttachmentImage?
+    @State private var pendingExternalAttachment: ExternalAttachmentRequest?
     @AppStorage("obviewer.reader.textScale") private var readerTextScale = 1.0
     @AppStorage("obviewer.reader.lineWidth") private var readerLineWidth = 860.0
 
     var body: some View {
+        readerContent
+            .sheet(item: $presentedImage) { presentedImage in
+                ImageLightboxView(presentedImage: presentedImage) { attachment in
+                    requestExternalOpen(for: attachment)
+                }
+            }
+            .confirmationDialog(
+                "Open outside Obviewer?",
+                isPresented: Binding(
+                    get: { pendingExternalAttachment != nil },
+                    set: { isPresented in
+                        if isPresented == false {
+                            pendingExternalAttachment = nil
+                        }
+                    }
+                ),
+                titleVisibility: .visible
+            ) {
+                if let request = pendingExternalAttachment {
+                    Button("Open in Default App") {
+                        pendingExternalAttachment = nil
+                        NSWorkspace.shared.open(request.url)
+                    }
+                }
+
+                Button("Cancel", role: .cancel) {
+                    pendingExternalAttachment = nil
+                }
+            } message: {
+                if let request = pendingExternalAttachment {
+                    Text("Obviewer will not modify \(request.title). The default external app may allow editing, so continue only if you trust that app.")
+                }
+            }
+    }
+
+    private var readerContent: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 24) {
@@ -37,7 +74,7 @@ struct ReaderView: View {
                         .padding(42)
                         .background(
                             RoundedRectangle(cornerRadius: 30, style: .continuous)
-                                .fill(VisualTheme.readerSurface)
+                                .fill(VisualTheme.heroSurface)
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 30, style: .continuous)
@@ -67,9 +104,6 @@ struct ReaderView: View {
             .onChange(of: pendingAnchorID) {
                 handlePendingAnchor(using: proxy)
             }
-        }
-        .sheet(item: $presentedImage) { presentedImage in
-            ImageLightboxView(presentedImage: presentedImage)
         }
     }
 
@@ -103,10 +137,12 @@ struct ReaderView: View {
                 .textSelection(.enabled)
 
             Text(note.relativePath)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(VisualTheme.quietInk)
+                .textSelection(.enabled)
 
             HStack(spacing: 10) {
+                metricPill(systemImage: "lock.shield", text: "read-only")
                 metricPill(systemImage: "clock", text: "\(note.readingTimeMinutes) min read")
                 metricPill(systemImage: "text.word.spacing", text: "\(note.wordCount) words")
 
@@ -126,7 +162,14 @@ struct ReaderView: View {
             .font(.system(size: 12, weight: .semibold, design: .rounded))
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .softPanel(cornerRadius: 999, opacity: 0.66)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.58))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(Color.black.opacity(0.045), lineWidth: 1)
+            )
     }
 
     @ViewBuilder
@@ -179,7 +222,7 @@ struct ReaderView: View {
         case .quote(let text):
             HStack(alignment: .top, spacing: 16) {
                 RoundedRectangle(cornerRadius: 999, style: .continuous)
-                    .fill(Color.black.opacity(0.14))
+                    .fill(VisualTheme.accentGradient)
                     .frame(width: 4)
 
                 RichTextView(
@@ -197,7 +240,15 @@ struct ReaderView: View {
                 )
                 .lineSpacing(scaled(6))
             }
-            .padding(.leading, 6)
+            .padding(18)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color.white.opacity(0.45))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(Color.black.opacity(0.04), lineWidth: 1)
+            )
 
         case .callout(let kind, let title, let body):
             VStack(alignment: .leading, spacing: 10) {
@@ -235,7 +286,7 @@ struct ReaderView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(calloutColor(for: kind).opacity(0.16))
+                    .fill(calloutColor(for: kind).opacity(0.12))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
@@ -308,10 +359,15 @@ struct ReaderView: View {
                                 ),
                                 alignment: .leading
                             )
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                                    .fill(Color.white.opacity(0.54))
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                                RoundedRectangle(cornerRadius: 30, style: .continuous)
                                     .stroke(Color.black.opacity(0.06), lineWidth: 1)
                             )
                             .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 6)
@@ -354,6 +410,9 @@ struct ReaderView: View {
                 Text(path)
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
+                Text("The note was parsed, but this attachment could not be resolved from the vault.")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(VisualTheme.quietInk)
             }
             .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -378,7 +437,11 @@ struct ReaderView: View {
             return
         }
 
-        NSWorkspace.shared.open(attachment.url)
+        requestExternalOpen(for: attachment)
+    }
+
+    private func requestExternalOpen(for attachment: VaultAttachment) {
+        pendingExternalAttachment = ExternalAttachmentRequest(attachment: attachment)
     }
 
     private func resolveInlineImage(
@@ -548,15 +611,8 @@ struct ReaderView: View {
 
 private struct ReaderSectionDivider: View {
     var body: some View {
-        LinearGradient(
-            colors: [
-                Color.black.opacity(0.09),
-                Color.black.opacity(0.02),
-                .clear,
-            ],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
+        Rectangle()
+            .fill(VisualTheme.quietRule)
         .frame(height: 1)
         .padding(.vertical, 2)
     }
@@ -571,6 +627,10 @@ private struct ReaderExperienceBar: View {
             Image(systemName: "eyeglasses")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(VisualTheme.fern)
+
+            Text("Reading")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(VisualTheme.quietInk)
 
             controlButton(systemImage: "textformat.size.smaller", help: "Smaller text") {
                 adjustTextScale(by: -0.05)
@@ -890,8 +950,21 @@ private struct PresentedAttachmentImage: Identifiable {
     let sizeHint: ImageSizeHint?
 }
 
+private struct ExternalAttachmentRequest: Identifiable {
+    let id: String
+    let url: URL
+    let title: String
+
+    init(attachment: VaultAttachment) {
+        id = attachment.relativePath
+        url = attachment.url
+        title = attachment.relativePath
+    }
+}
+
 private struct ImageLightboxView: View {
     let presentedImage: PresentedAttachmentImage
+    let onOpenExternally: (VaultAttachment) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var zoom: Double = 1
 
@@ -954,9 +1027,9 @@ private struct ImageLightboxView: View {
                         .buttonStyle(.bordered)
 
                         Button {
-                            NSWorkspace.shared.open(presentedImage.attachment.url)
+                            onOpenExternally(presentedImage.attachment)
                         } label: {
-                            Label("Open Original", systemImage: "arrow.up.forward.app")
+                            Label("Open Externally", systemImage: "arrow.up.forward.app")
                         }
                         .buttonStyle(.bordered)
 

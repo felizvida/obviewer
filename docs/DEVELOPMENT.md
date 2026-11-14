@@ -1,324 +1,131 @@
 # Development Guide
 
-This document explains how to set up, build, test, validate, and release the project.
-
-It assumes no prior knowledge of the repo.
-
-## What The Repository Contains Today
-
-Today the repository is a working Swift package application plus XcodeGen app-project spec.
-
-That means:
-
-- the app can be run locally in Xcode right now
-- the package is used for development, tests, and release automation
-- the final production artifact is still expected to be a signed and sandboxed macOS app distribution
+How to build, test, verify and release Obviewer 0.3. The v0.2.8 guide is in [`history/DEVELOPMENT_v0.2.8.md`](./history/DEVELOPMENT_v0.2.8.md).
 
 ## Prerequisites
 
-Minimum practical requirements:
+| Tool | Needed for |
+| --- | --- |
+| macOS 14 or later, full Xcode 15 or later | Building and running the app (`xcode-select -p` must point at Xcode, not the Command Line Tools) |
+| XcodeGen (`brew install xcodegen`) | Generating `Obviewer.xcodeproj` from `project.yml` |
+| Node 20 or later and npm | Changing the renderer or running its tests. Not needed just to build the app, because the bundle is committed. |
+| tesseract and pdftotext (`brew install tesseract poppler`) | Running the publication check locally (CI installs them) |
 
-- a Mac
-- full Xcode
-- Git
-
-Helpful extras:
-
-- Homebrew
-- GitHub CLI (`gh`)
-
-## Why Full Xcode Matters
-
-The project uses macOS UI frameworks, app signing, and Xcode-driven test flows.
-
-Command Line Tools alone are not enough for a reliable day-to-day workflow here. The first thing to check on any machine is whether full Xcode is selected:
+## Everyday commands
 
 ```bash
-xcode-select -p
-xcodebuild -version
-swift --version
+make try-local            # check Xcode, install XcodeGen if needed, generate and open the project
+make xcodeproj            # regenerate the project after adding or moving files
+swift build && swift test # Swift package build and tests
+
+cd Renderer && npm ci --ignore-scripts   # once, or after package-lock changes
+npm test                  # renderer, publication-check and release-script tests
+npm run build             # rebuild Sources/ObviewerReaderKit/Resources/Reader
+node build.mjs --check    # fail if the committed bundle is stale
+
+make publication-check    # scan tracked files against the publication policy
+make demo-vault           # generate build/SampleVault (Obsidian)
+make benchmark-vault      # indexing benchmarks (see the Makefile for PROFILE, BUDGET, ...)
 ```
 
-## First-Time Setup
+## Changing the renderer
 
-The easiest local trial path is:
+1. Edit `Renderer/src/` and add tests in `Renderer/test/`.
+2. Run `npm test`, then `npm run build`, and commit the source **and** the regenerated `Sources/ObviewerReaderKit/Resources/Reader/` together. CI runs `node build.mjs --check` and fails if they disagree. The bundle includes `manifest.json` (hashes and versions) and `THIRD_PARTY_NOTICES.txt`.
+3. If you change how links are recognized, add a case to `Fixtures/notes/expectations.json`. The renderer tests and `SharedFixtureLinkTests` both check it.
+4. The Quick Look bundle (`quicklook.js`) runs in bare JavaScriptCore with no DOM. Keep `src/core/` free of browser APIs, and use `test/quicklook.test.js` to confirm.
 
-```bash
-make try-local
-```
+`build.mjs` loads `esbuild` from `node_modules`, or from the path in `OBVIEWER_ESBUILD`. The esbuild version is pinned exactly so the bundle can be reproduced.
 
-That target:
+## Changing Swift code
 
-- verifies the active Xcode selection
-- installs `xcodegen` if Homebrew is available and the tool is missing
-- generates `Obviewer.xcodeproj`
-- opens the project in Xcode
+- `ObviewerCore` has no UI dependency; keep it that way.
+- New files need `make xcodeproj` before Xcode sees them.
+- The packages build in Swift 5 language mode (`SWIFT_VERSION 5.0`). Newer Xcodes default to Swift 6, so the setting is pinned.
+- WebKit behavior (rendering, sandbox, Quick Look, printing) can only be checked by running the app; see [`VERIFICATION.md`](./VERIFICATION.md).
+- If the reader is blank or misbehaves, use Help › Copy Reader Diagnostics, or stream the log with `log stream --predicate 'subsystem == "com.felizvida.obviewer"'`. The Web Inspector is enabled in Debug builds; attach via Safari › Develop.
 
-If you want realistic data for testing:
+## Entitlements policy
 
-```bash
-make demo-vault
-```
+`Configuration/Obviewer.entitlements` and `Configuration/ObviewerQuickLook.entitlements` are allow-lists checked by `ReleaseHardeningTests` and by `scripts/release_common.sh` on signed builds:
 
-## Working Modes
+- **App:** `app-sandbox`, `files.user-selected.read-only`, `print`, and `network.client` (required by WebKit in the sandbox; the reader blocks remote loads itself).
+- **Quick Look extension:** `app-sandbox` and `files.user-selected.read-only` only.
+- **Never:** any read-write file entitlement, `network.server`, or `get-task-allow` in a Release build. Release configurations set `CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO`.
 
-### Option 1: Xcode
+Changing these requires a deliberate review. Explain the change in the pull request.
 
-Recommended for day-to-day product work.
+## Publication policy
 
-1. run `make try-local` or `make xcodeproj`
-2. open `Obviewer.xcodeproj`
-3. run the `Obviewer` scheme
-4. use `Product -> Test` for the app and package test targets
+Everything pushed to GitHub, and everything attached to a release, is checked by `scripts/publication-check.mjs` against `Configuration/publication-policy.json`.
 
-Important:
+- The policy holds only SHA-256 fingerprints of prohibited terms. The terms themselves are not in the repository, and shouldn't be written into code, docs, tests or commit messages.
+- The scanner covers text, printable strings in binaries, file names, zip/tar archives, DMGs (mounted read-only on macOS), PDFs and images (OCR), plus commit metadata with `--git-range`.
+- Findings report location and rule ID only. Any file that can't be fully inspected fails the check (exit code 2).
+- Supported formats: UTF-8 text; PNG and JPEG (structured metadata plus OCR); PDF (text layer, metadata, and OCR of every page); Mach-O (string sections, symbol table, load commands, signature blobs); TTF/OTF/WOFF/WOFF2 (name and glyph-name tables); binary plists (via `plutil`, macOS); zip, tar and gzip (parsed in-process, scanned in memory); and DMGs (mounted read-only, macOS).
+- Anything else fails as unsupported: unknown binaries, SVG, Git LFS pointers, encrypted or ZIP64 archives, and archive members with absolute paths, `..`, links or devices. Size and nesting limits apply.
+- Known limits: compiled code can hold short string literals inside machine instructions, and glyph outlines are shapes. Both are covered by scanning the sources.
+- Gates and their scope:
+  - **CI:** tracked files; commit metadata on pull requests; generated benchmark reports before they're published.
+  - **Release workflow, before building:** the tree, the notes, the release title, the tag name, tagger and message, and the commit messages and identities since the previous release tag.
+  - **Release workflow, before uploading:** every file to be uploaded, with the DMG mounted.
+  - History contents are checked before push by the maintainer's local guard.
+- To add a rule, generate a fingerprint locally (`node scripts/publication-check.mjs --fingerprint --mode token|stream < terms.txt`) and keep `terms.txt` out of the repository.
+- Tests use random synthetic terms generated at runtime.
 
-- after pulling source changes, rerun `make xcodeproj` before reopening Xcode
-- the generated project is disposable; `project.yml` is the source of truth
+## CI
 
-### Option 2: Terminal
+`.github/workflows/ci.yml` runs on pushes to `main`, `codex/**` and `redesign/**`, and on pull requests:
 
-Recommended for quick local verification and CI parity.
+- **Publication policy:** Ubuntu with tesseract and poppler.
+- **Renderer:** Node 22: `npm ci`, `npm test`, bundle check.
+- **Swift Package:** GitHub's macOS 14 and 15 runners run `swift build` and `swift test`.
+- **Scaffolding:** entitlement checks, script syntax, XcodeGen, and an unsigned Xcode compile of the app.
+- **Benchmarks:** the smoke profile is enforced by `Configuration/benchmark-smoke-budget.json`; the integration profile reports only.
 
-```bash
-swift build
-swift test
-```
+CI compiles and tests but never launches the app, so UI behavior is covered by the manual verification.
 
-For the Xcode-style path:
+## Releases
 
-```bash
-xcodebuild -project Obviewer.xcodeproj \
-  -scheme Obviewer \
-  -destination 'platform=macOS' \
-  -derivedDataPath build/DerivedData \
-  test
-```
+Releases are tag-driven (`.github/workflows/release.yml`):
 
-## Core Commands
+1. Update `MARKETING_VERSION` in `project.yml` (numeric `x.y.z`).
+2. Write the reviewed notes at `docs/RELEASE_NOTES_<tag>.md`, and update `CHANGELOG.md` and `docs/STATUS.md`.
+3. Declare the channel on the first line of the notes: `<!-- release-channel: prerelease -->` or `<!-- release-channel: stable -->`. A hyphenated tag (for example `v0.3.0-beta.1`) must be a pre-release.
+4. Tag `v<x.y.z>` or `v<x.y.z>-<label>`.
 
-```bash
-make try-local
-make demo-vault
-make docs-screenshots
-make xcodeproj
-make build-app
-make package-app
-swift test
-```
+The workflow then:
 
-## Package Metadata
+- Fails unless the tag matches `MARKETING_VERSION`, the notes file exists, and the signing secrets are either complete or entirely absent. **Partial Developer ID secrets fail the run** instead of falling back to ad-hoc.
+- Runs the publication check on the tree, notes, commit and tag. Then come the renderer tests and bundle check, entitlement checks, and `swift build` / `swift test`.
+- Builds the DMG. With all four Developer ID secrets it signs (and notarizes, if the notary secrets are present). With none, it builds an **ad-hoc** DMG and attaches `docs/INSTALL.md`.
+- Runs the publication check on everything in `dist/`, including the mounted DMG, before uploading.
+- Creates the GitHub release from the notes file, on the declared channel. If a release already exists (for example a reviewed draft), it only attaches the files.
 
-Defined in `Package.swift`:
+Locally, `make package-adhoc` builds the same ad-hoc DMG: `scripts/build_app.sh`, then `scripts/package_release_dmg.sh`. Packaging verifies the app three times: in the staging folder, on the writable image volume before sealing, and inside the finished, read-only-mounted DMG. Each time it checks:
 
-- Swift tools version: `5.10`
-- deployment target: macOS 14+
-- core library: `ObviewerCore`
-- fixture library: `ObviewerFixtureSupport`
-- macOS shell library: `ObviewerMacApp`
-- executables: `Obviewer`, `ObviewerFixtureTool`, `ObviewerDocsTool`
+- the strict signature
+- the hardened runtime
+- the entitlement allow-lists, with no `get-task-allow`
+- system-only library dependencies, with no bundled frameworks or dylibs
+- the absence of Finder info or resource forks
 
-## Test Coverage
+The image is built by copying into a fresh APFS volume, not with `hdiutil create -srcfolder`. Before the volume is sealed:
 
-Current test targets:
+- markers stop the OS from writing a Spotlight index or file-event logs into it (`.metadata_never_index`, `.fseventsd/no_log`)
+- OS-generated entries are removed
+- extended attributes are cleared from the copied content
+- the app is verified on the writable volume itself
 
-- `Tests/ObviewerCoreTests/ObsidianParserTests.swift`
-- `Tests/ObviewerCoreTests/VaultReferenceTests.swift`
-- `Tests/ObviewerCoreTests/VaultSnapshotTests.swift`
-- `Tests/ObviewerCoreTests/VaultReaderTests.swift`
-- `Tests/ObviewerCoreTests/NoteGraphTests.swift`
-- `Tests/ObviewerMacAppTests/AppModelTests.swift`
-- `Tests/ObviewerMacAppTests/VaultNoteCacheStoreTests.swift`
-- `Tests/ObviewerMacAppTests/ViewSupportTests.swift`
+The final image root is an allow-list: the app, the Applications link, the install guide and the two empty markers. Anything else fails. The Release build is universal (arm64 and x86_64), but 0.3.0 was run only on Apple silicon.
 
-Current coverage is strongest around:
+### Why the modules are static libraries
 
-- parser behavior
-- note and attachment resolution
-- graph derivation
-- vault enumeration against real temporary directories
-- live watching and incremental reload orchestration
-- warm-start snapshot-cache persistence and cold-load reuse
-- app-model orchestration
-- selected view-support utilities
+`ObviewerCore`, `ObviewerReaderKit`, `ObviewerMacApp` and `ObviewerFixtureSupport` are static libraries in the Xcode project. The hardened runtime validates every library a process loads, and ad-hoc signatures carry no Team ID, so an ad-hoc app can't load ad-hoc-signed frameworks. Debug builds hide this, because they carry the debugger entitlement. Linking statically keeps the hardened runtime without any library-validation exception. The reader bundle (`Resources/Reader`) is copied into the app, the Quick Look extension and the ReaderKit test bundle, and `ReaderAssets` finds it with `Bundle(for:)`.
 
-Coverage is still weak around:
+## Common problems
 
-- UI snapshots
-- accessibility behavior
-- enforced performance thresholds in CI
-- end-to-end signed distribution validation
-
-The repo now does include a manual benchmark path for large-vault profiling:
-
-```bash
-make benchmark-vault
-```
-
-Useful variants:
-
-```bash
-PROFILE=integration make benchmark-vault
-VAULT=/absolute/path/to/YourVault make benchmark-vault
-FORMAT=json make benchmark-vault
-PROFILE=smoke BUDGET=Configuration/benchmark-smoke-budget.json make benchmark-vault
-```
-
-Notes:
-
-- synthetic generated-vault runs measure cold load, warm reload, selective reload, search, and graph query work
-- existing-vault runs stay read-only and skip the selective-reload mutation step
-- the smoke profile can now run as a pass/fail CI guardrail through `Configuration/benchmark-smoke-budget.json`
-- CI also runs an `integration` benchmark profile and uploads its JSON artifact without enforcing a timing budget yet
-- benchmark jobs also emit markdown summaries into the GitHub Actions job summary so maintainers can scan timings without downloading artifacts
-- larger-profile runs are still primarily for profiling and regression investigation, not hard CI gates yet
-
-## CI And Release Automation
-
-GitHub Actions:
-
-- `.github/workflows/ci.yml`
-- `.github/workflows/release.yml`
-
-Current CI behavior:
-
-- runs on `main`, `codex/**`, pull requests, and manual dispatch
-- builds and tests on `macos-14` and `macos-15`
-- validates entitlements and packaging scripts
-- verifies that the XcodeGen project can be generated
-
-Current release behavior:
-
-- tag `v*` to trigger the release workflow
-- rebuild and retest the repo
-- generate source archives and checksums
-- publish a GitHub release
-- publish a signed DMG as well when Apple signing secrets are configured
-
-Current limitation:
-
-- the release workflow needs Apple signing secrets configured before it can publish a signed/notarized `.dmg`
-
-## Packaging And Shipping
-
-The repository already contains the bones of the shipping pipeline:
-
-- `project.yml`
-- `scripts/generate_xcode_project.sh`
-- `scripts/build_app.sh`
-- `scripts/notarize_release_app.sh`
-- `scripts/package_release_app.sh`
-- `scripts/package_release_dmg.sh`
-
-Typical local signed build flow:
-
-```bash
-brew install xcodegen
-export OBVIEWER_CODE_SIGN_IDENTITY="Developer ID Application: Example Corp (TEAMID1234)"
-export OBVIEWER_DEVELOPMENT_TEAM="TEAMID1234"
-make xcodeproj
-make build-app
-make package-app
-```
-
-Important:
-
-- `make package-app` refuses unsigned packaging
-- that is intentional because the sandbox/read-only story depends on code signing carrying the entitlements
-
-Typical local notarized DMG flow:
-
-```bash
-export OBVIEWER_CODE_SIGN_IDENTITY="Developer ID Application: Example Corp (TEAMID1234)"
-export OBVIEWER_DEVELOPMENT_TEAM="TEAMID1234"
-export OBVIEWER_NOTARY_KEYCHAIN_PROFILE="obviewer-notary"
-make package-dmg
-```
-
-## Entitlements
-
-The current entitlement baseline is intentionally minimal:
-
-- `com.apple.security.app-sandbox`
-- `com.apple.security.files.user-selected.read-only`
-
-Do not broaden these casually. Any change to permissions should be treated as a product-level decision, not a routine implementation detail.
-
-## Common Failure Modes
-
-### Failure Mode 1: `swift build` or `swift test` fails with Apple toolchain errors
-
-Likely cause:
-
-- Command Line Tools are selected instead of full Xcode
-- the active SDK and toolchain do not match
-
-What to do:
-
-- check `xcode-select -p`
-- confirm Xcode is installed and opened once
-- reselect the full Xcode developer directory if needed
-
-### Failure Mode 2: Xcode runs the app but sandbox/bookmark behavior is wrong
-
-Likely cause:
-
-- the generated app target is not using the intended entitlements
-- local signing configuration is incomplete
-
-What to inspect:
-
-- `Configuration/Obviewer.entitlements`
-- target signing settings
-- bookmark and security-scope service behavior
-
-### Failure Mode 3: Notes render incorrectly
-
-Likely cause:
-
-- parser limitation or link resolution issue rather than a view bug
-
-What to inspect:
-
-- `ObsidianParser`
-- `VaultModels`
-- the specific note content and attachment paths
-
-### Failure Mode 4: The app feels slow on a large vault
-
-Likely cause:
-
-- current full reindexing model, lack of caching, or graph/layout cost
-
-What to inspect:
-
-- `VaultReader`
-- `VaultLoading`
-- graph subgraph generation and view layout behavior
-
-## Suggested Development Workflow
-
-For normal work:
-
-1. read `docs/HANDOFF.md`, `docs/STATUS.md`, and `docs/MODERNIZATION_PLAN.md`
-2. identify whether the task touches core, UI, distribution, or docs
-3. add or update tests first when the behavior is deterministic
-4. validate against the demo vault and a real vault when possible
-5. update docs whenever the product surface or release story changes
-
-## Decisions To Keep In Mind
-
-- read-only safety is the top requirement
-- local-only behavior is intentional
-- macOS quality matters
-- the current repo is strong enough for serious iteration, but it is not fully modernized yet
-
-## Recommended Near-Term Engineering Work
-
-The highest-value technical work in order is:
-
-1. Create the real sandboxed app target
-2. Verify the read-only guarantee on-device
-3. Improve parser fidelity
-4. Add richer note navigation and media support
-5. Improve release automation
+- **Xcode doesn't see new files:** run `make xcodeproj`.
+- **`node build.mjs --check` fails in CI:** someone changed `Renderer/src` without rebuilding, or used a different esbuild version. Run `npm ci` and `npm run build`, then commit.
+- **The reader is blank:** Help › Copy Reader Diagnostics. A WebContent process that keeps terminating usually means the app was built without its entitlements.
+- **The publication check reports INCOMPLETE:** install tesseract or poppler, or check that the archive or DMG can be opened. It never passes a file it couldn't read.

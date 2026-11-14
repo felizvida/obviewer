@@ -1,14 +1,15 @@
 ## Summary
 
-- Explain the user-facing change.
-- Link the issue or discussion when applicable.
+- What changes for users?
+- Linked issue, if any
 
 ## Validation
 
-- [ ] `swift build`
-- [ ] `swift test`
-- [ ] Manual smoke check on macOS
+- [ ] `swift build` and `swift test`
+- [ ] Renderer changed? `cd Renderer && npm test && npm run build`, bundle committed, `node build.mjs --check` passes
+- [ ] `make publication-check` passes
+- [ ] Relevant items of `docs/VERIFICATION.md` checked on a Mac (UI, WebKit, Finder, Quick Look changes)
 
-## Notes
+## Risk notes
 
-- Mention any sandbox, entitlement, or UI risks here.
+- Entitlement, sandbox, network or packaging changes (describe, or write "none")

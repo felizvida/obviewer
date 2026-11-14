@@ -8,11 +8,16 @@ protocol VaultBookmarkStoring {
 
 @MainActor
 struct BookmarkStore: VaultBookmarkStoring {
+    static let bookmarkCreationOptions: URL.BookmarkCreationOptions = [
+        .withSecurityScope,
+        .securityScopeAllowOnlyReadAccess,
+    ]
+
     private let key = "vault-bookmark"
 
     func save(url: URL) throws {
         let data = try url.bookmarkData(
-            options: [.withSecurityScope],
+            options: Self.bookmarkCreationOptions,
             includingResourceValuesForKeys: nil,
             relativeTo: nil
         )

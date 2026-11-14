@@ -1,12 +1,66 @@
 import Foundation
 
-public struct VaultReader: VaultLoading, Sendable {
-    private let supportedImages = Set(["png", "jpg", "jpeg", "gif", "webp", "heic"])
-    private let supportedAudio = Set(["mp3", "m4a", "wav"])
-    private let supportedVideo = Set(["mp4", "mov"])
-    private let progressUpdateInterval = 25
+/// How note files are recognised and indexed.
+public enum VaultNoteFormat: Equatable, Sendable {
+    case markdown
+    case dokuwiki(DokuWikiLayout)
 
-    public init() {}
+    public init(input: ReadingInputSource) {
+        if input.profile == .dokuwiki {
+            self = .dokuwiki(input.dokuWikiLayout ?? DokuWikiLayout(pagesBase: "", mediaBase: ""))
+        } else {
+            self = .markdown
+        }
+    }
+
+    var noteExtensions: Set<String> {
+        switch self {
+        case .markdown:
+            return NoteFileTypes.markdownExtensions
+        case .dokuwiki:
+            return NoteFileTypes.dokuWikiExtensions
+        }
+    }
+
+    /// Folders (relative to the root) to scan. Empty string means the whole root.
+    var scanRoots: [String] {
+        switch self {
+        case .markdown:
+            return [""]
+        case .dokuwiki(let layout):
+            if layout.pagesBase.isEmpty { return [""] }
+            return [layout.pagesBase, layout.mediaBase].filter { $0.isEmpty == false }
+        }
+    }
+
+    func isWithinScanRoots(_ relativePath: String) -> Bool {
+        scanRoots.contains { $0.isEmpty || relativePath.hasPrefix($0 + "/") }
+    }
+
+    func isNote(relativePath: String) -> Bool {
+        let ext = (relativePath as NSString).pathExtension.lowercased()
+        guard noteExtensions.contains(ext) else { return false }
+        if case .dokuwiki(let layout) = self, layout.pagesBase.isEmpty == false {
+            return relativePath.hasPrefix(layout.pagesBase + "/")
+        }
+        return true
+    }
+}
+
+public struct VaultReader: VaultLoading, Sendable {
+    private let supportedImages = Set(["png", "jpg", "jpeg", "gif", "webp", "heic", "svg", "bmp", "avif", "tif", "tiff"])
+    private let supportedAudio = Set(["mp3", "m4a", "wav", "ogg", "flac", "aac"])
+    private let supportedVideo = Set(["mp4", "mov", "webm", "m4v"])
+    private let progressUpdateInterval = 25
+    public let noteFormat: VaultNoteFormat
+
+    public init(noteFormat: VaultNoteFormat = .markdown) {
+        self.noteFormat = noteFormat
+    }
+
+    public func with(noteFormat: VaultNoteFormat) -> VaultReader {
+        VaultReader(noteFormat: noteFormat)
+    }
 
     public func loadVault(
         at rootURL: URL,
@@ -47,6 +101,97 @@ public struct VaultReader: VaultLoading, Sendable {
         return try fullyReloadVault(at: rootURL, previousSnapshot: previousSnapshot, progress: progress)
     }
 
+    public func loadMarkdownFile(
+        at fileURL: URL,
+        progress: (@Sendable (VaultLoadingProgress) -> Void)? = nil
+    ) throws -> VaultSnapshot {
+        try reloadMarkdownFile(at: fileURL, previousSnapshot: nil, progress: progress)
+    }
+
+    public func reloadMarkdownFile(
+        at originalURL: URL,
+        previousSnapshot: VaultSnapshot?,
+        progress: (@Sendable (VaultLoadingProgress) -> Void)? = nil
+    ) throws -> VaultSnapshot {
+        // A fresh URL instance: URL caches resource values, which would hide edits on live reload.
+        let fileURL = URL(fileURLWithPath: originalURL.standardizedFileURL.path)
+        // A single file opens with whichever flavor the user picked, whatever its extension.
+        guard NoteFileTypes.isNoteFile(fileURL) else {
+            throw VaultReaderError.unsupportedInput(fileURL.path)
+        }
+
+        let resourceKeys: Set<URLResourceKey> = [
+            .isRegularFileKey,
+            .contentModificationDateKey,
+        ]
+        let values = try fileURL.resourceValues(forKeys: resourceKeys)
+        guard values.isRegularFile == true else {
+            throw VaultReaderError.unreadableVault(fileURL.path)
+        }
+
+        let rootURL = fileURL.deletingLastPathComponent()
+        let relativePath = fileURL.lastPathComponent
+        let modifiedAt = values.contentModificationDate ?? .distantPast
+        progress?(
+            VaultLoadingProgress(
+                processedFileCount: 1,
+                noteCount: 0,
+                attachmentCount: 0,
+                currentPath: relativePath
+            )
+        )
+
+        let previousNotesByID = Dictionary(
+            uniqueKeysWithValues: (previousSnapshot?.notes ?? []).map { ($0.id, $0) }
+        )
+        let note: VaultNote
+        if let previousNote = previousNotesByID[relativePath], previousNote.modifiedAt == modifiedAt {
+            note = previousNote
+        } else {
+            note = try loadNote(at: fileURL, relativePath: relativePath, modifiedAt: modifiedAt)
+        }
+
+        let manifest = VaultIndexManifest(
+            files: [
+                VaultIndexedFile(
+                    relativePath: relativePath,
+                    kind: .note,
+                    modifiedAt: modifiedAt
+                ),
+            ]
+        )
+
+        if let previousSnapshot,
+           previousSnapshot.rootURL == rootURL,
+           previousSnapshot.indexManifest == manifest {
+            progress?(
+                VaultLoadingProgress(
+                    processedFileCount: 1,
+                    noteCount: previousSnapshot.notes.count,
+                    attachmentCount: previousSnapshot.attachments.count,
+                    currentPath: nil
+                )
+            )
+            return previousSnapshot
+        }
+
+        progress?(
+            VaultLoadingProgress(
+                processedFileCount: 1,
+                noteCount: 1,
+                attachmentCount: 0,
+                currentPath: nil
+            )
+        )
+
+        return VaultSnapshot(
+            rootURL: rootURL,
+            notes: [note],
+            attachments: [],
+            indexManifest: manifest
+        )
+    }
+
     private func fullyReloadVault(
         at rootURL: URL,
         previousSnapshot: VaultSnapshot?,
@@ -58,11 +203,22 @@ public struct VaultReader: VaultLoading, Sendable {
             .nameKey,
         ]
 
-        guard let enumerator = FileManager.default.enumerator(
-            at: rootURL,
-            includingPropertiesForKeys: Array(resourceKeys),
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
-        ) else {
+        var enumerators = [FileManager.DirectoryEnumerator]()
+        for scanRoot in noteFormat.scanRoots {
+            let scanURL = scanRoot.isEmpty ? rootURL : rootURL.appendingPathComponent(scanRoot, isDirectory: true)
+            if scanRoot.isEmpty == false, FileManager.default.fileExists(atPath: scanURL.path) == false {
+                continue
+            }
+            guard let enumerator = FileManager.default.enumerator(
+                at: scanURL,
+                includingPropertiesForKeys: Array(resourceKeys),
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            ) else {
+                throw VaultReaderError.unreadableVault(scanURL.path)
+            }
+            enumerators.append(enumerator)
+        }
+        guard enumerators.isEmpty == false else {
             throw VaultReaderError.unreadableVault(rootURL.path)
         }
 
@@ -88,7 +244,7 @@ public struct VaultReader: VaultLoading, Sendable {
             )
         }
 
-        for case let fileURL as URL in enumerator {
+        for case let fileURL as URL in enumerators.lazy.flatMap({ $0 }) {
             let values = try fileURL.resourceValues(forKeys: resourceKeys)
             guard values.isRegularFile == true else { continue }
 
@@ -100,7 +256,7 @@ public struct VaultReader: VaultLoading, Sendable {
             let modifiedAt = values.contentModificationDate ?? .distantPast
             let extensionName = fileURL.pathExtension.lowercased()
 
-            if extensionName == "md" {
+            if noteFormat.isNote(relativePath: relativePath) {
                 manifestFiles.append(
                     VaultIndexedFile(
                         relativePath: relativePath,
@@ -122,6 +278,7 @@ public struct VaultReader: VaultLoading, Sendable {
                 continue
             }
 
+            if noteFormat.noteExtensions.contains(extensionName) { continue }
             guard let kind = classifyAttachment(extensionName) else { continue }
             manifestFiles.append(
                 VaultIndexedFile(
@@ -207,7 +364,7 @@ public struct VaultReader: VaultLoading, Sendable {
                 reportProgress(currentPath: relativePath)
             }
 
-            if changes.removedPaths.contains(relativePath) {
+            if changes.removedPaths.contains(relativePath) || noteFormat.isWithinScanRoots(relativePath) == false {
                 removeIndexedItem(
                     at: relativePath,
                     notesByPath: &notesByPath,
@@ -230,7 +387,7 @@ public struct VaultReader: VaultLoading, Sendable {
             let modifiedAt = values.contentModificationDate ?? .distantPast
             let extensionName = fileURL.pathExtension.lowercased()
 
-            if extensionName == "md" {
+            if noteFormat.isNote(relativePath: relativePath) {
                 let note: VaultNote
                 if let previousNote = notesByPath[relativePath], previousNote.modifiedAt == modifiedAt {
                     note = previousNote
@@ -246,7 +403,8 @@ public struct VaultReader: VaultLoading, Sendable {
                 continue
             }
 
-            if let kind = classifyAttachment(extensionName) {
+            if noteFormat.noteExtensions.contains(extensionName) == false,
+               let kind = classifyAttachment(extensionName) {
                 let attachment: VaultAttachment
                 if let previousAttachment = attachmentsByPath[relativePath],
                    previousAttachment.modifiedAt == modifiedAt,
@@ -286,7 +444,18 @@ public struct VaultReader: VaultLoading, Sendable {
     ) throws -> VaultNote {
         let markdown = try readText(at: fileURL)
         let fallbackTitle = ((relativePath as NSString).lastPathComponent as NSString).deletingPathExtension
-        let parsed = ObsidianParser().parse(markdown: markdown, fallbackTitle: fallbackTitle)
+        let parsed: ObsidianParseResult
+        switch noteFormat {
+        case .markdown:
+            parsed = ObsidianParser().parse(markdown: markdown, fallbackTitle: fallbackTitle)
+        case .dokuwiki(let layout):
+            parsed = DokuWikiSyntax.parse(
+                text: markdown,
+                noteID: relativePath,
+                pagesBase: layout.pagesBase,
+                fallbackTitle: fallbackTitle.replacingOccurrences(of: "_", with: " ")
+            )
+        }
         return VaultNote(
             id: relativePath,
             title: parsed.title,
@@ -336,7 +505,10 @@ public struct VaultReader: VaultLoading, Sendable {
         }
 
         let data = try handle.readToEnd() ?? Data()
-        return String(decoding: data, as: UTF8.self)
+        if let text = String(data: data, encoding: .utf8) {
+            return text
+        }
+        return String(data: data, encoding: .windowsCP1252) ?? String(decoding: data, as: UTF8.self)
     }
 
     private func classifyAttachment(_ extensionName: String) -> VaultAttachment.Kind? {
@@ -372,11 +544,14 @@ public struct VaultReader: VaultLoading, Sendable {
 
 public enum VaultReaderError: LocalizedError {
     case unreadableVault(String)
+    case unsupportedInput(String)
 
     public var errorDescription: String? {
         switch self {
         case .unreadableVault(let path):
             return "Unable to read vault at \(path)."
+        case .unsupportedInput(let path):
+            return "Unsupported reading input at \(path)."
         }
     }
 }

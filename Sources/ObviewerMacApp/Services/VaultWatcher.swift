@@ -1,3 +1,4 @@
+import CoreServices
 import Darwin
 import Foundation
 import ObviewerCore
@@ -29,6 +30,11 @@ private final class RecursiveVaultWatchSession: VaultWatchSession {
     private let onChange: @Sendable (VaultReloadChanges) -> Void
     private let coordinationQueue = DispatchQueue(label: "com.felizvida.obviewer.vaultwatch.coordination")
     private let callbackQueue = DispatchQueue(label: "com.felizvida.obviewer.vaultwatch.callback")
+    private let eventQueue = DispatchQueue(label: "com.felizvida.obviewer.vaultwatch.fsevents")
+    /// File-level FSEvents for the whole tree. Directory kqueues only report entries being
+    /// added, removed or renamed; editors that save in place (Sublime Text by default)
+    /// change a file without touching its directory, so only this stream sees those saves.
+    private var eventStream: FSEventStreamRef?
     private var observers = [String: DirectoryObserver]()
     private var directorySnapshots = [String: DirectoryContentsSnapshot]()
     private var fileInventory = [String: WatchedFileSnapshot]()
@@ -42,6 +48,7 @@ private final class RecursiveVaultWatchSession: VaultWatchSession {
         coordinationQueue.sync {
             installTree(at: normalizedRootURL)
         }
+        startEventStream()
     }
 
     func invalidate() {
@@ -51,6 +58,12 @@ private final class RecursiveVaultWatchSession: VaultWatchSession {
             }
 
             isInvalidated = true
+            if let eventStream {
+                FSEventStreamStop(eventStream)
+                FSEventStreamInvalidate(eventStream)
+                FSEventStreamRelease(eventStream)
+                self.eventStream = nil
+            }
             pendingDispatchWorkItem?.cancel()
             pendingDispatchWorkItem = nil
             pendingDirectoryPaths.removeAll()
@@ -67,9 +80,80 @@ private final class RecursiveVaultWatchSession: VaultWatchSession {
         invalidate()
     }
 
+    private func startEventStream() {
+        // The stream retains a box holding a weak reference, so a callback that races with
+        // deallocation finds nil instead of a freed session.
+        let box = WeakSessionBox(self)
+        var context = FSEventStreamContext(
+            version: 0,
+            info: Unmanaged.passUnretained(box).toOpaque(),
+            retain: { info in
+                guard let info else { return nil }
+                _ = Unmanaged<WeakSessionBox>.fromOpaque(info).retain()
+                return info
+            },
+            release: { info in
+                guard let info else { return }
+                Unmanaged<WeakSessionBox>.fromOpaque(info).release()
+            },
+            copyDescription: nil
+        )
+        let callback: FSEventStreamCallback = { _, info, eventCount, eventPaths, eventFlags, _ in
+            guard let info,
+                  let session = Unmanaged<WeakSessionBox>.fromOpaque(info).takeUnretainedValue().session else { return }
+            let paths = unsafeBitCast(eventPaths, to: NSArray.self) as? [String] ?? []
+            var directories = Set<String>()
+            for index in 0..<min(eventCount, paths.count) {
+                let path = session.normalizeEventPath(paths[index])
+                let flags = Int(eventFlags[index])
+                if flags & kFSEventStreamEventFlagItemIsDir != 0 {
+                    directories.insert(path)
+                }
+                directories.insert((path as NSString).deletingLastPathComponent)
+            }
+            directories.forEach { session.handleObservedChange(at: $0) }
+        }
+        let flags = FSEventStreamCreateFlags(
+            kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer | kFSEventStreamCreateFlagUseCFTypes
+        )
+        guard let stream = FSEventStreamCreate(
+            kCFAllocatorDefault,
+            callback,
+            &context,
+            [normalizedRootURL.path] as CFArray,
+            FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
+            0.15,
+            flags
+        ) else {
+            return
+        }
+        FSEventStreamSetDispatchQueue(stream, eventQueue)
+        if FSEventStreamStart(stream) {
+            coordinationQueue.sync { eventStream = stream }
+        } else {
+            FSEventStreamInvalidate(stream)
+            FSEventStreamRelease(stream)
+        }
+    }
+
+    /// FSEvents reports real paths ("/private/var/..."); the watcher keys directories by the
+    /// root as resolved by Foundation, which strips "/private". Map one onto the other.
+    private func normalizeEventPath(_ path: String) -> String {
+        let rootPath = normalizedRootURL.path
+        if path.hasPrefix("/private/"), rootPath.hasPrefix("/private/") == false {
+            let stripped = String(path.dropFirst("/private".count))
+            if stripped.hasPrefix(rootPath) { return stripped }
+        }
+        return path.hasSuffix("/") && path.count > 1 ? String(path.dropLast()) : path
+    }
+
     private func handleObservedChange(at absoluteDirectoryPath: String) {
-        coordinationQueue.async {
-            guard self.isInvalidated == false else {
+        coordinationQueue.async { [weak self] in
+            guard let self, self.isInvalidated == false else {
+                return
+            }
+            let rootPath = self.normalizedRootURL.path
+            guard absoluteDirectoryPath == rootPath || absoluteDirectoryPath.hasPrefix(rootPath + "/") else {
                 return
             }
 
@@ -364,6 +448,14 @@ private final class RecursiveVaultWatchSession: VaultWatchSession {
         }
 
         return normalizedRootURL.appending(path: relativePath)
+    }
+}
+
+private final class WeakSessionBox {
+    weak var session: RecursiveVaultWatchSession?
+
+    init(_ session: RecursiveVaultWatchSession) {
+        self.session = session
     }
 }
 

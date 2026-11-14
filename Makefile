@@ -1,4 +1,4 @@
-.PHONY: help try-local demo-vault benchmark-vault docs-screenshots xcodeproj build-app notarize-app package-app package-dmg clean-app
+.PHONY: help publication-check renderer renderer-test package-adhoc try-local demo-vault benchmark-vault docs-screenshots xcodeproj build-app notarize-app package-app package-dmg clean-app
 
 help:
 	@printf '%s\n' \
@@ -11,6 +11,10 @@ help:
 	"make notarize-app Notarize and staple the signed Release app (requires notary env vars)" \
 	"make package-app Build and zip a signed Release app (requires signing env vars)" \
 	"make package-dmg Build a signed DMG, optionally notarized if notary env vars are set" \
+	"make package-adhoc Build an ad-hoc signed DMG for colleagues (no Apple Developer ID needed)" \
+	"make publication-check Scan tracked files against the publication policy (needs tesseract and pdftotext)" \
+	"make renderer    Rebuild the offline reader bundle (needs Node and npm ci in Renderer/)" \
+	"make renderer-test Run the renderer's Node tests" \
 	"make clean-app   Remove generated build artifacts and the generated Xcode project"
 
 try-local:
@@ -39,6 +43,18 @@ package-app: xcodeproj
 
 package-dmg: xcodeproj
 	./scripts/package_release_dmg.sh
+
+publication-check:
+	node scripts/publication-check.mjs --tracked
+
+renderer:
+	cd Renderer && npm ci --ignore-scripts && npm run build
+
+renderer-test:
+	cd Renderer && npm test
+
+package-adhoc: xcodeproj
+	OBVIEWER_CODE_SIGN_IDENTITY=- ./scripts/package_release_dmg.sh
 
 clean-app:
 	rm -rf build Obviewer.xcodeproj

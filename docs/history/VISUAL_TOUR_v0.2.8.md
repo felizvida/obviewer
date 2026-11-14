@@ -1,3 +1,5 @@
+> **Historical document.** This describes Obviewer as of v0.2.8 (spring 2026), before the v0.3 redesign. It is kept for context only and is not maintained. For the current state, see [`../README.md`](../README.md).
+
 # Visual Tour
 
 This page is the fastest way to understand how Obviewer feels before you run it yourself.
@@ -15,19 +17,19 @@ Obviewer is trying to combine four ideas in one product:
 
 ## Library Overview
 
-![Library overview](./images/visual-tour-library-home.png)
+![Library overview](../images/visual-tour-library-home.png)
 
 The main window combines a folder-grouped library sidebar with a wide reading surface. The opening note shows the current design language clearly: warm backgrounds, rounded chrome, serif-led note typography, and metadata that stays secondary to the note body.
 
 ## Project Reading View
 
-![Project overview note](./images/visual-tour-project-overview.png)
+![Project overview note](../images/visual-tour-project-overview.png)
 
 The project note shows the more ambitious reading path: callouts, tables, inline links, attachment links, image embeds, and the right-side contents rail. This is the core reading-room experience the project is aiming to mature.
 
 ## Tag-Focused Search
 
-![Tag-focused search](./images/visual-tour-tag-search.png)
+![Tag-focused search](../images/visual-tour-tag-search.png)
 
 Search narrows the sidebar without collapsing the reading flow. In this example, a tag query focuses the library on `#alpha` notes while keeping the selected note open in the detail pane.
 

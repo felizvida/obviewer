@@ -1,0 +1,24 @@
+====== Lab Protocols ======
+
+Standard operating procedures for the **wet lab**. See [[start|the start page]], [[:safety:training#ppe|PPE training]] and [[.:reagents]].
+External: [[https://www.example.org|Example]] and [[wp>Polymerase chain reaction]].
+
+===== Equipment =====
+
+  * Centrifuge
+  * Thermocycler
+    * Calibrated monthly
+  - Ordered step
+
+^ Item ^ Location ^
+| Pipettes | Bench 2 |
+| Gels | [[lab:storage|Storage room]] |
+
+{{ :lab:gel.png?200 |Example gel}}
+
+<code bash>
+echo "run"
+</code>
+
+Footnote((Updated yearly.)) and ''monospace''.
+{{tag>lab sop}}

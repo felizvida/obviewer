@@ -1,8 +1,10 @@
 # Quick Start
 
-This is the fastest way to try Obviewer on a Mac with full Xcode installed.
+**To use Obviewer,** install the release build: see [`docs/INSTALL.md`](./docs/INSTALL.md). This page is for running it from source.
 
-## Fastest Path
+## Fastest path
+
+You need a Mac with macOS 14 or later, full Xcode 15 or later, and Homebrew.
 
 ```bash
 git clone https://github.com/felizvida/obviewer.git
@@ -10,75 +12,36 @@ cd obviewer
 make try-local
 ```
 
-That command:
+`make try-local` checks that full Xcode (not just the Command Line Tools) is selected, installs XcodeGen if it's missing, generates `Obviewer.xcodeproj` and opens it. Then:
 
-- verifies that full Xcode is selected instead of Command Line Tools
-- installs `xcodegen` with Homebrew if needed
-- generates `Obviewer.xcodeproj`
-- opens the project in Xcode
+1. Select the **Obviewer** scheme.
+2. If Xcode asks for signing, choose your Personal Team, or "Sign to Run Locally", under Signing & Capabilities.
+3. Run (⌘R).
+4. In the app, choose **Open File or Folder** and pick a `.md` file, a Markdown folder, an Obsidian vault, a DokuWiki folder, or the test notes in `Fixtures/notes/`.
 
-## Optional Demo Vault
+You don't need Node to run the app: the reader bundle is committed under `Sources/ObviewerReaderKit/Resources/Reader/`.
 
-If you want a realistic vault without using your own notes, open a second terminal and run:
+## Sample data
 
-```bash
-make demo-vault
-```
+- `Fixtures/notes/` holds small notes that exercise the renderer: Obsidian syntax, a GitHub README, tricky emphasis, hostile HTML, and a DokuWiki tree.
+- `make demo-vault` generates `build/SampleVault`, a synthetic Obsidian vault with nested folders, images, callouts, tags and many cross-links.
 
-That creates `build/SampleVault`, a synthetic Obsidian-style vault with:
+## Single files
 
-- nested folders
-- duplicate note names
-- images and documents
-- tables, callouts, tags, and anchors
-- graph-friendly cross-links
+Opening one `.md` file shows that note and refreshes it when the file changes. Images or notes stored next to it need read-only access to the folder: use the banner's **Allow Access…** button, or open the folder itself.
 
-## In Xcode
-
-1. Select the `Obviewer` scheme.
-2. If Xcode asks for signing, choose your Personal Team under Signing & Capabilities.
-3. Press Run.
-4. In the app, choose `Open Vault...`.
-5. Pick your real Obsidian vault or `build/SampleVault`.
-
-## What To Expect
-
-The current app gives you:
-
-- a searchable note library
-- a reader-first detail pane
-- inline links, images, tables, and callouts
-- a note graph workspace
-- a read-only vault loading flow built around user-selected folder access
-
-The current GitHub releases still publish source archives rather than a ready-made signed `.app`, so local Xcode run is the easiest way to try the app today.
-
-## Requirements
-
-- a Mac
-- full Xcode
-- Homebrew
-
-## If `make try-local` Stops Early
-
-If the script says Command Line Tools are selected, run the `xcode-select` command it prints and then retry:
+## Launch options (development)
 
 ```bash
-make try-local
+swift run Obviewer --markdown /absolute/path/to/Note.md
+swift run Obviewer --obsidian /absolute/path/to/Vault
+swift run Obviewer --dokuwiki /absolute/path/to/dokuwiki
 ```
 
-If the script says no full Xcode app could be found, install Xcode from the App Store, open it once, and rerun the same command.
+These override the detected flavor. A sandboxed, signed app only gets access to paths the user chose, so for a built `.app` prefer the Open command, Finder, or `open -a Obviewer <path>`.
 
-## Manual Path
+## If something goes wrong
 
-If you want to do the steps yourself:
-
-```bash
-brew install xcodegen
-make xcodeproj
-open Obviewer.xcodeproj
-```
-
-Then follow the Xcode steps above.
-
-If you pull new changes later, rerun `make xcodeproj` before reopening Xcode so the generated project picks up any added or moved source files.
+- **"Command Line Tools are selected":** run the `xcode-select` command the script prints, then rerun `make try-local`.
+- **After pulling changes:** rerun `make xcodeproj`. The project is generated, so new files appear only after regenerating.
+- **Blank reader:** choose Help › Copy Reader Diagnostics and include the text in an issue.
