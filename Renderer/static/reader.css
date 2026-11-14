@@ -111,6 +111,9 @@ body { margin: 0; }
 /* ---------- Header ---------- */
 
 .note-header { margin-bottom: 2rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--ob-rule); }
+/* When the note supplies its own H1, the header is just a quiet line above it:
+   no rule between the metadata and the title it describes. */
+.note-header:not(:has(.note-title)) { margin-bottom: 0.9rem; padding-bottom: 0; border-bottom: none; }
 .note-title { font-family: var(--ob-font-heading); font-size: 2.3rem; line-height: 1.15; margin: 0 0 0.6rem; letter-spacing: -0.01em; }
 .note-meta { color: var(--ob-quiet); font-size: 0.82rem; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: baseline; }
 .note-meta .note-path { font-family: var(--ob-font-mono); font-size: 0.78rem; }
@@ -128,9 +131,12 @@ body { margin: 0; }
 .note-body h1, .note-body h2, .note-body h3, .note-body h4, .note-body h5, .note-body h6 {
   font-family: var(--ob-font-heading);
   line-height: 1.25;
-  margin: 2em 0 0.6em;
+  margin: 1.7em 0 0.55em;
   scroll-margin-top: 1rem;
+  text-wrap: balance;
 }
+.note-title { text-wrap: balance; }
+p, li { text-wrap: pretty; }
 .note-body h1 { font-size: 2.1rem; margin-top: 0.4em; }
 .note-body h2 { font-size: 1.55rem; padding-bottom: 0.25em; border-bottom: 1px solid var(--ob-rule); }
 .note-body h3 { font-size: 1.28rem; }
@@ -177,7 +183,7 @@ blockquote > :last-child { margin-bottom: 0; }
 /* ---------- Code ---------- */
 
 code { font-family: var(--ob-font-mono); font-size: 0.88em; background: var(--ob-code-bg); color: var(--ob-code-ink); padding: 0.1em 0.35em; border-radius: 4px; }
-pre.code-block { background: var(--ob-code-bg); color: var(--ob-code-ink); padding: 0.9em 1em; border-radius: 8px; overflow-x: auto; line-height: 1.5; font-size: 0.88em; }
+pre.code-block { background: var(--ob-code-bg); color: var(--ob-code-ink); padding: 0.9em 1em; border-radius: 8px; overflow-x: auto; line-height: 1.5; font-size: 0.88em; tab-size: 4; }
 pre.code-block code { background: none; padding: 0; font-size: 1em; }
 .code-wrapper { position: relative; }
 .code-wrapper > pre { margin: 0; }
@@ -202,7 +208,7 @@ pre.code-block code { background: none; padding: 0; font-size: 1em; }
 .table-wrapper { overflow-x: auto; }
 .table-wrapper > table { margin: 0; }
 table { border-collapse: collapse; font-size: 0.92em; }
-th, td { border: 1px solid var(--ob-rule); padding: 0.35em 0.7em; vertical-align: top; }
+th, td { border: 1px solid var(--ob-rule); padding: 0.35em 0.7em; vertical-align: top; font-variant-numeric: tabular-nums; }
 th { background: var(--ob-code-bg); text-align: left; font-weight: 600; }
 
 /* ---------- Tasks ---------- */
@@ -210,7 +216,7 @@ th { background: var(--ob-code-bg); text-align: left; font-weight: 600; }
 ul.contains-task-list { list-style: none; padding-left: 0.4em; }
 ul.contains-task-list ul.contains-task-list { padding-left: 1.4em; }
 .task-list-item { position: relative; }
-.task-checkbox { margin: 0 0.45em 0 0; vertical-align: -0.1em; accent-color: var(--ob-accent); }
+.task-checkbox { width: 0.95em; height: 0.95em; margin: 0 0.5em 0 0; vertical-align: -0.12em; accent-color: var(--ob-accent); }
 .task-list-item.is-checked > p, .task-list-item.is-checked:not(:has(> p)) { color: var(--ob-quiet); }
 .task-list-item[data-task="-"] { text-decoration: line-through; color: var(--ob-quiet); }
 
