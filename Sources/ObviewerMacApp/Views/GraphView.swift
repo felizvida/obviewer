@@ -13,7 +13,7 @@ struct GraphWorkspaceView: View {
     let onOpenReader: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 26) {
+        HStack(alignment: .top, spacing: 20) {
             VStack(alignment: .leading, spacing: 22) {
                 header
 
@@ -29,7 +29,7 @@ struct GraphWorkspaceView: View {
                     emptyState
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             GraphInspectorPanel(
                 snapshot: snapshot,
@@ -40,7 +40,7 @@ struct GraphWorkspaceView: View {
                 onOpenReader: onOpenReader
             )
         }
-        .padding(36)
+        .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -53,7 +53,7 @@ struct GraphWorkspaceView: View {
                 Text(headerSubtitle)
                     .font(.system(size: 15, design: .serif).italic())
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2)
 
                 Spacer(minLength: 12)
 
@@ -174,7 +174,9 @@ private struct GraphCanvasPanel: View {
                 }
             }
         }
-        .frame(minHeight: 640)
+        // Flexible: a large minimum here forced the whole window taller than the
+        // screen and pushed the header, sidebar and inspector out of view.
+        .frame(minWidth: 240, minHeight: 240)
         .shadow(color: Color.black.opacity(0.06), radius: 24, x: 0, y: 14)
     }
 
@@ -460,6 +462,18 @@ private struct GraphInspectorPanel: View {
     let onOpenReader: () -> Void
 
     var body: some View {
+        // Scrolls rather than grows, so a well-linked note can't push the window taller.
+        ScrollView {
+            content
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .frame(width: 270)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .premiumPanel(cornerRadius: 10)
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 18) {
             if let selectedNode {
                 VStack(alignment: .leading, spacing: 8) {
@@ -489,12 +503,7 @@ private struct GraphInspectorPanel: View {
                     .font(.system(size: 13, design: .serif).italic())
                     .foregroundStyle(.secondary)
             }
-
-            Spacer(minLength: 0)
         }
-        .padding(20)
-        .frame(width: 270, alignment: .topLeading)
-        .premiumPanel(cornerRadius: 10)
     }
 
     private func statsText(for node: NoteGraphNode) -> String {
