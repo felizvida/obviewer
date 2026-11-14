@@ -177,6 +177,8 @@ private struct GraphCanvasPanel: View {
         // Flexible: a large minimum here forced the whole window taller than the
         // screen and pushed the header, sidebar and inspector out of view.
         .frame(minWidth: 240, minHeight: 240)
+        // Nodes and labels stay inside the canvas, whatever the layout does.
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .shadow(color: Color.black.opacity(0.06), radius: 24, x: 0, y: 14)
     }
 

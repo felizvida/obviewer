@@ -182,24 +182,21 @@ public final class AppModel: ObservableObject {
 
         switch graphScope {
         case .local:
-            if let selectedNoteID {
-                return snapshot.noteGraph.localSubgraph(
-                    around: selectedNoteID,
-                    highlightedIDs: graphHighlightedNoteIDs
-                )
-            }
-
-            return snapshot.noteGraph.globalSubgraph(
-                visibleNoteIDs: Set(snapshot.notes.map(\.id)),
-                highlightedIDs: graphHighlightedNoteIDs,
-                centerNodeID: nil
+            // Local means "around the selected note". With nothing selected there is
+            // nothing to draw; the graph view says so instead of showing the whole vault.
+            guard let selectedNoteID else { return nil }
+            return snapshot.noteGraph.localSubgraph(
+                around: selectedNoteID,
+                highlightedIDs: graphHighlightedNoteIDs
             )
 
         case .global:
             let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-            var visibleNoteIDs = query.isEmpty
-                ? Set(snapshot.notes.map(\.id))
-                : Set(filteredNotes.map(\.id))
+            let matches = Set(filteredNotes.map(\.id))
+            // A search that matches nothing shows nothing, as the sidebar does. (An empty
+            // set passed to globalSubgraph means "every note", so don't pass one.)
+            if query.isEmpty == false, matches.isEmpty { return nil }
+            var visibleNoteIDs = query.isEmpty ? Set(snapshot.notes.map(\.id)) : matches
             if let selectedNoteID {
                 visibleNoteIDs.insert(selectedNoteID)
             }

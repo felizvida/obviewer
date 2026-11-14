@@ -464,6 +464,52 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
+    func testLocalGraphIsEmptyWithoutASelection() async throws {
+        let snapshot = makeSnapshot()
+        let model = AppModel(
+            bookmarkStore: BookmarkStoreSpy(),
+            picker: VaultPickerStub(url: URL(fileURLWithPath: "/tmp/obviewer-tests/vault")),
+            reader: VaultLoaderSpy(result: .success(snapshot)),
+            securityScopeManager: SecurityScopeSpy()
+        )
+
+        await model.chooseVault()
+        model.graphScope = .local
+        model.selectedNoteID = nil
+
+        // Not the whole vault drawn in the local layout: nothing, so the view shows its empty state.
+        XCTAssertNil(model.graphSubgraph)
+
+        model.selectedNoteID = "Projects/Plan.md"
+        XCTAssertEqual(model.graphSubgraph?.centerNodeID, "Projects/Plan.md")
+    }
+
+    @MainActor
+    func testWholeVaultGraphIsEmptyWhenSearchMatchesNothing() async throws {
+        let snapshot = makeSnapshot()
+        let model = AppModel(
+            bookmarkStore: BookmarkStoreSpy(),
+            picker: VaultPickerStub(url: URL(fileURLWithPath: "/tmp/obviewer-tests/vault")),
+            reader: VaultLoaderSpy(result: .success(snapshot)),
+            securityScopeManager: SecurityScopeSpy()
+        )
+
+        await model.chooseVault()
+        model.graphScope = .global
+        model.searchText = "zz-no-match-graph"
+        XCTAssertTrue(model.filteredNotes.isEmpty)
+
+        model.selectedNoteID = nil
+        XCTAssertNil(model.graphSubgraph, "no matches and no selection must not fall back to every note")
+
+        model.selectedNoteID = "Projects/Plan.md"
+        XCTAssertNil(model.graphSubgraph, "a selection doesn't make a search that matches nothing show a graph")
+
+        model.searchText = ""
+        XCTAssertEqual(model.graphSubgraph?.nodes.count, snapshot.notes.count, "no search: the whole vault")
+    }
+
+    @MainActor
     func testGraphStateUsesSelectionWhenSearchIsEmpty() async throws {
         let snapshot = makeSnapshot()
         let model = AppModel(
