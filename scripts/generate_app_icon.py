@@ -5,12 +5,18 @@ The icon is a page of paper (the macOS icon squircle) with a purple silk
 bookmark, a few lines of text, and the gold fleur-de-lis that closes every
 note in the reader: ink on paper, with a hint of Louisiana.
 
-Usage: python3 scripts/generate_app_icon.py [output .appiconset directory]
+Writes App/AppIcon.icns: PNG renditions only, one per slot, with no other
+chunk types, so the publication check can inspect every pixel of the exact
+file that ships (an Xcode asset catalog would compile to Assets.car, an
+undocumented container the check rightly refuses).
+
+Usage: python3 scripts/generate_app_icon.py [output .icns path]
 Needs only Pillow; the fleur-de-lis is drawn from curves, not a font.
 """
 
-import json
+import io
 import math
+import struct
 import sys
 from pathlib import Path
 
@@ -18,7 +24,14 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 UNIT = 4                      # draw at 4x, then downsample
 SIZE = 1024 * UNIT
-OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("App/Assets.xcassets/AppIcon.appiconset")
+OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("App/AppIcon.icns")
+
+# ICNS slots and their pixel sizes. Every slot holds a PNG (no JPEG 2000, no
+# legacy RLE/ARGB data), which is what scripts/publication-check.mjs accepts.
+ICNS_SLOTS = [
+    ("icp4", 16), ("icp5", 32), ("ic07", 128), ("ic08", 256), ("ic09", 512), ("ic10", 1024),
+    ("ic11", 32), ("ic12", 64), ("ic13", 256), ("ic14", 512),
+]
 
 PAPER_TOP = (253, 252, 248)
 PAPER_BOTTOM = (241, 238, 230)
@@ -195,19 +208,16 @@ def main():
     canvas.alpha_composite(body)
 
     master = canvas.resize((1024, 1024), Image.LANCZOS)
-    OUT.mkdir(parents=True, exist_ok=True)
-    images = []
-    for points in (16, 32, 128, 256, 512):
-        for scale in (1, 2):
-            px = points * scale
-            name = f"icon_{points}x{points}{'@2x' if scale == 2 else ''}.png"
-            master.resize((px, px), Image.LANCZOS).save(OUT / name, optimize=True)
-            images.append({"idiom": "mac", "size": f"{points}x{points}", "scale": f"{scale}x", "filename": name})
-    (OUT / "Contents.json").write_text(json.dumps({"images": images, "info": {"author": "xcode", "version": 1}}, indent=2) + "\n")
-    catalog = OUT.parent / "Contents.json"
-    if not catalog.exists():
-        catalog.write_text(json.dumps({"info": {"author": "xcode", "version": 1}}, indent=2) + "\n")
-    print(f"Wrote {len(images)} icon images to {OUT}")
+    chunks = []
+    for slot, px in ICNS_SLOTS:
+        png = io.BytesIO()
+        master.resize((px, px), Image.LANCZOS).save(png, format="PNG", optimize=True)
+        data = png.getvalue()
+        chunks.append(slot.encode("ascii") + struct.pack(">I", len(data) + 8) + data)
+    body = b"".join(chunks)
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_bytes(b"icns" + struct.pack(">I", len(body) + 8) + body)
+    print(f"Wrote {OUT} ({len(ICNS_SLOTS)} PNG renditions, {len(body) + 8} bytes)")
 
 
 if __name__ == "__main__":

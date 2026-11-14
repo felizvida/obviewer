@@ -8,7 +8,7 @@
 
 All three are gitignored. Regenerate them with `make xcodeproj`.
 
-`App/Assets.xcassets` holds the app icon and is tracked. It is drawn by `scripts/generate_app_icon.py` (Pillow only): a page with a purple bookmark and the gold fleur-de-lis that also closes each note in the reader. Rerun the script after changing the drawing.
+`App/AppIcon.icns` is the app icon, tracked and copied into the app as is (`CFBundleIconFile`). `scripts/generate_app_icon.py` (Pillow only) draws it: a page with a purple bookmark and the gold fleur-de-lis that also closes each note in the reader. It holds PNG renditions only, so the publication check can inspect every pixel of the exact file that ships. There is deliberately no asset catalog: Xcode would compile it to `Assets.car`, which the check can't inspect and refuses. Rerun the script after changing the drawing.
 
 The generated project contains:
 

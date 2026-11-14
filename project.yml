@@ -89,7 +89,8 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - path: Sources/Obviewer
-      - path: App/Assets.xcassets
+      - path: App/AppIcon.icns
+        buildPhase: resources
       - path: Sources/ObviewerReaderKit/Resources/Reader
         type: folder
         buildPhase: resources
@@ -107,6 +108,7 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: Obviewer
+        CFBundleIconFile: AppIcon
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDocumentTypes:
@@ -145,7 +147,6 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer
         PRODUCT_NAME: Obviewer
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         CODE_SIGN_ENTITLEMENTS: Configuration/Obviewer.entitlements
         ENABLE_HARDENED_RUNTIME: YES
