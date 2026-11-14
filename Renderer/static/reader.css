@@ -95,7 +95,7 @@ html {
   color: var(--ob-ink);
   font-family: var(--ob-font-body);
   font-size: calc(17px * var(--ob-text-scale));
-  line-height: 1.66;
+  line-height: 1.5;
   font-kerning: normal;
   hanging-punctuation: first;
   -webkit-font-smoothing: antialiased;
@@ -107,7 +107,7 @@ body { margin: 0; }
 .ob-page {
   max-width: calc(var(--ob-measure) + 7rem);
   margin: 0 auto;
-  padding: 3.5rem 3.5rem 6rem;
+  padding: 2.25rem 3rem 4.5rem;
 }
 
 .ob-page > * { max-width: var(--ob-measure); margin-left: auto; margin-right: auto; }
@@ -117,7 +117,7 @@ body { margin: 0; }
 /* ---------- Header ---------- */
 /* Title, then one quiet italic sentence of metadata, then tags as plain ink. */
 
-.note-header { margin: 0 0 2.4rem; }
+.note-header { margin: 0 0 1.6rem; }
 .note-header > :last-child { margin-bottom: 0; }
 .note-title {
   font-size: 2.35rem; font-weight: 500; line-height: 1.12; letter-spacing: -0.012em;
@@ -141,7 +141,7 @@ body { margin: 0; }
 .note-body h1, .note-body h2, .note-body h3, .note-body h4, .note-body h5, .note-body h6 {
   line-height: 1.25;
   font-weight: 600;
-  margin: 1.9em 0 0.5em;
+  margin: 1.45em 0 0.4em;
   scroll-margin-top: 1.25rem;
   text-wrap: balance;
 }
@@ -153,12 +153,12 @@ body { margin: 0; }
 .note-body h1:not(:first-child) { font-size: 1.85rem; }
 
 p, li { text-wrap: pretty; }
-p, ul, ol, dl, table, pre, blockquote, figure, details, .callout, .math-display, .code-wrapper, .table-wrapper { margin: 0 0 1em; }
+p, ul, ol, dl, table, pre, blockquote, figure, details, .callout, .math-display, .code-wrapper, .table-wrapper { margin: 0 0 0.8em; }
 ul, ol { padding-left: 1.5em; }
-li { margin: 0.25em 0; }
-li > ul, li > ol { margin: 0.25em 0; }
+li { margin: 0.1em 0; }
+li > ul, li > ol { margin: 0.1em 0; }
 li::marker { color: var(--ob-quiet); }
-hr { border: none; height: auto; margin: 2em 0; text-align: center; line-height: 1; }
+hr { border: none; height: auto; margin: 1.5em 0; text-align: center; line-height: 1; }
 hr::after { content: "\2042"; color: var(--ob-quiet); }
 img { max-width: 100%; height: auto; border-radius: 2px; }
 img.is-zoomed { max-width: none; width: auto; cursor: zoom-out; }
@@ -186,7 +186,7 @@ blockquote > :last-child { margin-bottom: 0; }
 /* ---------- Code ---------- */
 
 code { font-family: var(--ob-font-mono); font-size: 0.82em; background: var(--ob-code-bg); color: var(--ob-code-ink); padding: 0.12em 0.32em; border-radius: 3px; }
-pre.code-block { background: var(--ob-code-bg); color: var(--ob-code-ink); padding: 0.95em 1.1em; border-radius: 4px; overflow-x: auto; line-height: 1.55; font-size: 0.82em; tab-size: 4; }
+pre.code-block { background: var(--ob-code-bg); color: var(--ob-code-ink); padding: 0.8em 1em; border-radius: 4px; overflow-x: auto; line-height: 1.45; font-size: 0.82em; tab-size: 4; }
 pre.code-block code { background: none; padding: 0; font-size: 1em; }
 .code-wrapper { position: relative; }
 .code-wrapper > pre { margin: 0; }
@@ -212,7 +212,7 @@ pre.code-block code { background: none; padding: 0; font-size: 1em; }
 .table-wrapper { overflow-x: auto; }
 .table-wrapper > table { margin: 0; }
 table { border-collapse: collapse; font-family: var(--ob-font-ui); font-size: 0.82em; line-height: 1.45; }
-th, td { border-bottom: 1px solid var(--ob-rule); padding: 0.5em 1.4em 0.5em 0; vertical-align: top; font-variant-numeric: tabular-nums; }
+th, td { border-bottom: 1px solid var(--ob-rule); padding: 0.35em 1.4em 0.35em 0; vertical-align: top; font-variant-numeric: tabular-nums; }
 th:last-child, td:last-child { padding-right: 0; }
 th { text-align: left; font-weight: 600; border-bottom-color: var(--ob-quiet); }
 
@@ -291,7 +291,7 @@ details.callout[open] > summary.callout-title::after { transform: rotate(90deg);
 
 /* ---------- Footnotes ---------- */
 
-.footnotes { font-size: 0.88em; color: var(--ob-soft); margin-top: 2.5em; }
+.footnotes { font-size: 0.88em; color: var(--ob-soft); margin-top: 2em; }
 .footnotes hr { width: 5em; margin: 1em 0; border-top: 1px solid var(--ob-rule); }
 .footnotes hr::after { content: none; }
 .footnote-ref a { text-decoration: none; }
@@ -306,7 +306,7 @@ details.callout[open] > summary.callout-title::after { transform: rotate(90deg);
   display: block;
   width: 1.9rem;
   height: 1.71rem;
-  margin: 2.6rem auto 0;
+  margin: 2rem auto 0;
   background: var(--ob-gold);
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 240 216%22%3E%3Cpath d=%22M120 0 C132 26 151 50 149 80 C147 106 135 120 132 136 L132 150L108 150L108 136 C105 120 93 106 91 80 C89 50 108 26 120 0 Z M134 142 C158 96 210 62 228 98 C236 116 222 134 208 126 C194 118 172 126 152 148 Z M144 150 C164 164 180 184 167 199 C157 208 145 198 152 187 C157 178 148 164 136 152 Z M106 142 C82 96 30 62 12 98 C4 116 18 134 32 126 C46 118 68 126 88 148 Z M96 150 C76 164 60 184 73 199 C83 208 95 198 88 187 C83 178 92 164 104 152 Z M130 150 C133 172 129 194 120 216 C111 194 107 172 110 150 Z%22/%3E%3Crect x=%2270%22 y=%22134%22 width=%22100%22 height=%2218%22 rx=%228%22/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 240 216%22%3E%3Cpath d=%22M120 0 C132 26 151 50 149 80 C147 106 135 120 132 136 L132 150L108 150L108 136 C105 120 93 106 91 80 C89 50 108 26 120 0 Z M134 142 C158 96 210 62 228 98 C236 116 222 134 208 126 C194 118 172 126 152 148 Z M144 150 C164 164 180 184 167 199 C157 208 145 198 152 187 C157 178 148 164 136 152 Z M106 142 C82 96 30 62 12 98 C4 116 18 134 32 126 C46 118 68 126 88 148 Z M96 150 C76 164 60 184 73 199 C83 208 95 198 88 187 C83 178 92 164 104 152 Z M130 150 C133 172 129 194 120 216 C111 194 107 172 110 150 Z%22/%3E%3Crect x=%2270%22 y=%22134%22 width=%22100%22 height=%2218%22 rx=%228%22/%3E%3C/svg%3E") center / contain no-repeat;
@@ -317,7 +317,7 @@ details.callout[open] > summary.callout-title::after { transform: rotate(90deg);
 
 /* ---------- Backlinks ---------- */
 
-.backlinks { margin-top: 2.4rem; font-size: 0.94rem; }
+.backlinks { margin-top: 1.8rem; font-size: 0.94rem; }
 .backlinks-title { font-size: 1rem; font-weight: 400; font-style: italic; color: var(--ob-quiet); margin: 0 0 0.45rem; }
 .backlinks ul { list-style: none; padding: 0; margin: 0; }
 .backlinks li { margin: 0.2em 0; }
