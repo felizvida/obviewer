@@ -4,6 +4,9 @@ public struct ObsidianParseResult: Sendable {
     public let title: String
     public let previewText: String
     public let frontmatter: NoteFrontmatter
+    /// The note's block structure. Notes are rendered by the web reader; the indexer
+    /// walks these blocks so links and tags inside code, tables and lists are classified
+    /// the same way every time. Not stored in the snapshot.
     public let blocks: [RenderBlock]
     public let outboundLinks: [String]
     public let tags: [String]

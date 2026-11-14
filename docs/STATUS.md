@@ -43,7 +43,6 @@ This page records what works and has been checked, what is known to be limited, 
 - **Obsidian syntax needs the Obsidian flavor.** Single files and plain folders open as Markdown, where `==highlights==`, `%%comments%%` and `#tags` stay literal; switch with the badge. Custom task states such as `[/]` display as checked boxes. The renderer covers common Obsidian syntax, not full Obsidian parity.
 - **PDF pagination is plain.** A short last section, such as footnotes, can land alone on its own page.
 - **Ad-hoc signature.** The app isn't notarized by Apple. macOS asks once to allow it, may ask again after each update, and managed Macs may refuse it. See [`INSTALL.md`](./INSTALL.md).
-- **The classic native reader** is still available under Settings › Reading for one release. It can't draw diagrams, math or embeds.
 
 ## Not yet verified
 

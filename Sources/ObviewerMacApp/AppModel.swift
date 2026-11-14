@@ -303,17 +303,6 @@ public final class AppModel: ObservableObject {
         errorMessage = nil
     }
 
-    func navigate(to linkTarget: String, anchor: String? = nil, from sourceNoteID: String? = nil) {
-        guard let snapshot else { return }
-        guard let noteID = snapshot.resolveNoteID(for: linkTarget, from: sourceNoteID) else { return }
-        selectedNoteID = noteID
-        if let anchor, anchor.isEmpty == false {
-            pendingAnchor = PendingAnchor(noteID: noteID, anchor: anchor)
-        } else {
-            pendingAnchor = .none
-        }
-    }
-
     func select(tag: String) {
         searchText = "#\(tag)"
     }

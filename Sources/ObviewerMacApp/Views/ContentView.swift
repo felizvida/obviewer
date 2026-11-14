@@ -8,7 +8,6 @@ public struct ContentView: View {
     @State private var hoveredNoteID: String?
     @FocusState private var isSearchFocused: Bool
     @Environment(\.openWindow) private var openWindow
-    @AppStorage(ReaderPreferenceKeys.useClassicReader) private var useClassicReader = false
 
     public init(model: AppModel) {
         self.model = model
@@ -102,23 +101,7 @@ public struct ContentView: View {
                 switch model.detailMode {
                 case .reader:
                     if let note = model.selectedNote {
-                        if useClassicReader || ReaderAssets.isAvailable == false {
-                            ReaderView(
-                                note: note,
-                                snapshot: snapshot,
-                                onNavigate: { target, anchor in
-                                    model.navigate(to: target, anchor: anchor, from: note.id)
-                                },
-                                onSelectTag: model.select(tag:),
-                                pendingAnchorID: model.pendingAnchor(for: note.id),
-                                onConsumePendingAnchor: {
-                                    model.clearPendingAnchor(for: note.id)
-                                }
-                            )
-                            .transition(.opacity.combined(with: .move(edge: .trailing)))
-                        } else {
-                            WebReaderView(model: model, note: note)
-                        }
+                        NoteReaderPane(model: model, note: note)
                     } else {
                         EmptyReaderState {
                             Task {
@@ -152,7 +135,6 @@ public struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.22), value: model.isLoading)
         .animation(.easeInOut(duration: 0.24), value: model.detailMode)
-        .animation(useClassicReader ? .easeInOut(duration: 0.18) : nil, value: model.selectedNoteID)
     }
 
     private var header: some View {

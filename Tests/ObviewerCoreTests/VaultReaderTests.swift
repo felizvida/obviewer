@@ -211,7 +211,6 @@ final class VaultReaderTests: XCTestCase {
                     tags: ["cached"],
                     outboundLinks: [],
                     tableOfContents: [],
-                    blocks: [.paragraph(text: .plain("Reused snapshot body"))],
                     wordCount: 3,
                     readingTimeMinutes: 1,
                     modifiedAt: modifiedAt
@@ -392,23 +391,10 @@ final class VaultReaderTests: XCTestCase {
         let home = try XCTUnwrap(snapshot.note(withID: manifest.homeNoteID))
         XCTAssertTrue(home.tags.contains("reader"))
         XCTAssertTrue(home.tableOfContents.contains(where: { $0.title == "Reader Checklist" }))
-        XCTAssertTrue(home.blocks.contains(where: isTableBlock))
-        XCTAssertTrue(home.blocks.contains(where: isImageBlock))
-        XCTAssertTrue(
-            home.blocks.contains(
-                where: containsLink(destination: .attachment(manifest.operationsManualAttachmentPath))
-            )
-        )
 
         let alphaOverview = try XCTUnwrap(snapshot.note(withID: manifest.alphaOverviewNoteID))
         XCTAssertTrue(alphaOverview.tags.contains("alpha"))
-        XCTAssertTrue(alphaOverview.blocks.contains(where: isTableBlock))
-        XCTAssertTrue(alphaOverview.blocks.contains(where: containsInlineImage(path: "cover.png")))
-        XCTAssertTrue(
-            alphaOverview.blocks.contains(
-                where: containsLink(destination: .note(target: "Knowledge/Architecture/Index.md", anchor: "patterns"))
-            )
-        )
+        XCTAssertTrue(alphaOverview.outboundLinks.contains("Knowledge/Architecture/Index.md"))
 
         XCTAssertGreaterThanOrEqual(events.count, 8)
         XCTAssertEqual(events.last?.processedFileCount, manifest.noteCount + manifest.attachmentCount)
@@ -496,88 +482,5 @@ private struct TemporaryVault {
 
     func cleanup() {
         try? FileManager.default.removeItem(at: rootURL)
-    }
-}
-
-private func isTableBlock(_ block: RenderBlock) -> Bool {
-    if case .table = block {
-        return true
-    }
-    return false
-}
-
-private func isImageBlock(_ block: RenderBlock) -> Bool {
-    if case .image = block {
-        return true
-    }
-    return false
-}
-
-private func containsLink(destination expected: LinkDestination) -> (RenderBlock) -> Bool {
-    { block in
-        richTexts(in: block).contains { richText in
-            richText.runs.contains { run in
-                if case .link(_, let destination) = run {
-                    return destination == expected
-                }
-                return false
-            }
-        }
-    }
-}
-
-private func containsInlineImage(
-    path expectedPath: String,
-    alt expectedAlt: String? = nil,
-    sizeHint expectedSizeHint: ImageSizeHint? = nil
-) -> (RenderBlock) -> Bool {
-    { block in
-        richTexts(in: block).contains { richText in
-            richText.runs.contains { run in
-                if case .image(let path, let alt, let sizeHint) = run {
-                    guard path == expectedPath else {
-                        return false
-                    }
-
-                    if let expectedAlt, alt != expectedAlt {
-                        return false
-                    }
-
-                    if let expectedSizeHint, sizeHint != expectedSizeHint {
-                        return false
-                    }
-
-                    return true
-                }
-                return false
-            }
-        }
-    }
-}
-
-private func richTexts(in block: RenderBlock) -> [RichText] {
-    switch block {
-    case .heading(_, let text, _):
-        return [text]
-    case .paragraph(let text):
-        return [text]
-    case .list(let items):
-        return listRichTexts(in: items)
-    case .quote(let text):
-        return [text]
-    case .callout(_, let title, let body):
-        return [title, body]
-    case .table(let headers, let rows):
-        return headers + rows.flatMap { $0 }
-    case .footnotes(let items):
-        return items.map(\.text)
-    case .code, .image, .unsupported, .divider:
-        return []
-    }
-}
-
-private func listRichTexts(in items: [RenderListItem]) -> [RichText] {
-    items.flatMap { item in
-        [item.text] + listRichTexts(in: item.children)
     }
 }

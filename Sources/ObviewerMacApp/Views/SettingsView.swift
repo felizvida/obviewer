@@ -25,7 +25,6 @@ private struct ReadingSettings: View {
     @AppStorage(ReaderPreferenceKeys.theme) private var theme = "system"
     @AppStorage(ReaderPreferenceKeys.textScale) private var textScale = 1.0
     @AppStorage(ReaderPreferenceKeys.measure) private var measure = 68
-    @AppStorage(ReaderPreferenceKeys.useClassicReader) private var useClassicReader = false
 
     var body: some View {
         Form {
@@ -57,11 +56,6 @@ private struct ReadingSettings: View {
                         .frame(width: 44, alignment: .trailing)
                 }
             }
-
-            Toggle("Use the classic native reader", isOn: $useClassicReader)
-            Text("The classic reader can't draw diagrams, math, or embeds. It stays available for one release as a fallback.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
         .onAppear { applyAppAppearance() }

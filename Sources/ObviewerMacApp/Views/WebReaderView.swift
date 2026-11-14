@@ -7,7 +7,38 @@ enum ReaderPreferenceKeys {
     static let textScale = "obviewer.reader.textScale"
     static let measure = "obviewer.reader.measure"
     static let theme = "obviewer.reader.theme"
-    static let useClassicReader = "obviewer.reader.useClassic"
+}
+
+/// The note reader backed by the offline WebKit renderer. Shows an explanation
+/// instead if the bundled reader files are missing from the app.
+struct NoteReaderPane: View {
+    @ObservedObject var model: AppModel
+    let note: VaultNote
+
+    var body: some View {
+        if ReaderAssets.isAvailable {
+            WebReaderView(model: model, note: note)
+        } else {
+            ReaderUnavailableView()
+        }
+    }
+}
+
+private struct ReaderUnavailableView: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+            Text("The reader is missing from this copy of Obviewer.")
+                .font(.headline)
+            Text("Reinstall Obviewer from the latest release. Your notes are untouched.")
+                .foregroundStyle(.secondary)
+        }
+        .multilineTextAlignment(.center)
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
 }
 
 /// The note reader backed by the offline WebKit renderer.
@@ -288,7 +319,6 @@ public struct NoteWindowView: View {
     @StateObject private var model = AppModel()
     @State private var url: URL?
     @Environment(\.openWindow) private var openWindow
-    @AppStorage(ReaderPreferenceKeys.useClassicReader) private var useClassicReader = false
 
     public init(request: NoteWindowRequest?) {
         self.request = request
@@ -321,19 +351,8 @@ public struct NoteWindowView: View {
         if model.isLoading {
             ProgressView("Opening…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let snapshot = model.snapshot, let note = model.selectedNote {
-            if useClassicReader || ReaderAssets.isAvailable == false {
-                ReaderView(
-                    note: note,
-                    snapshot: snapshot,
-                    onNavigate: { target, anchor in model.navigate(to: target, anchor: anchor, from: note.id) },
-                    onSelectTag: model.select(tag:),
-                    pendingAnchorID: model.pendingAnchor(for: note.id),
-                    onConsumePendingAnchor: { model.clearPendingAnchor(for: note.id) }
-                )
-            } else {
-                WebReaderView(model: model, note: note)
-            }
+        } else if model.snapshot != nil, let note = model.selectedNote {
+            NoteReaderPane(model: model, note: note)
         } else {
             VStack(spacing: 12) {
                 Image(systemName: "doc.questionmark")

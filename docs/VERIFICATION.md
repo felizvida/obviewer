@@ -46,7 +46,7 @@ For diagnostics, use Help › Copy Reader Diagnostics, or `log stream --predicat
 | 17 | Copy for Slack into Slack; Copy as Rich Text into Mail and Word | Mail and Word pass (local images become placeholders; Mail changes the code font). Slack: text, code and tables arrive, but headings and bold become italics and nested bullets flatten. Nothing was sent. |
 | 18 | Print (⌘P) previews; Open as PDF in Preview (⌥⌘P) gives a paginated PDF in the container's temporary folder; Share as PDF offers the share sheet; no files appear in the notes folder | Pass. The print dialog's own "Save as PDF" is unsupported by design. |
 | 19 | DokuWiki: detection, links, media, flavor badge round trip | Pass |
-| 20 | Settings › Reading › classic reader toggles and restores | Pass |
+| 20 | Settings › Reading shows Appearance, Text size and Line length, and each change applies to an open note at once | Not yet run (after 0.3.0-beta.1, the classic reader toggle was removed) |
 
 ## Release build and distribution
 

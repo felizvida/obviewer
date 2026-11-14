@@ -6,6 +6,11 @@
 
 - **Apple silicon Macs only.** Intel Macs aren't supported from the next version on, and CI no longer runs an Intel job. `v0.3.0-beta.1` stays as published: a universal build that has never been run on an Intel Mac.
 
+### Removed
+
+- **The classic native reader** and its Settings › Reading toggle. The web reader is the only reader; if its bundled files are missing, the window says so instead of falling back. Notes in the snapshot cache no longer carry rendered blocks, so the cache is smaller and is rebuilt once (schema 4).
+- `ObviewerDocsTool`, `make docs-screenshots` and `scripts/generate_doc_screenshots.sh`. They could only draw the classic reader; screenshots now come from the running app.
+
 ## 0.3.0 (pre-release `v0.3.0-beta.1`, November 2026)
 
 A redesign of the reader and of how Obviewer fits into macOS. See [`docs/REDESIGN_PLAN.md`](docs/REDESIGN_PLAN.md) for the decisions and [`docs/STATUS.md`](docs/STATUS.md) for verification.

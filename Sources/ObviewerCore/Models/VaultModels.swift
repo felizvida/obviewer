@@ -807,7 +807,6 @@ public struct VaultNote: Identifiable, Hashable, Sendable {
     public let tags: [String]
     public let outboundLinks: [String]
     public let tableOfContents: [TableOfContentsItem]
-    public let blocks: [RenderBlock]
     public let wordCount: Int
     public let readingTimeMinutes: Int
     public let modifiedAt: Date
@@ -823,7 +822,6 @@ public struct VaultNote: Identifiable, Hashable, Sendable {
         tags: [String],
         outboundLinks: [String],
         tableOfContents: [TableOfContentsItem],
-        blocks: [RenderBlock],
         wordCount: Int,
         readingTimeMinutes: Int,
         modifiedAt: Date,
@@ -838,7 +836,6 @@ public struct VaultNote: Identifiable, Hashable, Sendable {
         self.tags = tags
         self.outboundLinks = outboundLinks
         self.tableOfContents = tableOfContents
-        self.blocks = blocks
         self.wordCount = wordCount
         self.readingTimeMinutes = readingTimeMinutes
         self.modifiedAt = modifiedAt

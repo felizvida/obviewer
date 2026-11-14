@@ -13,13 +13,13 @@ This page describes how Obviewer 0.3 is built. The reader itself (WebKit host, r
 
 | Module | Kind | Responsibility |
 | --- | --- | --- |
-| `ObviewerCore` | Swift library | Indexing: notes, frontmatter, tags, links, search, the note graph, and the snapshot model. Flavor detection (`ReadingInput`), `VaultReader` (Markdown or DokuWiki formats), and `WikiSyntax`/`DokuWikiSyntax` link rules shared in spirit with the renderer. `ObsidianParser` also produces blocks for the classic reader. |
+| `ObviewerCore` | Swift library | Indexing: notes, frontmatter, tags, links, search, the note graph, and the snapshot model. Flavor detection (`ReadingInput`), `VaultReader` (Markdown or DokuWiki formats), and `WikiSyntax`/`DokuWikiSyntax` link rules shared in spirit with the renderer. `ObsidianParser` walks a note's blocks to classify links and tags; the blocks aren't stored. |
 | `ObviewerReaderKit` | Swift library + resources | Hosts the renderer: `ReaderWebController` (WKWebView with locked-down configuration), `ReaderSchemeHandler` (`obviewer-asset://`), `VaultAssetResolver`, `ReaderPayloadBuilder` (embeds, backlinks, resolved links), `StaticPreviewRenderer` (JavaScriptCore, for Quick Look). `Resources/Reader/` is the built bundle. |
 | `ObviewerMacApp` | Swift library | The app: `AppModel` (+`AppModel+Reader`) for state, history, link routing, find, sharing, Edit in…, live reload. Views: `ContentView`, `WebReaderView`, `NoteWindowView`, graph, settings, commands. Services: watchers, bookmarks, recents, `OpenRequestRouter`, `EditorHandoff`. |
 | `Obviewer` | Executable | The SwiftUI `App`: a single library `Window`, a `WindowGroup` of note windows, Settings |
 | `ObviewerQuickLook` | App extension (Xcode only) | Data-based Quick Look preview: renders static HTML via `StaticPreviewRenderer` |
 | `Renderer/` | JavaScript (not a Swift module) | markdown-it + plugins, DokuWiki renderer, Slack/rich-text export, page assembly. `build.mjs` bundles it into `ObviewerReaderKit/Resources/Reader`. |
-| `ObviewerFixtureSupport`, `ObviewerFixtureTool`, `ObviewerBenchmarkTool`, `ObviewerDocsTool` | Tooling | Demo vault generation, indexing benchmarks, and offscreen screenshots. The docs tool renders the classic reader only, because offscreen capture can't draw WebKit. |
+| `ObviewerFixtureSupport`, `ObviewerFixtureTool`, `ObviewerBenchmarkTool` | Tooling | Demo vault generation and indexing benchmarks. Screenshots come from the running app, because offscreen capture can't draw WebKit. |
 
 `Package.swift` builds everything except the Quick Look extension. `project.yml` (XcodeGen) generates the Xcode project. There, the internal modules are **static libraries** linked into the app and the extension (see [`DEVELOPMENT.md`](./DEVELOPMENT.md#why-the-modules-are-static-libraries)), and the reader bundle is copied into each of those bundles.
 

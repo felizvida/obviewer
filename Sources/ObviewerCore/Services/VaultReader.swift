@@ -468,7 +468,6 @@ public struct VaultReader: VaultLoading, Sendable {
             tags: parsed.tags,
             outboundLinks: parsed.outboundLinks,
             tableOfContents: parsed.tableOfContents,
-            blocks: parsed.blocks,
             wordCount: parsed.wordCount,
             readingTimeMinutes: parsed.readingTimeMinutes,
             modifiedAt: modifiedAt

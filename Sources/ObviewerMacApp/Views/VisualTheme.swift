@@ -6,8 +6,6 @@ enum VisualTheme {
     static let softInk = dynamic(light: (0.28, 0.31, 0.33), dark: (0.76, 0.77, 0.75))
     static let quietInk = dynamic(light: (0.45, 0.48, 0.46), dark: (0.58, 0.61, 0.59))
     static let fern = dynamic(light: (0.20, 0.45, 0.33), dark: (0.47, 0.76, 0.61))
-    static let blue = dynamic(light: (0.18, 0.36, 0.63), dark: (0.54, 0.72, 0.94))
-    static let ember = dynamic(light: (0.72, 0.38, 0.21), dark: (0.90, 0.58, 0.40))
     static let paper = dynamic(light: (0.98, 0.97, 0.93), dark: (0.11, 0.12, 0.12))
     static let mist = dynamic(light: (0.90, 0.95, 0.94), dark: (0.13, 0.15, 0.15))
     static let clay = dynamic(light: (0.94, 0.88, 0.80), dark: (0.18, 0.16, 0.14))
@@ -39,17 +37,6 @@ enum VisualTheme {
                 paper,
                 mist,
                 dynamic(light: (0.94, 0.91, 0.86), dark: (0.12, 0.12, 0.11)),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
-    static var readerSurface: some ShapeStyle {
-        LinearGradient(
-            colors: [
-                VisualTheme.panel.opacity(0.86),
-                paper.opacity(0.78),
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -100,18 +87,6 @@ enum VisualTheme {
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
-        )
-    }
-
-    static var quietRule: some ShapeStyle {
-        LinearGradient(
-            colors: [
-                VisualTheme.shade.opacity(0.10),
-                VisualTheme.shade.opacity(0.025),
-                .clear,
-            ],
-            startPoint: .leading,
-            endPoint: .trailing
         )
     }
 }

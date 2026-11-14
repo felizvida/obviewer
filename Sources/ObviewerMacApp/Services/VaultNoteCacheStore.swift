@@ -20,8 +20,9 @@ struct NullVaultNoteCache: VaultNoteCaching {
 
 struct VaultNoteCacheStore: VaultNoteCaching {
     private let cachesRootURL: URL
-    private let schemaVersion = 3
-    private let supportedSchemaVersions: Set<Int> = [1, 2, 3]
+    // 4: notes no longer carry rendered blocks (older caches still decode; extra keys are ignored).
+    private let schemaVersion = 4
+    private let supportedSchemaVersions: Set<Int> = [1, 2, 3, 4]
 
     init(cachesRootURL: URL? = nil) {
         let fileManager = FileManager.default

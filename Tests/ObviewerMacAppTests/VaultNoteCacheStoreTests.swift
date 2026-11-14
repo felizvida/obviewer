@@ -133,7 +133,6 @@ private extension VaultNote {
             tags: tags,
             outboundLinks: [],
             tableOfContents: [],
-            blocks: [.paragraph(text: .plain("Body"))],
             wordCount: 1,
             readingTimeMinutes: 1,
             modifiedAt: modifiedAt

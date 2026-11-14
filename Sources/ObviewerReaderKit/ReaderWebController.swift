@@ -234,7 +234,7 @@ public final class ReaderWebController: NSObject, ObservableObject {
             guard installed else {
                 // Fail closed: without the network block, don't show web content at all.
                 self.note("content rules failed: \(errorText ?? "unknown error")", stage: "rules-failed")
-                self.failureMessage = "The reader's offline protection couldn't be set up, so notes aren't shown (\(errorText ?? "unknown error")). Turn on the classic reader in Settings › Reading."
+                self.failureMessage = "The reader's offline protection couldn't be set up, so notes aren't shown (\(errorText ?? "unknown error")). Quit and reopen Obviewer; if it keeps happening, reinstall it."
                 return
             }
             self.note("content rules installed; loading \(ReaderSchemeHandler.readerPageURL.absoluteString)", stage: "page-loading")

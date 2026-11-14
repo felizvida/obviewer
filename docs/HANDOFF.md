@@ -26,12 +26,10 @@ A read-only macOS reader for Markdown files, Obsidian vaults and DokuWiki folder
 
 - **Green CI doesn't mean the app works.** CI never launches it. WebKit and sandbox behavior only show up in a running build; use [`VERIFICATION.md`](./VERIFICATION.md).
 - **`swift run` is not the shipping trust boundary.** The sandbox and entitlements apply only to the signed `.app` built from the Xcode project.
-- **The classic reader is a fallback, not a second implementation to maintain.** It's behind Settings › Reading and slated for removal.
 - **Ad-hoc signing has costs:** approval prompts after updates, possibly lost folder access, and managed Macs that refuse the app. A Developer ID would remove them; the notarization path is already in the scripts and workflow.
 
 ## Open decisions
 
-- Whether to remove the classic reader in the next release
 - Whether to improve the Slack paste format (Slack flattens nesting and italicizes bold), or document it as is
 - Whether to pursue a Developer ID for notarized distribution
 

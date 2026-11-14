@@ -296,7 +296,7 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
-    func testNavigateStoresPendingAnchorForResolvedNote() async {
+    func testWikiLinkStoresPendingAnchorForResolvedNote() async {
         let snapshot = makeSnapshot()
         let model = AppModel(
             bookmarkStore: BookmarkStoreSpy(),
@@ -306,14 +306,14 @@ final class AppModelTests: XCTestCase {
         )
 
         await model.chooseVault()
-        model.navigate(to: "Plan", anchor: "details", from: "Journal/Today.md")
+        model.openWikiTarget("Plan", anchor: "details", from: "Journal/Today.md")
 
         XCTAssertEqual(model.selectedNoteID, "Projects/Plan.md")
         XCTAssertEqual(model.pendingAnchor(for: "Projects/Plan.md"), "details")
     }
 
     @MainActor
-    func testNavigateToMissingNoteLeavesSelectionUnchanged() async {
+    func testWikiLinkToMissingNoteLeavesSelectionUnchanged() async {
         let snapshot = makeSnapshot()
         let model = AppModel(
             bookmarkStore: BookmarkStoreSpy(),
@@ -325,10 +325,11 @@ final class AppModelTests: XCTestCase {
         await model.chooseVault()
         let originalSelection = model.selectedNoteID
 
-        model.navigate(to: "Missing Note", anchor: "details", from: "Journal/Today.md")
+        model.openWikiTarget("Missing Note", anchor: "details", from: "Journal/Today.md")
 
         XCTAssertEqual(model.selectedNoteID, originalSelection)
         XCTAssertNil(originalSelection.flatMap { model.pendingAnchor(for: $0) })
+        XCTAssertNotNil(model.readerNotice)
     }
 
     @MainActor
@@ -635,11 +636,11 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(bookmarkStore.savedURLs, [fixture.rootURL])
         XCTAssertEqual(securityScope.activatedURLs, [fixture.rootURL])
 
-        model.navigate(to: "Daily", from: fixture.manifest.alphaOverviewNoteID)
+        model.openWikiTarget("Daily", anchor: nil, from: fixture.manifest.alphaOverviewNoteID)
 
         XCTAssertEqual(model.selectedNoteID, fixture.manifest.alphaDailyNoteID)
 
-        model.navigate(to: "Knowledge/Architecture/Index.md", anchor: "patterns")
+        model.openWikiTarget("Knowledge/Architecture/Index.md", anchor: "patterns", from: nil)
         XCTAssertEqual(model.pendingAnchor(for: fixture.manifest.architectureIndexNoteID), "patterns")
         model.clearPendingAnchor(for: fixture.manifest.architectureIndexNoteID)
         XCTAssertNil(model.pendingAnchor(for: fixture.manifest.architectureIndexNoteID))
@@ -1144,7 +1145,6 @@ private extension VaultNote {
             tableOfContents: [
                 TableOfContentsItem(id: "details", level: 2, title: "Details"),
             ],
-            blocks: [],
             wordCount: 42,
             readingTimeMinutes: 1,
             modifiedAt: modifiedAt

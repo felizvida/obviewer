@@ -107,8 +107,7 @@ public enum DokuWikiSyntax {
 
     // MARK: - Indexing
 
-    /// Builds the index entry for a DokuWiki page. Rendering happens in the
-    /// web renderer; `blocks` is only a plain-text fallback for the classic view.
+    /// Builds the index entry for a DokuWiki page. Rendering happens in the web renderer.
     public static func parse(text: String, noteID: String, pagesBase: String, fallbackTitle: String) -> ObsidianParseResult {
         let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
         let lines = normalized.components(separatedBy: "\n")
@@ -147,12 +146,6 @@ public enum DokuWikiSyntax {
         let links = linkIDs(in: normalized, fromNoteID: noteID, pagesBase: pagesBase)
             .map { pathWithoutExtension(forPageID: $0, pagesBase: pagesBase) }
 
-        let paragraphs = plain.components(separatedBy: "\n\n")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { $0.isEmpty == false }
-            .prefix(200)
-            .map { RenderBlock.paragraph(text: .plain($0)) }
-
         var uniqueTags = [String]()
         for tag in tags where uniqueTags.contains(where: { $0.caseInsensitiveCompare(tag) == .orderedSame }) == false {
             uniqueTags.append(tag)
@@ -162,7 +155,7 @@ public enum DokuWikiSyntax {
             title: title ?? fallbackTitle,
             previewText: preview,
             frontmatter: NoteFrontmatter(),
-            blocks: Array(paragraphs),
+            blocks: [],
             outboundLinks: links,
             tags: uniqueTags,
             tableOfContents: toc,

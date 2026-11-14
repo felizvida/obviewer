@@ -1,11 +1,10 @@
-.PHONY: help publication-check renderer renderer-test package-adhoc try-local demo-vault benchmark-vault docs-screenshots xcodeproj build-app notarize-app package-app package-dmg clean-app
+.PHONY: help publication-check renderer renderer-test package-adhoc try-local demo-vault benchmark-vault xcodeproj build-app notarize-app package-app package-dmg clean-app
 
 help:
 	@printf '%s\n' \
 	"make try-local   Generate the Xcode project and open it for the easiest first run" \
 	"make demo-vault  Generate a rich sample Obsidian vault under build/SampleVault" \
 	"make benchmark-vault Profile a vault; supports PROFILE, VAULT, FORMAT, OUTPUT, SUMMARY, and BUDGET env vars" \
-	"make docs-screenshots Generate polished product screenshots under docs/images" \
 	"make xcodeproj   Generate Obviewer.xcodeproj using XcodeGen" \
 	"make build-app   Build a signed Release app (requires signing env vars)" \
 	"make notarize-app Notarize and staple the signed Release app (requires notary env vars)" \
@@ -25,9 +24,6 @@ demo-vault:
 
 benchmark-vault:
 	./scripts/benchmark_vault.sh
-
-docs-screenshots:
-	./scripts/generate_doc_screenshots.sh
 
 xcodeproj:
 	./scripts/generate_xcode_project.sh

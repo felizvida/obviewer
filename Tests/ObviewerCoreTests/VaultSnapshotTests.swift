@@ -438,7 +438,6 @@ private extension VaultNote {
             tags: tags,
             outboundLinks: outboundLinks,
             tableOfContents: [],
-            blocks: [],
             wordCount: wordCount,
             readingTimeMinutes: 1,
             modifiedAt: modifiedAt
