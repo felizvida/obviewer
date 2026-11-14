@@ -1,12 +1,12 @@
 # Status
 
-Last updated: November 14, 2026. Version: **0.3.0**, first published as the pre-release `v0.3.0-beta.1`.
+Last updated: November 14, 2026. Version: **0.3.0**, first published as the pre-release `v0.3.0-beta.1`. Unreleased changes since then (see the CHANGELOG) were verified at commit `9c277cf`; see [Unreleased: maintenance and redesign](#unreleased-maintenance-and-redesign-9c277cf).
 
 This page records what works and has been checked, what is known to be limited, and what hasn't been verified. The other documents summarize; this one is the ledger.
 
 ## How it was checked
 
-- **Automated:** Swift tests (`swift test`: 132 passing on the maintainer's Mac, including packaging, linkage and publication-gate tests) and Node tests (`cd Renderer && npm test`: 86, covering the renderer, the publication check and the release-script gates (run against mock tools)). `node build.mjs --check` confirms that the committed reader bundle matches its source. `node scripts/publication-check.mjs --tracked` passes.
+- **Automated:** Swift tests (`swift test`: 133 passing on the maintainer's Mac at `9c277cf`, including packaging, linkage and publication-gate tests; 132 at `v0.3.0-beta.1`) and Node tests (`cd Renderer && npm test`: 104 at `9c277cf`, 86 at `v0.3.0-beta.1`, covering the renderer, the publication check and the release-script gates (run against mock tools)). `node build.mjs --check` confirms that the committed reader bundle matches its source. `node scripts/publication-check.mjs --tracked` passes.
 - **Manual:** the checklist in [`VERIFICATION.md`](./VERIFICATION.md), run on the maintainer's Mac (Apple silicon, macOS 26.7, Xcode 27.2) with a Debug build, using the notes in `Fixtures/notes/` and a generated demo vault.
 - **Not yet run on:** macOS 14 or 15, an Intel Mac, or a second Mac with an installed release build. From the next version on, Intel Macs aren't supported. CI builds and runs the Swift tests on GitHub's Apple silicon macOS 15 runner but never launches the app. GitHub no longer offers macOS 14 runners, so macOS 14, the deployment target, is untested.
 
@@ -32,6 +32,20 @@ This page records what works and has been checked, what is known to be limited, 
 - **Indexing benchmark** (`make benchmark-vault PROFILE=integration`, the maintainer's Mac): a synthetic vault of 201 notes and 17 attachments, with 327 links. Results: cold load 781 ms, warm reload 27 ms, search 1.8 ms, global graph 1.2 ms, selective reload 36 ms. This measures the Swift indexer, not WebKit rendering.
 - **Release build and DMG:** the Release app builds and signs ad-hoc. `v0.3.0-beta.1` is universal (arm64 + x86_64). At its tag, the Swift package tests also passed on GitHub's Intel macOS 15 runner, but the app has never been run on an Intel Mac. Later versions will be built for Apple silicon only. For `v0.3.0-beta.1` (build 3), a clean `make package-adhoc` passed every packaging gate on the staged app, the writable image volume and the mounted final DMG. Separately from those scripts, the mounted app and Quick Look extension were checked: both pass strict signature verification, have the hardened runtime and exactly the allowed entitlements, and carry no Finder info or resource forks. The image root holds only the expected entries. The app, launched from inside the mounted DMG, rendered a sample note with a callout, tasks, a Mermaid diagram and math. Quick Look was checked with the Release extension confirmed as the running provider (build 2, same source). The publication check of the mounted DMG and notes found 0 prohibited references and 0 unreadable files. Details in [`VERIFICATION.md`](./VERIFICATION.md).
 
+## Unreleased: maintenance and redesign (9c277cf)
+
+Verified on the maintainer's Mac in an isolated checkout of commit `9c277cf` (Debug build 7 and a Release package, build 7):
+
+- **Automated:** 133 Swift tests and 104 Node tests pass; the committed reader bundle matches its source; `publication-check --tracked` passes.
+- **Package:** `make package-adhoc` passes every gate, including the new icon gate (the shipped `AppIcon.icns` is byte-identical to `App/AppIcon.icns`, and no `*.car` is in the app). The app and Quick Look executables are arm64 only. A fresh publication check of the final build-7 DMG: 78 items, 0 prohibited, 0 incomplete. That clears only the repository's own scanner: it is not clearance to publish (see below).
+- **Live checks that passed:** the redesigned library window and reader in light and dark; flavor round trip; search count, focus and Clear Search; tag filtering; Settings › Reading in 10% steps with live reflow; no Reload button, ⌘R still reloads; the Graph toolbar toggle and ⌥⌘G; Whole Vault on and off (local 3 notes / 4 links, whole vault 133 / 218 in the demo vault); inspector links and Open in Reader; the graph at the default 1380 × 900 and the minimum window size with nothing clipped; the empty graph with no selection and with a search that matches nothing (including with a selection), and labels clipped to the canvas; Open as PDF with the gold fleur-de-lis and highlight wash (checked at `6e7dfb6`; the reader resources are unchanged since); the welcome screen; the new icon in Finder's icon view.
+- **Not verified for this candidate:**
+  - **Quick Look:** Finder kept launching an older registered copy of the extension, so the candidate's own preview was never confirmed. It was not forced by restarting Finder or removing other copies.
+  - **Smallest icons:** Finder's list-view icon was too small to judge; the 16 and 32 px renditions look right when extracted.
+  - **Dock icon:** not inspected; the automation could not read the Dock.
+  - **VoiceOver:** the accessibility tree was checked (one element per library row with title and reading time), but spoken output was not listened to.
+- **Before anything is published:** the scanner's ordinary PNG path (outside ICNS icons) still ignores bytes after `IEND` and some ancillary chunks, a gap that predates this work; and the maintainers' separate pre-publication guard must itself be confirmed to inspect the exact payload, including the `.icns`. A repository scanner pass is not publication clearance.
+
 ## Known limitations
 
 - **Slack paste formatting.** Slack turns headings and bold into italics and flattens nested bullets. Code and table text survive.
@@ -48,7 +62,7 @@ This page records what works and has been checked, what is known to be limited, 
 
 - Installing the ad-hoc signed DMG on a second Mac, and whether folder access survives an update
 - Performance on very long notes (thousands of lines) and very large vaults (thousands of notes) in the new reader. The indexer's benchmarks still run in CI.
-- An accessibility pass (VoiceOver, keyboard-only use, contrast)
+- An accessibility pass (VoiceOver speech, keyboard-only use, contrast)
 - Pasting rich text into Outlook or Teams; actually sending through share-sheet services
 - Settings › Finder › "Make Obviewer the Default" (Get Info was used instead), and Open Recent
 - Running on macOS 14 or 15

@@ -30,6 +30,8 @@ A read-only macOS reader for Markdown files, Obsidian vaults and DokuWiki folder
 
 ## Open decisions
 
+- Which new screenshot replaces `docs/images/reader-v0.3.png` (it shows the beta's look); candidates were captured but not committed
+- Closing the publication check's ordinary-PNG gap (bytes after `IEND`, some ancillary chunks), which ICNS icons already avoid
 - Whether to improve the Slack paste format (Slack flattens nesting and italicizes bold), or document it as is
 - Whether to pursue a Developer ID for notarized distribution
 
