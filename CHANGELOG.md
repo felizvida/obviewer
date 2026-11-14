@@ -6,6 +6,9 @@
 
 - **Apple silicon Macs only.** Intel Macs aren't supported from the next version on, and CI no longer runs an Intel job. `v0.3.0-beta.1` stays as published: a universal build that has never been run on an Intel Mac.
 - Release builds are arm64 only (`ARCHS = arm64` for the Release configuration).
+- The library sidebar is more compact once something is open (the read-only notice becomes a lock chip with a tooltip), and the toolbar's Reload button is gone; File › Reload (⌘R) and live reload remain.
+- Reader typography: no rule between a note's metadata and its own H1, balanced headings, text-sized task checkboxes, tabular numbers in tables.
+- VoiceOver reads each library row as one item; the Live pulse and loading spinner respect Reduce Motion. The Settings text-size slider now moves in the same 10% steps as Bigger/Smaller Text.
 
 ### Removed
 
