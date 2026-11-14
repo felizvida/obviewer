@@ -115,7 +115,7 @@ public final class AppModel: ObservableObject {
         self.watcher = watcher ?? VaultWatcher()
     }
 
-    /// The window's web reader, created on first use so tests and the classic view never spin up WebKit.
+    /// The window's web reader, created on first use so tests never spin up WebKit.
     var reader: ReaderWebController {
         if let readerControllerStorage {
             return readerControllerStorage
