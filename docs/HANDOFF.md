@@ -20,7 +20,7 @@ A read-only macOS reader for Markdown files, Obsidian vaults and DokuWiki folder
 
 ## How it fits together
 
-[`ARCHITECTURE.md`](./ARCHITECTURE.md) covers the modules and data flow. [`READER_ARCHITECTURE.md`](./READER_ARCHITECTURE.md) covers the reader and where each safety guarantee is enforced. [`DEVELOPMENT.md`](./DEVELOPMENT.md) covers commands, CI and the release process. [`REDESIGN_PLAN.md`](./REDESIGN_PLAN.md) records why the v0.3 decisions were made.
+[`ARCHITECTURE.md`](./ARCHITECTURE.md) covers the modules and data flow. [`READER_ARCHITECTURE.md`](./READER_ARCHITECTURE.md) covers the reader and where each safety guarantee is enforced. [`DEVELOPMENT.md`](./DEVELOPMENT.md) covers commands, CI and the release process. [`history/REDESIGN_PLAN_v0.3.md`](./history/REDESIGN_PLAN_v0.3.md) records why the v0.3 decisions were made.
 
 ## Things that can mislead you
 

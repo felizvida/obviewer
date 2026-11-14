@@ -17,7 +17,7 @@
 
 ## 0.3.0 (pre-release `v0.3.0-beta.1`, November 2026)
 
-A redesign of the reader and of how Obviewer fits into macOS. See [`docs/REDESIGN_PLAN.md`](docs/REDESIGN_PLAN.md) for the decisions and [`docs/STATUS.md`](docs/STATUS.md) for verification.
+A redesign of the reader and of how Obviewer fits into macOS. See [`docs/history/REDESIGN_PLAN_v0.3.md`](docs/history/REDESIGN_PLAN_v0.3.md) for the decisions and [`docs/STATUS.md`](docs/STATUS.md) for verification.
 
 ### Added
 

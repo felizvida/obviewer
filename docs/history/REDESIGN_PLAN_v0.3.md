@@ -1,6 +1,8 @@
 # Redesign Plan and Outcomes (v0.3)
 
-This records the v0.3 redesign: what was planned in November 2026, what was decided along the way, and how it turned out. For the current state, see [`STATUS.md`](./STATUS.md). The earlier v0.2 roadmap is in [`history/MODERNIZATION_PLAN_v0.2.md`](./history/MODERNIZATION_PLAN_v0.2.md).
+> **Historical document.** The v0.3 redesign is complete; this is kept as the record of its decisions. Later changes (for example, the classic reader's removal after `v0.3.0-beta.1`) are in [`../../CHANGELOG.md`](../../CHANGELOG.md).
+
+This records the v0.3 redesign: what was planned in November 2026, what was decided along the way, and how it turned out. For the current state, see [`STATUS.md`](../STATUS.md). The earlier v0.2 roadmap is in [`MODERNIZATION_PLAN_v0.2.md`](./MODERNIZATION_PLAN_v0.2.md).
 
 ## Why the redesign
 

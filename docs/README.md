@@ -10,7 +10,7 @@ Start with the [`README`](../README.md). Then read in this order:
 6. [`READER_ARCHITECTURE.md`](./READER_ARCHITECTURE.md): the WebKit reader and where each safety guarantee is enforced
 7. [`DEVELOPMENT.md`](./DEVELOPMENT.md): building, testing, CI, the publication policy and releases
 8. [`VERIFICATION.md`](./VERIFICATION.md): the manual checklist for a build on a real Mac
-9. [`REDESIGN_PLAN.md`](./REDESIGN_PLAN.md): why the v0.3 decisions were made
+9. [`history/REDESIGN_PLAN_v0.3.md`](./history/REDESIGN_PLAN_v0.3.md): why the v0.3 decisions were made
 
 Also: [`../QUICKSTART.md`](../QUICKSTART.md) to run from source, and [`../CHANGELOG.md`](../CHANGELOG.md) for release history.
 
@@ -26,4 +26,4 @@ Also: [`../QUICKSTART.md`](../QUICKSTART.md) to run from source, and [`../CHANGE
 
 ## History
 
-[`history/`](./history/) holds the v0.2.8-era status, handoff, product notes, architecture, development guide, roadmap and visual tour. They're kept for context and aren't maintained. In [`images/`](./images/), `reader-v0.3.png` shows the current reader (0.3 Release build). The `visual-tour-*.png` screenshots belong to the historical visual tour and show the **v0.2.8 native reader**.
+[`history/`](./history/) holds the v0.2.8-era status, handoff, product notes, architecture, development guide, roadmap and visual tour. They're kept for context and aren't maintained. In [`images/`](./images/), `reader-v0.3.png` shows the current reader (0.3 Release build). The historical visual tour loads its v0.2.8 screenshots from the `v0.3.0-beta.1` tag.

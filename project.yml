@@ -144,7 +144,6 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer
         PRODUCT_NAME: Obviewer
-        SWIFT_VERSION: "5.0"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         CODE_SIGN_ENTITLEMENTS: Configuration/Obviewer.entitlements
         ENABLE_HARDENED_RUNTIME: YES
@@ -188,7 +187,6 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer.quicklook
         PRODUCT_NAME: ObviewerQuickLook
-        SWIFT_VERSION: "5.0"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         CODE_SIGN_ENTITLEMENTS: Configuration/ObviewerQuickLook.entitlements
         ENABLE_HARDENED_RUNTIME: YES
