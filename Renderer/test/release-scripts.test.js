@@ -31,6 +31,12 @@ function setup(options = {}) {
   mkdirSync(join(app, 'Contents', 'PlugIns', 'ObviewerQuickLook.appex', 'Contents', 'MacOS'), { recursive: true });
   writeFileSync(join(app, 'Contents', 'MacOS', 'Obviewer'), 'binary');
   writeFileSync(join(app, 'Contents', 'PlugIns', 'ObviewerQuickLook.appex', 'Contents', 'MacOS', 'ObviewerQuickLook'), 'binary');
+  mkdirSync(join(app, 'Contents', 'Resources'), { recursive: true });
+  writeFileSync(join(root, 'source.icns'), 'icns committed icon bytes');
+  if (options.icon !== 'missing') {
+    writeFileSync(join(app, 'Contents', 'Resources', 'AppIcon.icns'), options.icon === 'different' ? 'icns some other bytes' : 'icns committed icon bytes');
+  }
+  if (options.assetsCar) writeFileSync(join(app, 'Contents', 'Resources', 'Assets.car'), 'BOMStore');
   if (options.framework) mkdirSync(join(app, 'Contents', 'Frameworks', 'Bad.framework'), { recursive: true });
   if (options.applicationsLink !== false) symlinkSync('/Applications', join(root, 'content', 'Applications'));
   if (options.readme !== false) writeFileSync(join(root, 'content', 'Read Me First - How to Install.md'), 'guide');
@@ -97,6 +103,13 @@ exit 0`);
 echo "$2/Contents/MacOS/Obviewer: com.apple.provenance:"
 [ "\${MOCK_FINDERINFO:-0}" = 1 ] && echo "$2/Contents/Info.plist: com.apple.FinderInfo: 62726F6B"
 exit 0`);
+  // cmp: compares two files like 'cmp -s' (0 same, 1 different, 2 trouble).
+  tool('cmp', `
+[ "$1" = -s ] || { echo "mock cmp: expected -s" >&2; exit 2; }
+[ "\${MOCK_CMP_FAIL:-0}" = 1 ] && exit 2
+[ -f "$2" ] && [ -f "$3" ] || exit 2
+[ "$(cat "$2")" = "$(cat "$3")" ] && exit 0
+exit 1`);
   // mdutil: records its arguments; a unit test must never reach the real Spotlight service.
   tool('mdutil', `echo "$*" >> "${join(root, 'mdutil.log')}"; exit 0`);
   // hdiutil: "attach" populates the mount point from the content folder.
@@ -124,6 +137,8 @@ function run(env, script) {
       PLUTIL: join(env.bin, 'plutil'),
       HDIUTIL: join(env.bin, 'hdiutil'),
       MDUTIL: join(env.bin, 'mdutil'),
+      CMP: join(env.bin, 'cmp'),
+      OBVIEWER_SOURCE_ICON: join(env.root, 'source.icns'),
       OBVIEWER_CODE_SIGN_IDENTITY: '-',
       TMPDIR: env.root,
       ...(env.extra ?? {}),
@@ -186,6 +201,11 @@ const failures = [
   ['bundled framework', { framework: true }, {}, /ships frameworks or dylibs/],
   ['Finder information', {}, { MOCK_FINDERINFO: '1' }, /Finder information or resource forks/],
   ['xattr failure', {}, { MOCK_XATTR_FAIL: '1' }, /Could not list extended attributes/],
+  ['compiled asset catalog shipped', { assetsCar: true }, {}, /Compiled asset catalog found/],
+  ['app icon missing', { icon: 'missing' }, {}, /App icon not found/],
+  ['app icon differs from the committed file', { icon: 'different' }, {}, /differs from the committed/],
+  ['icon comparison tool failure', {}, { MOCK_CMP_FAIL: '1' }, /Could not compare .*cmp exit 2/],
+  ['committed icon missing', {}, { OBVIEWER_SOURCE_ICON: '/nonexistent/AppIcon.icns' }, /Source icon not found/],
 ];
 
 for (const [name, options, extra, reason] of failures) {

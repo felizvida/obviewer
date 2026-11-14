@@ -53,7 +53,7 @@ notarized_dmg_path() {
 #     pipefail reports as a failure (or, inverted, masks a match).
 #   - A tool that fails is a failed check, never "nothing found".
 # Tool paths can be overridden (tests use mocks): CODESIGN, OTOOL, XATTR,
-# PLISTBUDDY, PLUTIL, HDIUTIL.
+# PLISTBUDDY, PLUTIL, HDIUTIL, MDUTIL, CMP.
 
 : "${CODESIGN:=codesign}"
 : "${OTOOL:=otool}"
@@ -62,6 +62,7 @@ notarized_dmg_path() {
 : "${PLUTIL:=plutil}"
 : "${HDIUTIL:=hdiutil}"
 : "${MDUTIL:=mdutil}"
+: "${CMP:=cmp}"
 
 APP_ALLOWED_ENTITLEMENTS="com.apple.security.app-sandbox com.apple.security.files.user-selected.read-only com.apple.security.print com.apple.security.network.client"
 EXTENSION_ALLOWED_ENTITLEMENTS="com.apple.security.app-sandbox com.apple.security.files.user-selected.read-only"
@@ -124,7 +125,36 @@ verify_signed_app_bundle() {
   verify_bundle_entitlements "$extension_path" "Quick Look extension" "$EXTENSION_ALLOWED_ENTITLEMENTS" || return 1
 
   verify_loadable_without_library_exceptions "$app_path" || return 1
+  verify_icon_payload "$app_path" || return 1
   verify_no_detritus "$app_path" || return 1
+}
+
+# The shipped icon must be byte-for-byte the committed App/AppIcon.icns, the file
+# the publication check inspects rendition by rendition. A compiled asset catalog
+# (Assets.car) is an undocumented container that check can't inspect, so none may ship.
+verify_icon_payload() {
+  local app_path="$1"
+  local resources="$app_path/Contents/Resources"
+  local source_icon="${OBVIEWER_SOURCE_ICON:-$(repo_root)/App/AppIcon.icns}"
+  if [ -e "$resources/Assets.car" ]; then
+    verification_failed "Compiled asset catalog found at $resources/Assets.car; the publication check cannot inspect it. Ship App/AppIcon.icns instead."
+    return 1
+  fi
+  if [ ! -f "$source_icon" ]; then
+    verification_failed "Source icon not found at $source_icon"
+    return 1
+  fi
+  if [ ! -f "$resources/AppIcon.icns" ]; then
+    verification_failed "App icon not found at $resources/AppIcon.icns"
+    return 1
+  fi
+  local status=0
+  "$CMP" -s "$source_icon" "$resources/AppIcon.icns" || status=$?
+  case "$status" in
+    0) ;;
+    1) verification_failed "$resources/AppIcon.icns differs from the committed $source_icon"; return 1 ;;
+    *) verification_failed "Could not compare $resources/AppIcon.icns with $source_icon (cmp exit $status)"; return 1 ;;
+  esac
 }
 
 # Signed entitlements must be a valid plist, contain only allowed keys, and grant

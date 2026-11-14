@@ -68,6 +68,12 @@ final class ReleaseHardeningTests: XCTestCase {
         }
         XCTAssertTrue(releaseCommon.contains("verify_loadable_without_library_exceptions"))
         XCTAssertTrue(releaseCommon.contains("verify_no_detritus"))
+        // The icon ships as the committed, inspectable App/AppIcon.icns; no asset catalog
+        // (Assets.car can't be inspected by the publication check).
+        XCTAssertTrue(projectYAML.contains("CFBundleIconFile: AppIcon"))
+        XCTAssertFalse(projectYAML.contains(".xcassets"))
+        XCTAssertFalse(projectYAML.contains("ASSETCATALOG_COMPILER_APPICON_NAME"))
+        XCTAssertTrue(releaseCommon.contains("verify_icon_payload"))
         // The DMG is verified as produced, and no active command builds it with -srcfolder
         // (comments explaining why are fine).
         let activeLines = packaging

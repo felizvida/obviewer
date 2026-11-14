@@ -62,7 +62,7 @@ Everything pushed to GitHub, and everything attached to a release, is checked by
 - The policy holds only SHA-256 fingerprints of prohibited terms. The terms themselves are not in the repository, and shouldn't be written into code, docs, tests or commit messages.
 - The scanner covers text, printable strings in binaries, file names, zip/tar archives, DMGs (mounted read-only on macOS), PDFs and images (OCR), plus commit metadata with `--git-range`.
 - Findings report location and rule ID only. Any file that can't be fully inspected fails the check (exit code 2).
-- Supported formats: UTF-8 text; PNG and JPEG (structured metadata plus OCR); PDF (text layer, metadata, and OCR of every page); Mach-O (string sections, symbol table, load commands, signature blobs); TTF/OTF/WOFF/WOFF2 (name and glyph-name tables); binary plists (via `plutil`, macOS); zip, tar and gzip (parsed in-process, scanned in memory); and DMGs (mounted read-only, macOS).
+- Supported formats: UTF-8 text; PNG and JPEG (structured metadata plus OCR); ICNS icons holding only PNG renditions in known slots at their exact sizes (each rendition inspected like a PNG; anything else in the container is refused); PDF (text layer, metadata, and OCR of every page); Mach-O (string sections, symbol table, load commands, signature blobs); TTF/OTF/WOFF/WOFF2 (name and glyph-name tables); binary plists (via `plutil`, macOS); zip, tar and gzip (parsed in-process, scanned in memory); and DMGs (mounted read-only, macOS). Compiled asset catalogs (`Assets.car`) are not supported, which is why the app icon ships as `App/AppIcon.icns` and the packaging gate rejects any `Assets.car`.
 - Anything else fails as unsupported: unknown binaries, SVG, Git LFS pointers, encrypted or ZIP64 archives, and archive members with absolute paths, `..`, links or devices. Size and nesting limits apply.
 - Known limits: compiled code can hold short string literals inside machine instructions, and glyph outlines are shapes. Both are covered by scanning the sources.
 - Gates and their scope:
@@ -108,6 +108,7 @@ Locally, `make package-adhoc` builds the same ad-hoc DMG: `scripts/build_app.sh`
 - the hardened runtime
 - the entitlement allow-lists, with no `get-task-allow`
 - system-only library dependencies, with no bundled frameworks or dylibs
+- an app icon byte-identical to the committed `App/AppIcon.icns`, and no `Assets.car`
 - the absence of Finder info or resource forks
 
 The image is built by copying into a fresh APFS volume, not with `hdiutil create -srcfolder`. Before the volume is sealed:
