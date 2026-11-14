@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Apple silicon Macs only.** Intel Macs aren't supported from the next version on, and CI no longer runs an Intel job. `v0.3.0-beta.1` stays as published: a universal build that has never been run on an Intel Mac.
+
 ## 0.3.0 (pre-release `v0.3.0-beta.1`, November 2026)
 
 A redesign of the reader and of how Obviewer fits into macOS. See [`docs/REDESIGN_PLAN.md`](docs/REDESIGN_PLAN.md) for the decisions and [`docs/STATUS.md`](docs/STATUS.md) for verification.

@@ -1,8 +1,10 @@
 # Installing Obviewer
 
-Obviewer is a read-only reader for Markdown files, Obsidian vaults and DokuWiki folders on macOS 14 or later. These steps cover the **ad-hoc signed** build published on GitHub Releases. It isn't notarized by Apple (the project has no Apple Developer ID yet), so macOS asks you to approve it once.
+Obviewer is a read-only reader for Markdown files, Obsidian vaults and DokuWiki folders on Apple silicon Macs with macOS 14 or later. These steps cover the **ad-hoc signed** build published on GitHub Releases. It isn't notarized by Apple (the project has no Apple Developer ID yet), so macOS asks you to approve it once.
 
-> Version 0.3.0 has been tested on one Mac running macOS 26 on Apple silicon. The app is built for both Apple silicon and Intel, but installing on other Macs, on Intel, and on macOS 14 or 15 hasn't been verified yet. Please report what happens.
+> Version 0.3.0 has been tested on one Mac running macOS 26 on Apple silicon. Installing on other Macs and on macOS 14 or 15 hasn't been verified yet. Please report what happens.
+>
+> **Intel Macs:** `v0.3.0-beta.1` is a universal build, but it has never been run on an Intel Mac. From the next version on, Obviewer supports Apple silicon only and won't include Intel code.
 
 ## Install
 

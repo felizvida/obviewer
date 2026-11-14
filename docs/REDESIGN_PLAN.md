@@ -32,6 +32,7 @@ A Mac reader for Markdown and wiki text. Double-click a file and it's rendered f
 | Nov 13 | PDF via "Open as PDF in Preview" (container file) instead of the print dialog's "Save as PDF" | The print dialog's save panel requires read-write file access | Done and verified |
 | Nov 13 | Outline as native menus (toolbar and Note › Go to Heading) instead of a list in a popover | The popover's rows didn't respond reliably | Done and verified |
 | Nov 14 | Publication policy: a fingerprint-based scanner gates CI and releases | Maintainer requirement for anything published | Done (`scripts/publication-check.mjs`) |
+| Nov 14 | Support Apple silicon Macs only | Maintainer decision: Intel Macs are assumed out of use among the intended users, and supporting them costs CI and testing effort | Applies after `v0.3.0-beta.1`, which was already tagged and published as a universal build (Intel runtime unverified) and stays as it is. CI has no Intel job. The next version will be arm64 only (`ARCHS = arm64` for Release). |
 
 ## Phases as delivered
 

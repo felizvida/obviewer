@@ -9,7 +9,7 @@
 When reporting a problem, include:
 
 - your macOS version
-- whether your Mac has Apple silicon or Intel
+- your Mac model (Obviewer supports Apple silicon Macs only)
 - the Obviewer version (Obviewer › About)
 - the kind of source you opened: a single file, a Markdown folder, an Obsidian vault or a DokuWiki
 
