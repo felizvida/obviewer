@@ -98,7 +98,7 @@ public struct ObviewerCommands: Commands {
                 model.detailMode = model.detailMode == .graph ? .reader : .graph
             }
             .keyboardShortcut("g", modifiers: [.command, .option])
-            .disabled(model?.snapshot == nil)
+            .disabled(model?.snapshot == nil || model?.isLoading == true)
             Divider()
         }
 

@@ -42,7 +42,7 @@ public struct ContentView: View {
                     Label("Graph", systemImage: "point.3.connected.trianglepath.dotted")
                 }
                 .toggleStyle(.button)
-                .help("Show the note graph (⌥⌘G)")
+                .help("Graph of how notes link (⌥⌘G)")
                 .disabled(model.snapshot == nil || model.isLoading)
 
                 Button {

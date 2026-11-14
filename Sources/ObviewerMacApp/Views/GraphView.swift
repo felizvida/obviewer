@@ -106,7 +106,7 @@ struct GraphWorkspaceView: View {
     private var emptyState: some View {
         Text(graphScope == .local
             ? "Nothing to draw yet. Select a note, or turn on Whole Vault."
-            : "No links to draw for these notes.")
+            : isFiltered ? "No notes match “\(searchText)”." : "No links to draw yet.")
             .font(.system(size: 15, design: .serif).italic())
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
