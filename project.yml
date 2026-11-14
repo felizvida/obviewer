@@ -18,6 +18,8 @@ settings:
       # Never ship the debugger entitlement (get-task-allow). Xcode injects it when
       # signing to run locally, which includes ad-hoc ("-") signing.
       CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+      # Apple silicon only (decided after v0.3.0-beta.1, which shipped universal).
+      ARCHS: arm64
 
 # Internal modules are static libraries linked into each executable (app, Quick Look
 # extension, tests). Ad-hoc signatures carry no Team ID, and the hardened runtime's

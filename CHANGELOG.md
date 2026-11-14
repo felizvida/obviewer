@@ -5,6 +5,7 @@
 ### Changed
 
 - **Apple silicon Macs only.** Intel Macs aren't supported from the next version on, and CI no longer runs an Intel job. `v0.3.0-beta.1` stays as published: a universal build that has never been run on an Intel Mac.
+- Release builds are arm64 only (`ARCHS = arm64` for the Release configuration).
 
 ### Removed
 
