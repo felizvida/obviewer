@@ -11,7 +11,6 @@ final class RecentItemsStore: ObservableObject {
         let bookmark: Data
         var id: String { url.path }
         var displayName: String { url.lastPathComponent }
-        var isFolder: Bool { url.hasDirectoryPath || (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
     }
 
     @Published private(set) var items: [Item] = []

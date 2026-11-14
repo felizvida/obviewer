@@ -948,10 +948,6 @@ public struct ImageSizeHint: Hashable, Sendable {
         self.width = width
         self.height = height
     }
-
-    public var hasExplicitDimensions: Bool {
-        width != nil || height != nil
-    }
 }
 
 public struct TableOfContentsItem: Identifiable, Hashable, Sendable {

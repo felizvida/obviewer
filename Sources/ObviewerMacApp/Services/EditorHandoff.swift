@@ -104,10 +104,6 @@ final class EditorHandoff: ObservableObject {
         }
     }
 
-    private func isInstalled(_ bundleID: String) -> Bool {
-        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) != nil
-    }
-
     /// obsidian://open?path=… opens the note in whichever vault contains it.
     private func openInObsidian(_ fileURL: URL) -> Bool {
         var components = URLComponents()

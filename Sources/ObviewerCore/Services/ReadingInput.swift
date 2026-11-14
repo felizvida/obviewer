@@ -200,15 +200,6 @@ public protocol ReadingInputLoading: Sendable {
     ) throws -> VaultSnapshot
 }
 
-public extension ReadingInputLoading {
-    func loadInput(
-        _ input: ReadingInputSource,
-        progress: (@Sendable (VaultLoadingProgress) -> Void)? = nil
-    ) throws -> VaultSnapshot {
-        try reloadInput(input, previousSnapshot: nil, changes: nil, progress: progress)
-    }
-}
-
 public struct VaultReadingInputLoader: ReadingInputLoading {
     private let vaultReader: VaultReader
 

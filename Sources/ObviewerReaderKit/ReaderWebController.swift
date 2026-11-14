@@ -134,12 +134,6 @@ public final class ReaderWebController: NSObject, ObservableObject {
         send(payload)
     }
 
-    /// Re-renders the last payload (e.g. after the file changed on disk the caller passes a new one instead).
-    public func rerender() {
-        guard let lastPayload else { return }
-        render(lastPayload)
-    }
-
     public func apply(_ appearance: ReaderAppearance) {
         self.appearance = appearance
         guard isReady else { return }
@@ -168,11 +162,6 @@ public final class ReaderWebController: NSObject, ObservableObject {
 
     public func exportForSlack() async throws -> ReaderExport {
         try await export(function: "exportSlack")
-    }
-
-    public func selectedText() async -> String {
-        let result = try? await webView.callAsyncJavaScript("return window.obviewer.getSelectedText();", contentWorld: .page)
-        return (result as? String) ?? ""
     }
 
     /// Finds and selects the next match. Returns whether a match was found.

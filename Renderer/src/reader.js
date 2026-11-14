@@ -482,10 +482,6 @@ function exportSlack() {
   return { html: toClipboardHTML(body, { target: 'slack' }), text: toSlackText(body) };
 }
 
-function getSelectedText() {
-  return String(window.getSelection?.() ?? '');
-}
-
 // ---------------------------------------------------------------------------
 
 window.obviewer = {
@@ -495,9 +491,6 @@ window.obviewer = {
   setAppearance,
   exportRich,
   exportSlack,
-  getSelectedText,
-  getScroll: () => window.scrollY,
-  setScroll: (y) => window.scrollTo(0, Number(y) || 0),
 };
 
 post({ type: 'ready', version: 1 });

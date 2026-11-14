@@ -1,7 +1,6 @@
 // Small helpers shared by the Markdown and DokuWiki renderers.
 // Everything here is pure so it can run in Node tests and inside WebKit.
 
-export const ASSET_SCHEME = 'obviewer-asset:';
 export const VAULT_ASSET_BASE = 'obviewer-asset://vault/';
 
 const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
