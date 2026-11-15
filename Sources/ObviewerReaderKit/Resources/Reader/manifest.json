@@ -30,10 +30,10 @@
     "katex/fonts/KaTeX_Size4-Regular.woff2": "a4af7d414440a1c1790825cfb700cf9cf43b0f2c4b04f0ebc523011ad9853ec0",
     "katex/fonts/KaTeX_Typewriter-Regular.woff2": "71d517d67827787cfabdf186914cc3358eda539e37931941f2b2fd4a21f68c0b",
     "katex/katex.min.css": "00e0b094171b07f58422075f469b4feac2b2f7bce1aeec943c08da4d697f4dcf",
-    "mermaid.min.js": "927b44feed94bf74cb08882c5b3e88dfaf1e0080f4d01e5c9f5ebe44ba94fb18",
+    "mermaid.min.js": "8f612e0d9568f7b22b79c63e3a5148bddad80661d76216b61ee2a4e747256092",
     "quicklook.js": "919fda03a149b65d8cd9f9099a035c7f06cd542a01624738f8f9cdf1dc815c55",
     "reader.css": "ac4be427a8737809eac2ef5925a196c84b1360b7b8bc9d3cde765303377ac09e",
     "reader.html": "26faa582e497be99d33c59bc20f9c175c5d2338a701eb023a951e71fdb6ac771",
-    "reader.js": "f785d61bd9d2a18b9b9624d62ca0f5130fb6aee38d01b25f9dae9c409d300809"
+    "reader.js": "ba1909de2809a11941ff51efef39e1077dfacb7f9ae2045cab0a911cffd4c5b6"
   }
 }

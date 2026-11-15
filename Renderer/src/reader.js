@@ -236,6 +236,9 @@ async function renderDiagrams(root) {
     startOnLoad: false,
     securityLevel: 'strict',
     theme: isDark() ? 'dark' : 'neutral',
+    // Mermaid 12 defaults to the ELK layout and a new look; keep the classic ones.
+    layout: 'dagre',
+    look: 'classic',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif',
     flowchart: { htmlLabels: false },
     suppressErrorRendering: true,
