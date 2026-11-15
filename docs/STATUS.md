@@ -1,6 +1,6 @@
 # Status
 
-Last updated: November 15, 2026. Version: **0.3.0**, published as the pre-releases `v0.3.0-beta.1`, `v0.3.0-beta.2` and `v0.3.0-beta.3` (see [v0.3.0-beta.3](#v030-beta3-security-and-platform)). The beta.2 changes (see the CHANGELOG) were verified at commit `9c277cf` (app) and `a4cba2a` (publication check); see [v0.3.0-beta.2](#v030-beta2-maintenance-and-redesign-9c277cf). `v0.3.0-beta.2` was published on November 15, 2026 from commit `223c5bc` (build 8); see [Published: v0.3.0-beta.2](#published-v030-beta2).
+Last updated: November 15, 2026. Version: **0.3.0**, published as the pre-releases `v0.3.0-beta.1`, `v0.3.0-beta.2` and `v0.3.0-beta.3` (see [v0.3.0-beta.3](#v030-beta3-security-and-platform)). `v0.3.0-beta.3` was published on November 15, 2026 from commit `d8e09b7` (build 9); see [Published: v0.3.0-beta.3](#published-v030-beta3). The beta.2 changes (see the CHANGELOG) were verified at commit `9c277cf` (app) and `a4cba2a` (publication check); see [v0.3.0-beta.2](#v030-beta2-maintenance-and-redesign-9c277cf). `v0.3.0-beta.2` was published on November 15, 2026 from commit `223c5bc` (build 8); see [Published: v0.3.0-beta.2](#published-v030-beta2).
 
 This page records what works and has been checked, what is known to be limited, and what hasn't been verified. The other documents summarize; this one is the ledger.
 
@@ -48,6 +48,25 @@ This page records what works and has been checked, what is known to be limited, 
   - the smallest Finder icon and the Dock icon;
   - VoiceOver speech;
   - a second Mac.
+
+## Published: v0.3.0-beta.3
+
+- **Release:** [v0.3.0-beta.3](https://github.com/felizvida/obviewer/releases/tag/v0.3.0-beta.3), a pre-release published on November 15, 2026 from commit `d8e09b7` (build 9). It is arm64 only, needs macOS 26.0, and is ad-hoc signed, not notarized. Six files: the DMG (SHA-256 `7843de23e733f1cf027ae59e5fb15cc4e470311eeafdb6179928e65d79b5c02a`), its checksum file, the install guide, two source archives and their checksum file. `v0.3.0-beta.1` and `v0.3.0-beta.2` and their files were checked unchanged before and after.
+- **How it was published:** as for beta.2. The files were built locally with `scripts/make_release_payload.sh`, then checked by the repository's publication check (payload and notes: 476 items, 0 prohibited, 0 incomplete) and by the maintainer's separate pre-publication guard on the exact files, notes, tag and history. They were uploaded by hand only after both GitHub runs passed, and their sizes and digests were checked after publication. Both source archives match the tagged tree (186 files and their executable modes).
+- **Checks on this build:**
+  - 133 Swift tests and 114 renderer tests pass; Mermaid 12.3.0 shares one KaTeX 0.19.1, and `npm audit` reports no known vulnerabilities.
+  - [CI](https://github.com/felizvida/obviewer/actions/runs/43736808584) (six jobs, Swift on macOS 26) and [Release verification](https://github.com/felizvida/obviewer/actions/runs/43736898271) passed.
+  - The build-9 Release app and its extension need macOS 26.0, are arm64 only and strictly signed, and match the resource manifest, with the committed icon and no asset catalogs.
+  - Launched from the mounted final DMG on macOS 26.7.3, it rendered a callout, inline and display math, a flowchart and a sequence diagram. Sequence participant math was visible, with the known painting offset.
+- **Known bug:** math inside diagrams is painted off-centre in WebKit (see the beta.3 section above).
+- **Still not verified for beta.3:**
+  - Quick Look of this build;
+  - the Web Inspector console;
+  - copying a note with a diagram;
+  - the smallest Finder icon and the Dock icon;
+  - VoiceOver speech;
+  - a second Mac;
+  - the earliest macOS 26 release (the smoke test ran on 26.7.3).
 
 ## Published: v0.3.0-beta.2
 
