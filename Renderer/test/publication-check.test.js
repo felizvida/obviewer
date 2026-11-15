@@ -365,7 +365,7 @@ function icns(chunks, { declaredLength } = {}) {
 
 const cleanOCR = () => 'nothing here';
 
-test('ICNS: every rendition is decoded and OCRed three ways', () => {
+test('ICNS: every rendition is decoded and OCRed six ways', () => {
   const ocrCalls = [];
   const file = icns([
     { type: 'icp4', data: iconPNG(16) },
@@ -376,16 +376,14 @@ test('ICNS: every rendition is decoded and OCRed three ways', () => {
   assert.deepEqual(icnsRenditions(file).map((r) => r.type), ['icp4', 'ic07', 'ic12']);
   const scanner = scanBuffer(file, 'AppIcon.icns', { ocr: (path) => { ocrCalls.push(readFileSync(path)); return cleanOCR(); } });
   assert.equal(scanner.exitCode, 0, JSON.stringify(scanner.incomplete));
-  assert.equal(ocrCalls.length, 9, 'each rendition is OCRed three times, not only the largest');
+  assert.equal(ocrCalls.length, 18, 'each rendition is OCRed six ways, not only the largest');
   assert.equal(scanner.fileCount, 4);
 
   const drawn = scanBuffer(icns([{ type: 'icp4', data: iconPNG(16) }, { type: 'ic08', data: iconPNG(256) }]), 'AppIcon.icns', {
     ocr: (path) => (readFileSync(path).length > 0 ? `DRAWN ${FIVE.toUpperCase()}` : ''),
   });
-  assert.deepEqual(drawn.findings.map((f) => f.where), [
-    'AppIcon.icns#icp4 (image text on white)', 'AppIcon.icns#icp4 (image text on black)', 'AppIcon.icns#icp4 (image text ignoring transparency)',
-    'AppIcon.icns#ic08 (image text on white)', 'AppIcon.icns#ic08 (image text on black)', 'AppIcon.icns#ic08 (image text ignoring transparency)',
-  ]);
+  const passes = ['on white', 'on black', 'ignoring transparency', 'red channel', 'green channel', 'blue channel'];
+  assert.deepEqual(drawn.findings.map((f) => f.where), ['icp4', 'ic08'].flatMap((slot) => passes.map((pass) => `AppIcon.icns#${slot} (image text ${pass})`)));
 });
 
 test('ICNS: transparency is flattened on both backgrounds, and small renditions are enlarged', () => {
@@ -488,19 +486,18 @@ const rgbRows = (width, height, fill = 200) => {
   return rows;
 };
 
-test('PNG: opaque images are decoded and OCRed once; metadata text is still read', () => {
+test('PNG: opaque images are OCRed as luminance and per channel; metadata text is still read', () => {
   const ocrCalls = [];
   const png = plainPNG({
     width: 4, height: 2, rows: rgbRows(4, 2),
-    before: [pngChunk('gAMA', Buffer.alloc(4)), pngChunk('pHYs', Buffer.alloc(9))],
     after: [pngChunk('tEXt', Buffer.from(`Author\0${SHORT.toUpperCase()}`, 'latin1'))],
   });
   const scanner = scanBuffer(png, 'shot.png', { ocr: (file) => { ocrCalls.push(file); return cleanOCR(); } });
-  assert.equal(ocrCalls.length, 1);
+  assert.equal(ocrCalls.length, 4, 'luminance plus one pass per colour channel');
   assert.deepEqual(scanner.findings.map((f) => [f.where, f.rule]), [['shot.png (metadata)', 'A']]);
   assert.equal(scanner.incomplete.length, 0);
   const drawn = scanBuffer(plainPNG({ width: 4, height: 2, rows: rgbRows(4, 2) }), 'shot.png', { ocr: () => `X ${FIVE}` });
-  assert.deepEqual(drawn.findings.map((f) => f.where), ['shot.png (image text)']);
+  assert.deepEqual(drawn.findings.map((f) => f.where), ['shot.png (image text)', 'shot.png (image text red channel)', 'shot.png (image text green channel)', 'shot.png (image text blue channel)']);
 });
 
 test('PNG: images with transparency are OCRed on white, on black and ignoring transparency', () => {
@@ -508,7 +505,7 @@ test('PNG: images with transparency are OCRed on white, on black and ignoring tr
   const labels = [];
   scanBuffer(plainPNG({ width: 2, height: 2, color: 6, rows }), 'logo.png', { ocr: () => `X ${FIVE}` })
     .findings.forEach((f) => labels.push(f.where));
-  assert.deepEqual(labels, ['logo.png (image text on white)', 'logo.png (image text on black)', 'logo.png (image text ignoring transparency)']);
+  assert.deepEqual(labels, ['on white', 'on black', 'ignoring transparency', 'red channel', 'green channel', 'blue channel'].map((pass) => `logo.png (image text ${pass})`));
 });
 
 test('PNG: palette, grey and 16-bit images decode to the right pixels', () => {
@@ -548,6 +545,18 @@ test('PNG: anything not completely inspectable fails closed', () => {
     'suggested palette': plainPNG({ ...base, before: [pngChunk('sPLT', Buffer.concat([hidden, Buffer.from([0, 8])]))] }),
     'APNG frames': plainPNG({ ...base, before: [pngChunk('acTL', Buffer.alloc(8))], after: [pngChunk('fdAT', Buffer.alloc(16))] }),
     'numeric chunk with room for text': plainPNG({ ...base, before: [pngChunk('gAMA', Buffer.concat([Buffer.alloc(4), hidden]))] }),
+    'gamma (changes rendering)': plainPNG({ ...base, before: [pngChunk('gAMA', Buffer.from([0, 0x98, 0x96, 0x80]))] }),
+    'chromaticities': plainPNG({ ...base, before: [pngChunk('cHRM', Buffer.concat([hidden, Buffer.alloc(32 - hidden.length)]))] }),
+    'timestamp': plainPNG({ ...base, before: [pngChunk('tIME', Buffer.from('vortexq'))] }),
+    'pixel dimensions': plainPNG({ ...base, before: [pngChunk('pHYs', Buffer.alloc(9))] }),
+    'sRGB intent': plainPNG({ ...base, before: [pngChunk('sRGB', Buffer.from([0]))] }),
+    'palette in a truecolour image': plainPNG({ ...base, before: [pngChunk('PLTE', Buffer.concat([hidden, Buffer.alloc(3 - (hidden.length % 3))]))] }),
+    'unused palette entry': plainPNG({ width: 2, height: 1, color: 3, depth: 8, rows: Buffer.from([0, 0, 0]), before: [pngChunk('PLTE', Buffer.from([1, 2, 3, 0x76, 0x6f, 0x72]))] }),
+    'palette larger than the depth allows': plainPNG({ width: 2, height: 1, color: 3, depth: 1, rows: Buffer.from([0, 0b01000000]), before: [pngChunk('PLTE', Buffer.alloc(9))] }),
+    'data in row padding bits': plainPNG({ width: 2, height: 1, color: 0, depth: 1, rows: Buffer.from([0, 0b10111111]) }),
+    'NUL bytes in tEXt': plainPNG({ ...base, after: [pngChunk('tEXt', Buffer.from(`Comment\0${[...hidden.toString()].join('\0')}`, 'latin1'))] }),
+    'UTF-16 in compressed iTXt': plainPNG({ ...base, after: [pngChunk('iTXt', Buffer.concat([Buffer.from('Title\0\x01\0en\0\0'), deflateSync(Buffer.from(hidden.toString(), 'utf16le'))]))] }),
+    'zTXt decompression bomb': plainPNG({ ...base, after: [pngChunk('zTXt', Buffer.concat([Buffer.from('Comment\0\0'), deflateSync(Buffer.alloc(32 * 1024 * 1024, 0x61))]))] }),
     'zTXt with bytes after its stream': plainPNG({ ...base, after: [pngChunk('zTXt', Buffer.concat([Buffer.from('Comment\0\0'), deflateSync(Buffer.from('ok')), hidden]))] }),
     'palette image without PLTE': plainPNG({ width: 2, height: 1, color: 3, depth: 8, rows: Buffer.from([0, 0, 0]) }),
     'interlaced': (() => { const p = plainPNG(base); p[28] = 1; const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(p.subarray(12, 29))); crc.copy(p, 29); return p; })(),
@@ -569,25 +578,11 @@ test('PNG: anything not completely inspectable fails closed', () => {
   assert.equal(scanBuffer(ok, 'shot.png', { ocr: cleanOCR }).exitCode, 0);
 });
 
-test('JPEG: structure is walked; embedded thumbnails and trailing data fail closed', () => {
-  const segment = (marker, data) => {
-    const header = Buffer.from([0xff, marker, 0, 0]);
-    header.writeUInt16BE(data.length + 2, 2);
-    return Buffer.concat([header, data]);
-  };
-  const jpeg = (app = Buffer.from('JFIF\0'), tail = Buffer.alloc(0)) => Buffer.concat([
-    Buffer.from([0xff, 0xd8]), segment(0xe0, app), segment(0xdb, Buffer.alloc(65)),
-    segment(0xda, Buffer.alloc(10)), Buffer.from([0x12, 0xff, 0x00, 0x34, 0xff, 0xd0, 0x56]), Buffer.from([0xff, 0xd9]), tail,
-  ]);
-  assert.equal(scanBuffer(jpeg(), 'photo.jpg', { ocr: cleanOCR }).exitCode, 0);
-  for (const [name, file] of Object.entries({
-    'data after EOI': jpeg(undefined, Buffer.from(`hidden ${SHORT}`)),
-    'Exif thumbnail': jpeg(Buffer.concat([Buffer.from('Exif\0\0'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(20)])),
-    'no EOI': jpeg().subarray(0, -2),
-  })) {
-    const scanner = scanBuffer(file, 'photo.jpg', { ocr: cleanOCR });
-    assert.equal(scanner.exitCode, 2, name);
-  }
+test('JPEG is refused: it cannot be inspected completely', () => {
+  const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 7]), Buffer.from('JFIF\0'), Buffer.from([0xff, 0xd9])]);
+  const scanner = scanBuffer(jpeg, 'photo.jpg', { ocr: cleanOCR });
+  assert.equal(scanner.exitCode, 2);
+  assert.match(scanner.incomplete[0].reason, /JPEG cannot be inspected completely/);
 });
 
 test('compiled asset catalogs (Assets.car) stay unsupported', () => {
