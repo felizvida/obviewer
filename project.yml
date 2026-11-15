@@ -3,7 +3,7 @@ name: Obviewer
 options:
   bundleIdPrefix: com.felizvida
   deploymentTarget:
-    macOS: "14.0"
+    macOS: "26.0"
 
 configs:
   Debug: debug
@@ -30,7 +30,7 @@ targets:
   ObviewerCore:
     type: library.static
     platform: macOS
-    deploymentTarget: "14.0"
+    deploymentTarget: "26.0"
     sources:
       - path: Sources/ObviewerCore
     settings:
@@ -43,7 +43,7 @@ targets:
   ObviewerReaderKit:
     type: library.static
     platform: macOS
-    deploymentTarget: "14.0"
+    deploymentTarget: "26.0"
     dependencies:
       - target: ObviewerCore
     sources:
@@ -59,7 +59,7 @@ targets:
   ObviewerMacApp:
     type: library.static
     platform: macOS
-    deploymentTarget: "14.0"
+    deploymentTarget: "26.0"
     dependencies:
       - target: ObviewerCore
       - target: ObviewerReaderKit
@@ -74,7 +74,7 @@ targets:
   ObviewerFixtureSupport:
     type: library.static
     platform: macOS
-    deploymentTarget: "14.0"
+    deploymentTarget: "26.0"
     sources:
       - path: Sources/ObviewerFixtureSupport
     settings:
@@ -86,7 +86,7 @@ targets:
   Obviewer:
     type: application
     platform: macOS
-    deploymentTarget: "14.0"
+    deploymentTarget: "26.0"
     sources:
       - path: Sources/Obviewer
       - path: App/AppIcon.icns
@@ -147,7 +147,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer
         PRODUCT_NAME: Obviewer
-        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        MACOSX_DEPLOYMENT_TARGET: "26.0"
         CODE_SIGN_ENTITLEMENTS: Configuration/Obviewer.entitlements
         ENABLE_HARDENED_RUNTIME: YES
         GENERATE_INFOPLIST_FILE: NO
@@ -158,7 +158,7 @@ targets:
   ObviewerQuickLook:
     type: app-extension
     platform: macOS
-    deploymentTarget: "14.0"
+    deploymentTarget: "26.0"
     sources:
       - path: Sources/ObviewerQuickLook
       - path: Sources/ObviewerReaderKit/Resources/Reader
@@ -190,7 +190,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.felizvida.obviewer.quicklook
         PRODUCT_NAME: ObviewerQuickLook
-        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        MACOSX_DEPLOYMENT_TARGET: "26.0"
         CODE_SIGN_ENTITLEMENTS: Configuration/ObviewerQuickLook.entitlements
         ENABLE_HARDENED_RUNTIME: YES
         GENERATE_INFOPLIST_FILE: NO
@@ -202,7 +202,7 @@ targets:
   ObviewerReaderKitTests:
     type: bundle.unit-test
     platform: macOS
-    deploymentTarget: "14.0"
+    deploymentTarget: "26.0"
     sources:
       - path: Tests/ObviewerReaderKitTests
       - path: Sources/ObviewerReaderKit/Resources/Reader
@@ -221,7 +221,7 @@ targets:
   ObviewerCoreTests:
     type: bundle.unit-test
     platform: macOS
-    deploymentTarget: "14.0"
+    deploymentTarget: "26.0"
     sources:
       - path: Tests/ObviewerCoreTests
     dependencies:
@@ -237,7 +237,7 @@ targets:
   ObviewerMacAppTests:
     type: bundle.unit-test
     platform: macOS
-    deploymentTarget: "14.0"
+    deploymentTarget: "26.0"
     sources:
       - path: Tests/ObviewerMacAppTests
     dependencies:

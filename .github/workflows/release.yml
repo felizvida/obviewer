@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: macos-15
+    runs-on: macos-26
     env:
       HAS_SIGNING_SECRETS: ${{ secrets.OBVIEWER_DEVELOPER_ID_CERT_P12_BASE64 != '' && secrets.OBVIEWER_DEVELOPER_ID_CERT_PASSWORD != '' && secrets.OBVIEWER_CODE_SIGN_IDENTITY != '' && secrets.OBVIEWER_DEVELOPMENT_TEAM != '' && 'true' || 'false' }}
       HAS_ANY_SIGNING_SECRET: ${{ (secrets.OBVIEWER_DEVELOPER_ID_CERT_P12_BASE64 != '' || secrets.OBVIEWER_DEVELOPER_ID_CERT_PASSWORD != '' || secrets.OBVIEWER_CODE_SIGN_IDENTITY != '' || secrets.OBVIEWER_DEVELOPMENT_TEAM != '') && 'true' || 'false' }}

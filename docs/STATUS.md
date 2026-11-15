@@ -8,7 +8,7 @@ This page records what works and has been checked, what is known to be limited, 
 
 - **Automated:** Swift tests (`swift test`: 133 passing on the maintainer's Mac at `9c277cf`, including packaging, linkage and publication-gate tests; 132 at `v0.3.0-beta.1`) and Node tests (`cd Renderer && npm test`: 109 at `a4cba2a`, 104 at `9c277cf`, 86 at `v0.3.0-beta.1`, covering the renderer, the publication check and the release-script gates (run against mock tools)). `node build.mjs --check` confirms that the committed reader bundle matches its source. `node scripts/publication-check.mjs --tracked` passes.
 - **Manual:** the checklist in [`VERIFICATION.md`](./VERIFICATION.md), run on the maintainer's Mac (Apple silicon, macOS 26.7, Xcode 27.2) with a Debug build, using the notes in `Fixtures/notes/` and a generated demo vault.
-- **Not yet run on:** macOS 14 or 15, an Intel Mac, or a second Mac with an installed release build. From the next version on, Intel Macs aren't supported. CI builds and runs the Swift tests on GitHub's Apple silicon macOS 15 runner but never launches the app. GitHub no longer offers macOS 14 runners, so macOS 14, the deployment target, is untested.
+- **Not yet run on:** an Intel Mac, or a second Mac with an installed release build. Intel Macs aren't supported after beta.1. From the release after beta.2, the minimum is macOS 26 (beta.1 and beta.2 declared macOS 14 but were only run on macOS 26). CI builds and runs the Swift tests on GitHub's Apple silicon macOS 26 runner but never launches the app.
 
 ## Works and verified on a Mac
 
@@ -82,7 +82,6 @@ After `9c277cf`, the publication check's image inspectors were tightened on the 
 - An accessibility pass (VoiceOver speech, keyboard-only use, contrast)
 - Pasting rich text into Outlook or Teams; actually sending through share-sheet services
 - Settings › Finder › "Make Obviewer the Default" (Get Info was used instead), and Open Recent
-- Running on macOS 14 or 15
 
 ## Recently fixed during verification
 

@@ -38,7 +38,7 @@ Details and enforcement points: [`docs/READER_ARCHITECTURE.md`](./docs/READER_AR
 
 ## Build from source
 
-You need macOS 14 or later, Xcode 15 or later, and XcodeGen (`brew install xcodegen`). Node 20 or later is only needed to change the renderer. [`QUICKSTART.md`](./QUICKSTART.md) has the short version; [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md) has the full workflow.
+You need macOS 26 or later, Xcode 26 or later, and XcodeGen (`brew install xcodegen`). Node 22.12 or later is only needed to change the renderer. [`QUICKSTART.md`](./QUICKSTART.md) has the short version; [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md) has the full workflow.
 
 ```bash
 make try-local          # check Xcode, install XcodeGen if needed, generate and open the project

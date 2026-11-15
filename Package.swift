@@ -5,7 +5,8 @@ import PackageDescription
 let package = Package(
     name: "Obviewer",
     platforms: [
-        .macOS(.v14),
+        // macOS 26 and later only (decision of November 15, 2026).
+        .macOS("26.0"),
     ],
     products: [
         .library(

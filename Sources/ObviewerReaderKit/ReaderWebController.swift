@@ -82,9 +82,7 @@ public final class ReaderWebController: NSObject, ObservableObject {
         webView.allowsLinkPreview = false
         webView.allowsMagnification = true
         webView.underPageBackgroundColor = .textBackgroundColor
-        if #available(macOS 13.3, *) {
-            webView.isInspectable = Self.isInspectionEnabled
-        }
+        webView.isInspectable = Self.isInspectionEnabled
 
         note("controller created; resources available: \(ReaderAssets.isAvailable), dir: \(ReaderAssets.directoryURL?.path ?? "nil")")
         loadReaderPage()

@@ -6,9 +6,9 @@ How to build, test, verify and release Obviewer 0.3. The v0.2.8 guide is in [`hi
 
 | Tool | Needed for |
 | --- | --- |
-| macOS 14 or later, full Xcode 15 or later | Building and running the app (`xcode-select -p` must point at Xcode, not the Command Line Tools) |
+| macOS 26 or later, full Xcode 26 or later | Building and running the app (`xcode-select -p` must point at Xcode, not the Command Line Tools) |
 | XcodeGen (`brew install xcodegen`) | Generating `Obviewer.xcodeproj` from `project.yml` |
-| Node 20 or later and npm | Changing the renderer or running its tests. Not needed just to build the app, because the bundle is committed. |
+| Node 22.12 or later and npm | Changing the renderer or running its tests. Not needed just to build the app, because the bundle is committed. |
 | tesseract and pdftotext (`brew install tesseract poppler`) | Running the publication check locally (CI installs them) |
 
 ## Everyday commands
@@ -79,7 +79,7 @@ Everything pushed to GitHub, and everything attached to a release, is checked by
 
 - **Publication policy:** Ubuntu with tesseract and poppler.
 - **Renderer:** Node 22: `npm ci`, `npm test`, bundle check.
-- **Swift Package:** `swift build` and `swift test` on GitHub's Apple silicon macOS 15 runner (`macos-15`). Intel Macs aren't supported after `v0.3.0-beta.1`, so there is no Intel job (the beta's tag still ran one). GitHub retired its macOS 14 runners on November 2, 2026, so nothing in CI runs on macOS 14, even though it is the deployment target.
+- **Swift Package:** `swift build` and `swift test` on GitHub's Apple silicon macOS 26 runner (`macos-26`), matching the deployment target (macOS 26). Intel Macs aren't supported after `v0.3.0-beta.1`, so there is no Intel job.
 - **Scaffolding:** entitlement checks, script syntax, XcodeGen, and an unsigned Xcode compile of the app.
 - **Benchmarks:** the smoke profile is enforced by `Configuration/benchmark-smoke-budget.json`; the integration profile reports only. Reports stay on the runner.
 

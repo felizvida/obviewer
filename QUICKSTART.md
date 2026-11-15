@@ -4,7 +4,7 @@
 
 ## Fastest path
 
-You need a Mac with macOS 14 or later, full Xcode 15 or later, and Homebrew.
+You need an Apple silicon Mac with macOS 26 or later, full Xcode 26 or later, and Homebrew.
 
 ```bash
 git clone https://github.com/felizvida/obviewer.git

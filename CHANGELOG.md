@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **macOS 26 or later only.** The deployment target moves from macOS 14 to macOS 26 (Apple silicon). Earlier releases declared macOS 14 but were never run on it; CI now tests on macOS 26. Building needs Xcode 26 or later.
+
 ### Security
 
 - **KaTeX 0.19.1** (was 0.16.47), fixing GHSA-238p-pmpm-9mq7 (KaTeX before 0.18.2 could treat polluted `Object.prototype` properties such as `trust` as options). Mermaid's copy is fixed too: Mermaid's prebuilt `mermaid.min.js` embedded its own KaTeX 0.16.47, so the reader now bundles Mermaid from its ES module build, with an npm override making it use the same patched KaTeX. The renderer build refuses to run if any installed KaTeX is older than 0.18.2, and tests check that every shipped bundle embeds the patched version. `npm audit` reports no vulnerabilities. The renderer now needs Node 22.12 or later to build.
