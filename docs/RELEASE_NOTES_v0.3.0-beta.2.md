@@ -17,7 +17,7 @@ If you're updating from beta.1, macOS may ask again to approve the app and to le
 - **A calmer library window.** A plain macOS sidebar shows the open folder's name, its flavor as a small menu, a lock that explains the read-only promise, a search field that says how many notes it covers, and rows of title and preview. Cards, pills and gradients are gone. A simple title page greets you when nothing is open.
 - **Fewer controls.** The reader is the default and **Graph** is a toolbar toggle (View › Show Graph, ⌥⌘G). In the graph, one **Whole Vault** toggle replaces the Local/Global picker; local is the default. With nothing selected, or a search that matches nothing, the graph says so instead of drawing everything. The toolbar's Reload button is gone (⌘R and live reload remain).
 - **An app icon** instead of the blank placeholder: a page with a purple bookmark and a gold fleur-de-lis.
-- **Accessibility basics.** VoiceOver reads each library row as one item, and animations respect Reduce Motion. (A full accessibility audit hasn't been done.)
+- **Accessibility basics.** Each library row is exposed to accessibility tools as one item with its title and reading time, and animations respect Reduce Motion. What VoiceOver actually says hasn't been listened to, and a full accessibility audit hasn't been done.
 
 ## Removed
 
@@ -34,7 +34,7 @@ Unchanged from beta.1:
 New in this release:
 
 - Release builds contain no compiled asset catalog. The icon ships as a plain `.icns` file, byte-identical to the one in the source tree.
-- The project's publication check now inspects images strictly. Every PNG must be plain, and every pixel is read for text, including in transparent areas and in each colour channel. JPEG and SVG are refused.
+- The project's publication check now inspects images strictly. Every PNG must be plain, and is decoded and OCR-checked, including against white and black backgrounds where it's transparent and in each colour channel. OCR can still miss very small text. JPEG and SVG are refused.
 - Release files are built and checked locally, then uploaded by hand. GitHub's runners verify, but no longer upload anything.
 
 ## Known limitations

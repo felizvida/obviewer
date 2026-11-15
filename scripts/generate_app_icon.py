@@ -6,8 +6,8 @@ bookmark, a few lines of text, and the gold fleur-de-lis that closes every
 note in the reader: ink on paper, with a hint of Louisiana.
 
 Writes App/AppIcon.icns: PNG renditions only, one per slot, with no other
-chunk types, so the publication check can inspect every pixel of the exact
-file that ships (an Xcode asset catalog would compile to Assets.car, an
+chunk types, so the publication check can decode and OCR-check every rendition
+of the exact file that ships (an Xcode asset catalog would compile to Assets.car, an
 undocumented container the check rightly refuses).
 
 Usage: python3 scripts/generate_app_icon.py [output .icns path]
