@@ -30,6 +30,7 @@ A read-only macOS reader for Markdown files, Obsidian vaults and DokuWiki folder
 
 ## Open decisions
 
+- When to upgrade KaTeX (and Mermaid's copy of it) past the low-severity advisory GHSA-238p-pmpm-9mq7, with a renderer regression round
 - Whether to improve the Slack paste format (Slack flattens nesting and italicizes bold), or document it as is
 - Whether to pursue a Developer ID for notarized distribution
 
