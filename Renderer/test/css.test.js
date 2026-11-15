@@ -16,5 +16,8 @@ test('display-math spacing is scoped, so it cannot reach MathML inside diagram l
 
 test('Mermaid math labels are measured and drawn with the same font size and margins', () => {
   assert.match(css, /#katex-temp \{ font-size: 16px; line-height: 1\.5; \}/);
-  assert.match(css, /#katex-temp \.katex-display, \.mermaid-block \.katex-display \{ margin: 0; \}/);
+  // Scoped to foreignObject, not .mermaid-block: Mermaid measures labels in its own
+  // temporary container on <body>, where a .mermaid-block selector doesn't match
+  // (Safari showed a 35px formula pinned to the top of a 67px box).
+  assert.match(css, /#katex-temp \.katex-display, foreignObject \.katex-display \{ margin: 0; \}/);
 });

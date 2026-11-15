@@ -72,6 +72,31 @@ const withoutELK = {
   },
 };
 
+// Mermaid 12.3 draws math in sequence-diagram participant names with an async function
+// (byKatex) that drawActorType* call without awaiting, so the diagram is serialized
+// before the label exists and the box comes out empty. Patch those eight call sites to
+// await it (and the functions to be async; drawActor already awaits them). The build
+// fails if Mermaid's code no longer matches, so the patch can't silently stop applying.
+let sequencePatched = false;
+const awaitSequenceMathLabels = {
+  name: 'await-sequence-math-labels',
+  setup(build) {
+    build.onLoad({ filter: /mermaid[\\/]dist[\\/]chunks[\\/]mermaid\.core[\\/]sequenceDiagram-[^\\/]*\.mjs$/ }, (args) => {
+      let source = readFileSync(args.path, 'utf8');
+      const patch = (pattern, replacement, expected) => {
+        const count = source.split(pattern).length - 1;
+        if (count !== expected) throw new Error(`Mermaid sequence patch: expected ${expected} of ${JSON.stringify(pattern)}, found ${count}`);
+        source = source.split(pattern).join(replacement);
+      };
+      patch('_drawTextCandidateFunc(conf2, hasKatex(actor.description))(', 'await _drawTextCandidateFunc(conf2, hasKatex(actor.description))(', 8);
+      patch('= /* @__PURE__ */ __name(function(elem, actor, conf2, isFooter, diagramId, actorIndexMap) {', '= /* @__PURE__ */ __name(async function(elem, actor, conf2, isFooter, diagramId, actorIndexMap) {', 7);
+      patch('var drawActorTypeActor = /* @__PURE__ */ __name(function(elem, actor, conf2, isFooter, actorIndexMap) {', 'var drawActorTypeActor = /* @__PURE__ */ __name(async function(elem, actor, conf2, isFooter, actorIndexMap) {', 1);
+      sequencePatched = true;
+      return { contents: source, loader: 'js' };
+    });
+  },
+};
+
 collectInputs(await esbuild.build({
   entryPoints: [join(here, 'src/reader.js')],
   outfile: join(outDir, 'reader.js'),
@@ -116,7 +141,7 @@ collectInputs(await esbuild.build({
     sourcefile: 'mermaid-entry.js',
   },
   outfile: join(outDir, 'mermaid.min.js'),
-  plugins: [withoutELK],
+  plugins: [withoutELK, awaitSequenceMathLabels],
   bundle: true,
   format: 'iife',
   platform: 'browser',
@@ -128,6 +153,10 @@ collectInputs(await esbuild.build({
   logLevel: 'warning',
   metafile: true,
 }));
+if (!sequencePatched) {
+  console.error('The Mermaid sequence-diagram patch did not apply (file not found).');
+  process.exit(1);
+}
 
 // KaTeX: stylesheet plus WOFF2 fonts only (WebKit always picks WOFF2 first).
 const katexDist = join(nodeModules, 'katex/dist');
