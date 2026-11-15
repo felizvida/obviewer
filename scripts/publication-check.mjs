@@ -21,8 +21,9 @@
 //                  that are text (tEXt/zTXt/iTXt, read in full) or fixed-size numbers.
 //                  Colour profiles, Exif, sPLT, APNG and private chunks are refused.
 //                  The pixels are decoded and OCRed (three ways when transparent).
-//   JPEG           OCR (tesseract) of the pixels + APPn/COM segment strings. Exif
-//                  thumbnails and data after the image are not inspected separately.
+//   JPEG           OCR (tesseract) of the pixels + APPn/COM segment strings, after a
+//                  structural walk that refuses embedded images in metadata (Exif
+//                  thumbnails) and any data after the final EOI marker.
 //   ICNS           Apple icons that hold only PNG renditions, one per known slot,
 //                  each the slot's exact size and in a strict profile (8-bit RGBA,
 //                  not interlaced, only IHDR/IDAT/IEND, valid CRCs, nothing after
@@ -542,6 +543,47 @@ export function decodePNG(png, profile = 'image') {
     }
   }
   return { width, height, pixels };
+}
+
+/**
+ * Walks a JPEG's structure, fail-closed: markers where markers belong, segment lengths
+ * in bounds, no image embedded in an APPn segment (such as an Exif thumbnail, which OCR
+ * of the main image would never see), and nothing after the final EOI marker.
+ */
+export function checkJPEG(jpeg) {
+  if (jpeg.length < 4 || jpeg[0] !== 0xff || jpeg[1] !== 0xd8) throw new Unsupported('not a JPEG');
+  const embeddedImage = Buffer.from([0xff, 0xd8, 0xff]);
+  let offset = 2;
+  for (;;) {
+    if (offset + 2 > jpeg.length) throw new Unsupported('JPEG ends without an EOI marker');
+    if (jpeg[offset] !== 0xff) throw new Unsupported('JPEG marker expected');
+    const marker = jpeg[offset + 1];
+    if (marker === 0xff) { offset += 1; continue; }
+    if (marker === 0xd9) {
+      if (offset + 2 !== jpeg.length) throw new Unsupported('JPEG has data after its EOI marker');
+      return;
+    }
+    if ((marker >= 0xd0 && marker <= 0xd7) || marker === 0x01) { offset += 2; continue; }
+    if (marker === 0x00 || marker === 0xd8) throw new Unsupported('JPEG marker is invalid here');
+    if (offset + 4 > jpeg.length) throw new Unsupported('truncated JPEG segment');
+    const length = jpeg.readUInt16BE(offset + 2);
+    if (length < 2 || offset + 2 + length > jpeg.length) throw new Unsupported('JPEG segment runs past the end');
+    if (marker >= 0xe0 && marker <= 0xef && jpeg.subarray(offset + 4, offset + 2 + length).includes(embeddedImage)) {
+      throw new Unsupported('JPEG metadata holds an embedded image (such as an Exif thumbnail), which cannot be inspected');
+    }
+    offset += 2 + length;
+    if (marker === 0xda) {
+      // Entropy-coded data runs to the next real marker (stuffed FF00 and restart markers stay inside).
+      while (offset < jpeg.length) {
+        if (jpeg[offset] === 0xff && offset + 1 < jpeg.length) {
+          const next = jpeg[offset + 1];
+          if (next === 0x00 || (next >= 0xd0 && next <= 0xd7)) { offset += 2; continue; }
+          if (next !== 0xff) break;
+        }
+        offset += 1;
+      }
+    }
+  }
 }
 
 /** ICNS renditions: the strict PNG profile limited to 8-bit RGBA and IHDR/IDAT/IEND. */
@@ -1088,6 +1130,7 @@ export class Scanner {
           this.scanString(`${label} (metadata)`, imageMetadataText(buffer));
           return;
         case 'jpeg':
+          checkJPEG(buffer);
           this.scanString(`${label} (metadata)`, imageMetadataText(buffer));
           this.withFile(buffer, diskPath, '.jpg', (file) => this.scanString(`${label} (image text)`, this.tools.ocr(file)));
           return;

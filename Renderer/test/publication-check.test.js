@@ -569,6 +569,27 @@ test('PNG: anything not completely inspectable fails closed', () => {
   assert.equal(scanBuffer(ok, 'shot.png', { ocr: cleanOCR }).exitCode, 0);
 });
 
+test('JPEG: structure is walked; embedded thumbnails and trailing data fail closed', () => {
+  const segment = (marker, data) => {
+    const header = Buffer.from([0xff, marker, 0, 0]);
+    header.writeUInt16BE(data.length + 2, 2);
+    return Buffer.concat([header, data]);
+  };
+  const jpeg = (app = Buffer.from('JFIF\0'), tail = Buffer.alloc(0)) => Buffer.concat([
+    Buffer.from([0xff, 0xd8]), segment(0xe0, app), segment(0xdb, Buffer.alloc(65)),
+    segment(0xda, Buffer.alloc(10)), Buffer.from([0x12, 0xff, 0x00, 0x34, 0xff, 0xd0, 0x56]), Buffer.from([0xff, 0xd9]), tail,
+  ]);
+  assert.equal(scanBuffer(jpeg(), 'photo.jpg', { ocr: cleanOCR }).exitCode, 0);
+  for (const [name, file] of Object.entries({
+    'data after EOI': jpeg(undefined, Buffer.from(`hidden ${SHORT}`)),
+    'Exif thumbnail': jpeg(Buffer.concat([Buffer.from('Exif\0\0'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(20)])),
+    'no EOI': jpeg().subarray(0, -2),
+  })) {
+    const scanner = scanBuffer(file, 'photo.jpg', { ocr: cleanOCR });
+    assert.equal(scanner.exitCode, 2, name);
+  }
+});
+
 test('compiled asset catalogs (Assets.car) stay unsupported', () => {
   const car = Buffer.concat([Buffer.from('BOMStore', 'latin1'), Buffer.from([0, 0, 0, 1, 0xff, 0xfe, 0x80, 0x00]), Buffer.alloc(64)]);
   const scanner = scanBuffer(car, 'Assets.car', { ocr: cleanOCR });
