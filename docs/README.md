@@ -26,4 +26,4 @@ Also: [`../QUICKSTART.md`](../QUICKSTART.md) to run from source, and [`../CHANGE
 
 ## History
 
-[`history/`](./history/) holds the v0.2.8-era status, handoff, product notes, architecture, development guide, roadmap and visual tour. They're kept for context and aren't maintained. In [`images/`](./images/), `reader-v0.3.png` shows the current reader (0.3 Release build). The historical visual tour loads its v0.2.8 screenshots from the `v0.3.0-beta.1` tag.
+[`history/`](./history/) holds the v0.2.8-era status, handoff, product notes, architecture, development guide, roadmap and visual tour. They're kept for context and aren't maintained. In [`images/`](./images/), `reader.png` shows the current reader (a Debug build of the unreleased redesign, demo content; macOS's screen-sharing indicator was painted out of the window corner). The historical visual tour loads its v0.2.8 screenshots from the `v0.3.0-beta.1` tag.

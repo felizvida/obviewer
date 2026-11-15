@@ -8,7 +8,7 @@ Obviewer never changes your notes, and macOS enforces that. To edit, press ⌘E 
 
 > **Status:** 0.3.0 is a pre-release. It was verified on one Mac (Apple silicon, macOS 26). See [`docs/STATUS.md`](./docs/STATUS.md) for exactly what has and hasn't been checked, and the known limitations.
 
-![The Obviewer 0.3 reader showing a note with a callout, tasks, a Mermaid diagram, math and a table](docs/images/reader-v0.3.png)
+![Obviewer showing a note with its metadata line, tags, a tip callout, math, a highlight, a Mermaid diagram and the gold fleur-de-lis that ends each note, next to the library sidebar](docs/images/reader.png)
 
 *The 0.3 Release build, reading a synthetic sample note.*
 
