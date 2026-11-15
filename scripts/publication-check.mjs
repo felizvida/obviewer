@@ -633,6 +633,25 @@ export function flattenedPNG({ width, height, pixels }, background, minSide = 51
 }
 
 /**
+ * The images OCR must read for decoded pixels, as [{ name, png }]: the luminance image
+ * (once if opaque; on white, on black and ignoring transparency if any pixel is
+ * transparent or `alwaysTransparent` is set), then each colour channel as grey.
+ * Shared by the scanner and by external guards that run their own OCR.
+ */
+export function ocrVariants(image, { alwaysTransparent = false } = {}) {
+  let transparent = alwaysTransparent;
+  for (let i = 3; !transparent && i < image.pixels.length; i += 4) transparent = image.pixels[i] !== 255;
+  const passes = transparent
+    ? [['on white', 255, false, null], ['on black', 0, false, null], ['ignoring transparency', 255, true, null]]
+    : [['', 255, false, null]];
+  passes.push(['red channel', 255, transparent, 0], ['green channel', 255, transparent, 1], ['blue channel', 255, transparent, 2]);
+  return passes.map(([name, background, ignoreAlpha, channel]) => ({
+    name,
+    png: flattenedPNG(image, background, 512, ignoreAlpha, channel),
+  }));
+}
+
+/**
  * Apple icon (.icns) container. Returns its PNG renditions for the PNG inspector,
  * or throws Unsupported for anything that can't be inspected completely.
  */
@@ -1193,14 +1212,8 @@ export class Scanner {
    * so colour-only contrast is seen. Small images are enlarged first.
    */
   scanPixels(image, where, { alwaysTransparent = false } = {}) {
-    let transparent = alwaysTransparent;
-    for (let i = 3; !transparent && i < image.pixels.length; i += 4) transparent = image.pixels[i] !== 255;
-    const passes = transparent
-      ? [['on white', 255, false, null], ['on black', 0, false, null], ['ignoring transparency', 255, true, null]]
-      : [['', 255, false, null]];
-    passes.push(['red channel', 255, transparent, 0], ['green channel', 255, transparent, 1], ['blue channel', 255, transparent, 2]);
-    for (const [name, background, ignoreAlpha, channel] of passes) {
-      this.withFile(flattenedPNG(image, background, 512, ignoreAlpha, channel), null, '.png', (file) => {
+    for (const { name, png } of ocrVariants(image, { alwaysTransparent })) {
+      this.withFile(png, null, '.png', (file) => {
         this.scanString(`${where} (image text${name ? ` ${name}` : ''})`, this.tools.ocr(file));
       });
     }
