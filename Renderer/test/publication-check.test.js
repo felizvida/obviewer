@@ -516,12 +516,9 @@ test('PNG: palette, grey and 16-bit images decode to the right pixels', () => {
     before: [pngChunk('PLTE', palette), pngChunk('tRNS', Buffer.from([255, 128]))],
   }));
   assert.deepEqual([...pal.pixels], [255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 255, 9, 9, 9, 255]);
-  // Grey, 1-bit, with tRNS on value 0.
-  const grey = decodePNG(plainPNG({
-    width: 2, height: 1, color: 0, depth: 1, rows: Buffer.from([0, 0b10000000]),
-    before: [pngChunk('tRNS', Buffer.from([0, 0]))],
-  }));
-  assert.deepEqual([...grey.pixels], [255, 255, 255, 255, 0, 0, 0, 0]);
+  // Grey, 1-bit.
+  const grey = decodePNG(plainPNG({ width: 2, height: 1, color: 0, depth: 1, rows: Buffer.from([0, 0b10000000]) }));
+  assert.deepEqual([...grey.pixels], [255, 255, 255, 255, 0, 0, 0, 255]);
   // 16-bit RGB with the Sub filter on the second pixel.
   const deep = decodePNG(plainPNG({
     width: 2, height: 1, color: 2, depth: 16,
@@ -556,6 +553,10 @@ test('PNG: anything not completely inspectable fails closed', () => {
     'data in row padding bits': plainPNG({ width: 2, height: 1, color: 0, depth: 1, rows: Buffer.from([0, 0b10111111]) }),
     'NUL bytes in tEXt': plainPNG({ ...base, after: [pngChunk('tEXt', Buffer.from(`Comment\0${[...hidden.toString()].join('\0')}`, 'latin1'))] }),
     'UTF-16 in compressed iTXt': plainPNG({ ...base, after: [pngChunk('iTXt', Buffer.concat([Buffer.from('Title\0\x01\0en\0\0'), deflateSync(Buffer.from(hidden.toString(), 'utf16le'))]))] }),
+    'transparency key in a 16-bit RGB image': plainPNG({ width: 1, height: 1, depth: 16, rows: Buffer.from([0, 255, 255, 255, 255, 255, 255]), before: [pngChunk('tRNS', Buffer.from('marker'))] }),
+    'transparency key in an 8-bit RGB image': plainPNG({ ...base, before: [pngChunk('tRNS', Buffer.from([0, 1, 0, 2, 0, 3]))] }),
+    'transparency key in a grey image': plainPNG({ width: 2, height: 1, color: 0, depth: 8, rows: Buffer.from([0, 9, 9]), before: [pngChunk('tRNS', Buffer.from([0, 7]))] }),
+    'text over the per-image budget, spread across chunks': plainPNG({ ...base, after: Array.from({ length: 12 }, (_, i) => pngChunk('zTXt', Buffer.concat([Buffer.from(`K${i}\0\0`), deflateSync(Buffer.alloc(200 * 1024, 0x61))]))) }),
     'zTXt decompression bomb': plainPNG({ ...base, after: [pngChunk('zTXt', Buffer.concat([Buffer.from('Comment\0\0'), deflateSync(Buffer.alloc(32 * 1024 * 1024, 0x61))]))] }),
     'zTXt with bytes after its stream': plainPNG({ ...base, after: [pngChunk('zTXt', Buffer.concat([Buffer.from('Comment\0\0'), deflateSync(Buffer.from('ok')), hidden]))] }),
     'palette image without PLTE': plainPNG({ width: 2, height: 1, color: 3, depth: 8, rows: Buffer.from([0, 0, 0]) }),

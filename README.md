@@ -10,7 +10,7 @@ Obviewer never changes your notes, and macOS enforces that. To edit, press ⌘E 
 
 ![Obviewer showing a note with its metadata line, tags, a tip callout, math, a highlight, a Mermaid diagram and the gold fleur-de-lis that ends each note, next to the library sidebar](docs/images/reader.png)
 
-*The 0.3 Release build, reading a synthetic sample note.*
+*The unreleased redesign (a Debug build), reading a synthetic sample note.*
 
 ## Install
 

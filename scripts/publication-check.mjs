@@ -16,10 +16,10 @@
 //   text           UTF-8 text (source, docs, JSON, plists in XML). SVG is refused:
 //                  text drawn as paths can't be inspected.
 //   PNG            strict profile: IHDR first; PLTE only in palette images, every entry
-//                  used; tRNS; IDAT back to back holding one zlib stream consumed to its
+//                  used; tRNS only in palette images (no transparency keys); IDAT back to back holding one zlib stream consumed to its
 //                  last byte; zero padding bits; IEND last with nothing after it; valid
 //                  CRCs; not interlaced; and text chunks (tEXt/zTXt/iTXt, read in full,
-//                  no NUL). Every other chunk is refused (colour profiles and colour
+//                  no NUL, at most 1 MiB of text per image). Every other chunk is refused (colour profiles and colour
 //                  data, Exif, pHYs, tIME, sPLT, APNG, private). The pixels are decoded
 //                  and OCRed as luminance and per colour channel, and on white, on black
 //                  and ignoring transparency when any pixel is transparent.
@@ -339,39 +339,49 @@ function crc32(buffer) {
 }
 
 // PNG chunk policy. Allowed: the critical chunks (IHDR, PLTE for palette images,
-// IDAT, IEND), tRNS, and text chunks (tEXt, zTXt, iTXt) that imageMetadataText reads
-// in full, with compressed text required to decompress completely and no NUL bytes in
-// the text. Everything else is refused, including chunks that hold bytes no one reads
+// IDAT, IEND), tRNS in palette images only (one alpha byte per palette entry, all of
+// which are used), and text chunks (tEXt, zTXt, iTXt) that are decoded and scanned in
+// full, with compressed text required to decompress completely, no NUL bytes in the
+// text, and at most 1 MiB of text per image. Transparency keys (tRNS in greyscale or
+// truecolour images) are refused: they are sample values no pixel has to use. Everything else is refused, including chunks that hold bytes no one reads
 // or that change how viewers render the pixels: colour profiles and colour data
 // (iCCP, gAMA, cHRM, sRGB, sBIT), bKGD, pHYs, tIME, eXIf (which can hold thumbnails),
 // sPLT, APNG frames and private chunks. Re-save images as plain PNGs to pass. Icon
 // renditions allow only IHDR/IDAT/IEND.
 const PNG_TEXT_CHUNKS = new Set(['tEXt', 'zTXt', 'iTXt']);
 const PNG_MAX_PIXELS = 40_000_000;
-const PNG_MAX_TEXT_BYTES = 16 * 1024 * 1024;
+const PNG_MAX_TEXT_BYTES = 1024 * 1024; // all text chunks of one image, decompressed
 
-/** Inflates zlib data (capped), refusing anything after the end of the stream. */
-function inflateWhole(data, what) {
+/** Inflates zlib data within `limit` bytes, refusing anything after the end of the stream. */
+function inflateWhole(data, what, limit) {
   let result;
   try {
-    result = inflateSync(data, { info: true, maxOutputLength: PNG_MAX_TEXT_BYTES });
+    result = inflateSync(data, { info: true, maxOutputLength: Math.max(1, limit) });
   } catch (error) {
-    throw new Unsupported(`${what} could not be decompressed within limits (${error.code ?? error.message})`);
+    throw new Unsupported(`${what} exceeds the image's ${PNG_MAX_TEXT_BYTES} byte text budget or is corrupt (${error.code ?? error.message})`);
   }
   if (result.engine.bytesWritten !== data.length) throw new Unsupported(`${what} has bytes after its compressed stream`);
   return result.buffer;
 }
 
-/** Checks a PNG text chunk's layout so imageMetadataText reads all of it as text. */
-function checkPNGTextChunk(type, data) {
+/**
+ * Decodes one PNG text chunk in full (keyword, language tag, translated keyword and
+ * text) within the remaining text budget. Returns { text, size } where `text` is what
+ * gets scanned and `size` counts against the budget.
+ */
+function decodePNGTextChunk(type, data, budget) {
   const nul = data.indexOf(0);
   if (nul < 1 || nul > 79) throw new Unsupported(`PNG ${type} keyword is malformed`);
-  let text;
+  const keyword = data.toString('latin1', 0, nul);
+  const parts = [keyword];
+  let body;
   if (type === 'tEXt') {
-    text = data.subarray(nul + 1);
+    body = data.subarray(nul + 1);
+    parts.push(body.toString('latin1'));
   } else if (type === 'zTXt') {
     if (data[nul + 1] !== 0) throw new Unsupported('PNG zTXt uses an unknown compression method');
-    text = inflateWhole(data.subarray(nul + 2), 'PNG zTXt');
+    body = inflateWhole(data.subarray(nul + 2), 'PNG zTXt', budget + 1);
+    parts.push(body.toString('latin1'));
   } else {
     const flag = data[nul + 1];
     const method = data[nul + 2];
@@ -380,11 +390,16 @@ function checkPNGTextChunk(type, data) {
     if ((flag !== 0 && flag !== 1) || (flag === 1 && method !== 0) || translatedEnd < 0) {
       throw new Unsupported('PNG iTXt is malformed');
     }
-    const body = data.subarray(translatedEnd + 1);
-    text = flag === 1 ? inflateWhole(body, 'PNG iTXt') : body;
+    parts.push(data.toString('utf8', nul + 3, languageEnd), data.toString('utf8', languageEnd + 1, translatedEnd));
+    const raw = data.subarray(translatedEnd + 1);
+    body = flag === 1 ? inflateWhole(raw, 'PNG iTXt', budget + 1) : raw;
+    parts.push(body.toString('utf8'));
   }
   // The PNG specification forbids NUL in text; NUL-separated text (UTF-16) would dodge word rules.
-  if (text.includes(0)) throw new Unsupported(`PNG ${type} text contains NUL bytes`);
+  if (body.includes(0)) throw new Unsupported(`PNG ${type} text contains NUL bytes`);
+  const size = data.length + body.length;
+  if (size > budget) throw new Unsupported(`PNG text exceeds the image's ${PNG_MAX_TEXT_BYTES} byte text budget`);
+  return { text: parts.join('\n'), size };
 }
 
 /**
@@ -405,6 +420,8 @@ export function decodePNG(png, profile = 'image') {
   let header = null;
   let palette = null;
   let transparency = null;
+  const texts = [];
+  let textBudget = PNG_MAX_TEXT_BYTES;
   const idat = [];
   let sawIEND = false;
   let previous = '';
@@ -452,13 +469,17 @@ export function decodePNG(png, profile = 'image') {
       }
       palette = data;
     } else if (type === 'tRNS') {
-      const ok = idat.length === 0 && !transparency && (
-        (header.color === 0 && length === 2) || (header.color === 2 && length === 6)
-        || (header.color === 3 && palette && length <= palette.length / 3));
-      if (!ok) throw new Unsupported('PNG tRNS is misplaced or malformed');
+      if (header.color !== 3) {
+        throw new Unsupported('PNG transparency keys (tRNS outside palette images) are not supported; save with an alpha channel');
+      }
+      if (idat.length > 0 || transparency || !palette || length === 0 || length > palette.length / 3) {
+        throw new Unsupported('PNG tRNS is misplaced or malformed');
+      }
       transparency = data;
     } else if (PNG_TEXT_CHUNKS.has(type)) {
-      checkPNGTextChunk(type, data);
+      const { text, size } = decodePNGTextChunk(type, data, textBudget);
+      textBudget -= size;
+      texts.push(text);
     } else {
       throw new Unsupported(`PNG chunk ${label} cannot be inspected`);
     }
@@ -528,22 +549,15 @@ export function decodePNG(png, profile = 'image') {
     return (lines[row + (bit >> 3)] >> (8 - depth - (bit & 7))) & ((1 << depth) - 1);
   };
   const to8 = (value) => (depth === 16 ? value >> 8 : Math.round((value * 255) / max));
-  const transparentGray = transparency && color === 0 ? transparency.readUInt16BE(0) : null;
-  const transparentRGB = transparency && color === 2
-    ? [transparency.readUInt16BE(0), transparency.readUInt16BE(2), transparency.readUInt16BE(4)] : null;
   for (let y = 0; y < height; y += 1) {
     const row = y * stride;
     for (let x = 0; x < width; x += 1) {
       const o = (y * width + x) * 4;
       let r; let g; let b; let alpha = 255;
       if (color === 0) {
-        const v = sample(row, x);
-        r = g = b = to8(v);
-        if (transparentGray !== null && v === transparentGray) alpha = 0;
+        r = g = b = to8(sample(row, x));
       } else if (color === 2) {
-        const rv = sample(row, x * 3); const gv = sample(row, x * 3 + 1); const bv = sample(row, x * 3 + 2);
-        r = to8(rv); g = to8(gv); b = to8(bv);
-        if (transparentRGB && rv === transparentRGB[0] && gv === transparentRGB[1] && bv === transparentRGB[2]) alpha = 0;
+        r = to8(sample(row, x * 3)); g = to8(sample(row, x * 3 + 1)); b = to8(sample(row, x * 3 + 2));
       } else if (color === 3) {
         const index = sample(row, x);
         if (index * 3 + 2 >= palette.length) throw new Unsupported('PNG palette index out of range');
@@ -565,7 +579,7 @@ export function decodePNG(png, profile = 'image') {
     for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) used[sample(y * stride, x)] = 1;
     if (used.includes(0)) throw new Unsupported('PNG palette has entries no pixel uses');
   }
-  return { width, height, pixels };
+  return { width, height, pixels, metadata: texts.join('\n') };
 }
 
 /** ICNS renditions: the strict PNG profile limited to 8-bit RGBA and IHDR/IDAT/IEND. */
@@ -1112,8 +1126,13 @@ export class Scanner {
           return;
         case 'png':
           // Strict decode first: every byte must be structure, metadata text or pixels.
-          this.scanPixels(decodePNG(buffer, 'image'), label);
-          this.scanString(`${label} (metadata)`, imageMetadataText(buffer));
+          // The decoder returns the text chunks it read (within the text budget), so
+          // metadata isn't decompressed a second time.
+          {
+            const image = decodePNG(buffer, 'image');
+            this.scanPixels(image, label);
+            this.scanString(`${label} (metadata)`, image.metadata);
+          }
           return;
         case 'jpeg':
           // Metadata after the scan, ICC profiles that change rendering, unused tables and
