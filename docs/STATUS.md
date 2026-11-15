@@ -1,12 +1,12 @@
 # Status
 
-Last updated: November 14, 2026. Version: **0.3.0**, first published as the pre-release `v0.3.0-beta.1`. Unreleased changes since then (see the CHANGELOG) were verified at commit `9c277cf`; see [Unreleased: maintenance and redesign](#unreleased-maintenance-and-redesign-9c277cf).
+Last updated: November 14, 2026. Version: **0.3.0**, first published as the pre-release `v0.3.0-beta.1`. Unreleased changes since then (see the CHANGELOG) were verified at commit `9c277cf` (app) and `a4cba2a` (publication check); see [Unreleased: maintenance and redesign](#unreleased-maintenance-and-redesign-9c277cf).
 
 This page records what works and has been checked, what is known to be limited, and what hasn't been verified. The other documents summarize; this one is the ledger.
 
 ## How it was checked
 
-- **Automated:** Swift tests (`swift test`: 133 passing on the maintainer's Mac at `9c277cf`, including packaging, linkage and publication-gate tests; 132 at `v0.3.0-beta.1`) and Node tests (`cd Renderer && npm test`: 104 at `9c277cf`, 86 at `v0.3.0-beta.1`, covering the renderer, the publication check and the release-script gates (run against mock tools)). `node build.mjs --check` confirms that the committed reader bundle matches its source. `node scripts/publication-check.mjs --tracked` passes.
+- **Automated:** Swift tests (`swift test`: 133 passing on the maintainer's Mac at `9c277cf`, including packaging, linkage and publication-gate tests; 132 at `v0.3.0-beta.1`) and Node tests (`cd Renderer && npm test`: 109 at `a4cba2a`, 104 at `9c277cf`, 86 at `v0.3.0-beta.1`, covering the renderer, the publication check and the release-script gates (run against mock tools)). `node build.mjs --check` confirms that the committed reader bundle matches its source. `node scripts/publication-check.mjs --tracked` passes.
 - **Manual:** the checklist in [`VERIFICATION.md`](./VERIFICATION.md), run on the maintainer's Mac (Apple silicon, macOS 26.7, Xcode 27.2) with a Debug build, using the notes in `Fixtures/notes/` and a generated demo vault.
 - **Not yet run on:** macOS 14 or 15, an Intel Mac, or a second Mac with an installed release build. From the next version on, Intel Macs aren't supported. CI builds and runs the Swift tests on GitHub's Apple silicon macOS 15 runner but never launches the app. GitHub no longer offers macOS 14 runners, so macOS 14, the deployment target, is untested.
 
@@ -44,7 +44,16 @@ Verified on the maintainer's Mac in an isolated checkout of commit `9c277cf` (De
   - **Smallest icons:** Finder's list-view icon was too small to judge; the 16 and 32 px renditions look right when extracted.
   - **Dock icon:** not inspected; the automation could not read the Dock.
   - **VoiceOver:** the accessibility tree was checked (one element per library row with title and reading time), but spoken output was not listened to.
-- **Before anything is published:** the maintainers' separate pre-publication guard must itself be confirmed to inspect the exact payload, including the `.icns`. A repository scanner pass is not publication clearance. (The scanner's ordinary-PNG gap was closed afterwards, on the same branch: every PNG now gets the strict profile, and JPEG is refused; see the CHANGELOG.)
+- **Before anything is published:** the maintainers' separate pre-publication guard must itself be confirmed to inspect the exact payload, including the `.icns`. A repository scanner pass is not publication clearance.
+
+### Publication check hardening (a4cba2a)
+
+After `9c277cf`, the publication check's image inspectors were tightened on the same branch (scanner, tests and docs only; the app is unchanged). Every PNG now gets a strict profile and JPEG is refused; the rules are in [`DEVELOPMENT.md`](./DEVELOPMENT.md). Verified at `a4cba2a`, in a bounded adversarial review with real tesseract on the maintainer's Mac and in a separate review in a Linux sandbox:
+
+- 109 Node tests pass; the committed reader bundle matches its source; `publication-check --tracked` reports 191 items, 0 prohibited, 0 incomplete.
+- Probe files that had scanned clean while hiding text are now refused or caught. Refused: bytes after `IEND` or after a zlib stream (in IDAT, zTXt or iTXt); numeric, private and colour-profile chunks; unused palette entries; non-zero row padding; NUL in text; transparency keys; text beyond the 1 MiB per-image budget (including twelve individually legal chunks; it ends INCOMPLETE rather than aborting even with a 64 MiB heap). Caught: white text on transparency, colour hidden under transparent pixels, and red text on grey of equal brightness (per-channel OCR).
+- Under this scanner, the unchanged build-7 DMG scans 78 items / 0 / 0 and the built icon 11 / 0 / 0.
+- Known limits, out of scope by design: steganography (including text placed only in the low bytes of 16-bit samples), text too small for OCR, and non-ASCII terms in Latin-1 `tEXt`. The review was bounded, not exhaustive.
 
 ## Known limitations
 
