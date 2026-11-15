@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **Mermaid 12.3** (was 11.17.2), which itself requires a patched KaTeX. Diagrams keep the classic dagre layout and look. Mermaid 12's ELK layout engine (elkjs, EPL-2.0 or GPL-3.0) is left out of the bundle; a diagram that asks for an ELK layout shows an error. `THIRD_PARTY_NOTICES.txt` is now generated from every package actually in the bundles, including NOTICE files.
 - **macOS 26 or later only.** The deployment target moves from macOS 14 to macOS 26 (Apple silicon). Earlier releases declared macOS 14 but were never run on it; CI now tests on macOS 26. Building needs Xcode 26 or later.
 
 ### Security

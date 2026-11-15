@@ -26,3 +26,13 @@ test('Mermaid and the reader embed that same KaTeX, not an older copy', () => {
     assert.ok(!source.includes('"0.16.47"'), `${file} still embeds KaTeX 0.16.47`);
   }
 });
+
+test('the ELK layout engine is left out, and the notices cover what ships', () => {
+  const mermaid = readFileSync(join(bundle, 'mermaid.min.js'), 'utf8');
+  assert.ok(mermaid.includes('The ELK layout is not included in Obviewer'), 'elkjs is replaced by the stub');
+  const notices = readFileSync(join(bundle, 'THIRD_PARTY_NOTICES.txt'), 'utf8');
+  assert.ok(!notices.includes('=== elkjs '), 'elkjs must not be bundled');
+  for (const name of ['mermaid', 'katex', 'dompurify', 'markdown-it', 'highlight.js', 'chevrotain', 'cytoscape']) {
+    assert.match(notices, new RegExp(`^=== ${name.replace('.', '\\.')} `, 'm'), `notices list ${name}`);
+  }
+});

@@ -54,7 +54,25 @@ const outDir = check ? mkdtempSync(join(tmpdir(), 'obviewer-reader-')) : committ
 if (!check) rmSync(outDir, { recursive: true, force: true });
 mkdirSync(join(outDir, 'katex/fonts'), { recursive: true });
 
-await esbuild.build({
+// Every input file of every bundle, so the notices list exactly what ships.
+const bundledInputs = new Set();
+const collectInputs = (result) => { for (const file of Object.keys(result.metafile.inputs)) bundledInputs.add(file); return result; };
+
+// Mermaid 12 ships the ELK layout engine (elkjs, licensed EPL-2.0 OR GPL-3.0-or-later,
+// about 1.6 MB). The reader always lays diagrams out with dagre, so ELK is replaced by
+// a stub: a diagram that asks for an ELK layout shows an error instead.
+const withoutELK = {
+  name: 'without-elk',
+  setup(build) {
+    build.onResolve({ filter: /^elkjs(\/|$)/ }, () => ({ path: 'elkjs-stub', namespace: 'obviewer-stub' }));
+    build.onLoad({ filter: /.*/, namespace: 'obviewer-stub' }, () => ({
+      contents: "export default class ELK { constructor() { throw new Error('The ELK layout is not included in Obviewer. Remove the layout setting to use the default.'); } }",
+      loader: 'js',
+    }));
+  },
+};
+
+collectInputs(await esbuild.build({
   entryPoints: [join(here, 'src/reader.js')],
   outfile: join(outDir, 'reader.js'),
   bundle: true,
@@ -66,10 +84,11 @@ await esbuild.build({
   charset: 'utf8',
   nodePaths: [nodeModules],
   logLevel: 'warning',
-});
+  metafile: true,
+}));
 
 // Quick Look: a DOM-free bundle evaluated with JavaScriptCore (no WebKit in the extension).
-await esbuild.build({
+collectInputs(await esbuild.build({
   entryPoints: [join(here, 'src/quicklook.js')],
   outfile: join(outDir, 'quicklook.js'),
   bundle: true,
@@ -82,20 +101,22 @@ await esbuild.build({
   charset: 'utf8',
   nodePaths: [nodeModules],
   logLevel: 'warning',
-});
+  metafile: true,
+}));
 
 cpSync(join(here, 'static/reader.html'), join(outDir, 'reader.html'));
 cpSync(join(here, 'static/reader.css'), join(outDir, 'reader.css'));
 // Mermaid is bundled here from its ES module build rather than copied from
 // mermaid/dist/mermaid.min.js, which embeds its own (older, vulnerable) KaTeX. Bundling
 // resolves Mermaid's KaTeX import to the single, patched copy checked above.
-await esbuild.build({
+collectInputs(await esbuild.build({
   stdin: {
     contents: "import mermaid from 'mermaid';\nglobalThis.mermaid = mermaid;\n",
     resolveDir: here,
     sourcefile: 'mermaid-entry.js',
   },
   outfile: join(outDir, 'mermaid.min.js'),
+  plugins: [withoutELK],
   bundle: true,
   format: 'iife',
   platform: 'browser',
@@ -105,7 +126,8 @@ await esbuild.build({
   charset: 'utf8',
   nodePaths: [nodeModules],
   logLevel: 'warning',
-});
+  metafile: true,
+}));
 
 // KaTeX: stylesheet plus WOFF2 fonts only (WebKit always picks WOFF2 first).
 const katexDist = join(nodeModules, 'katex/dist');
@@ -114,16 +136,38 @@ for (const font of readdirSync(join(katexDist, 'fonts'))) {
   if (font.endsWith('.woff2')) cpSync(join(katexDist, 'fonts', font), join(outDir, 'katex/fonts', font));
 }
 
-// Third-party notices for everything shipped in the bundle.
-const bundled = ['markdown-it', 'markdown-it-footnote', 'mdurl', 'uc.micro', 'linkify-it', 'punycode.js', 'entities', 'highlight.js', 'katex', 'dompurify', 'mermaid'];
+// Third-party notices for everything shipped in the bundle: every npm package with a
+// file in any bundle, plus KaTeX (its stylesheet and fonts are copied as files).
+const packageOf = (file) => {
+  const parts = file.split('node_modules/');
+  if (parts.length < 2) return null;
+  const rest = parts[parts.length - 1].split('/');
+  return { name: rest[0].startsWith('@') ? `${rest[0]}/${rest[1]}` : rest[0], dir: join(here, parts.slice(0, -1).join('node_modules/'), 'node_modules') };
+};
+const shipped = new Map([['katex', join(nodeModules, 'katex')]]);
+for (const file of bundledInputs) {
+  const pkg = packageOf(file);
+  if (pkg && !shipped.has(pkg.name)) shipped.set(pkg.name, join(pkg.dir, pkg.name));
+}
+if ([...shipped.keys()].some((name) => name === 'elkjs')) {
+  console.error('elkjs ended up in a bundle; the ELK stub is not working.');
+  process.exit(1);
+}
 let notices = 'Third-party software bundled in Obviewer\'s reader.\n';
-for (const name of bundled) {
-  const dir = join(nodeModules, name);
-  if (!existsSync(dir)) continue;
+for (const name of [...shipped.keys()].sort()) {
+  const dir = shipped.get(name);
   const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
-  const licenseFile = readdirSync(dir).find((file) => /^licen[cs]e/i.test(file));
-  notices += `\n\n=== ${name} ${pkg.version} (${pkg.license ?? 'see below'}) ===\n`;
-  if (licenseFile) notices += readFileSync(join(dir, licenseFile), 'utf8').trim();
+  // Licence texts and any NOTICE file (Apache-2.0 requires passing NOTICE files on).
+  const licenseFiles = readdirSync(dir).filter((file) => /^(licen[cs]e|copying|notice)/i.test(file)).sort();
+  const declared = typeof pkg.license === 'string' ? pkg.license : null;
+  if (licenseFiles.length === 0 && !declared) {
+    console.error(`No license information found for bundled package ${name}.`);
+    process.exit(1);
+  }
+  notices += `\n\n=== ${name} ${pkg.version} (${declared ?? 'see below'}) ===\n`;
+  notices += licenseFiles.length
+    ? licenseFiles.map((file) => readFileSync(join(dir, file), 'utf8').trim()).join('\n\n')
+    : `Licensed under ${declared}.`;
 }
 writeFileSync(join(outDir, 'THIRD_PARTY_NOTICES.txt'), `${notices}\n`);
 
