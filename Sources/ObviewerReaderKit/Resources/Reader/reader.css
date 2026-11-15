@@ -346,6 +346,11 @@ details.callout[open] > summary.callout-title::after { transform: rotate(90deg);
    where a bottom margin pushed formulas against the top of their box. */
 .ob-quicklook .note-body math[display="block"] { display: block; text-align: center; margin: 0 0 1em; overflow-x: auto; }
 .mermaid-block math { margin: 0; }
+/* Mermaid sizes a math label from a hidden copy (#katex-temp) appended to <body>, then
+   draws it inside the diagram. Give both the same font size (Mermaid's 16px) and no
+   display-math margins, so the box it measures is the box it draws. */
+#katex-temp { font-size: 16px; line-height: 1.5; }
+#katex-temp .katex-display, .mermaid-block .katex-display { margin: 0; }
 
 @media print {
   :root { --ob-bg: #fff; --ob-ink: #000; --ob-code-bg: #f4f4f4; --ob-rule: #ccc; --ob-accent: #3a1d66; --ob-gold: #8a6a20; --ob-fleur: url("data:image/svg+xml,%3Csvg fill=%22%238a6a20%22 xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 240 216%22%3E%3Cpath d=%22M120 0 C132 26 151 50 149 80 C147 106 135 120 132 136 L132 150L108 150L108 136 C105 120 93 106 91 80 C89 50 108 26 120 0 Z M134 142 C158 96 210 62 228 98 C236 116 222 134 208 126 C194 118 172 126 152 148 Z M144 150 C164 164 180 184 167 199 C157 208 145 198 152 187 C157 178 148 164 136 152 Z M106 142 C82 96 30 62 12 98 C4 116 18 134 32 126 C46 118 68 126 88 148 Z M96 150 C76 164 60 184 73 199 C83 208 95 198 88 187 C83 178 92 164 104 152 Z M130 150 C133 172 129 194 120 216 C111 194 107 172 110 150 Z%22/%3E%3Crect x=%2270%22 y=%22134%22 width=%22100%22 height=%2218%22 rx=%228%22/%3E%3C/svg%3E"); }

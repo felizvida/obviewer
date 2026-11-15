@@ -13,3 +13,8 @@ test('display-math spacing is scoped, so it cannot reach MathML inside diagram l
   assert.doesNotMatch(css, /(^|[,}]\s*)math\[display="block"\]\s*\{/m);
   assert.match(css, /\.mermaid-block math \{ margin: 0; \}/);
 });
+
+test('Mermaid math labels are measured and drawn with the same font size and margins', () => {
+  assert.match(css, /#katex-temp \{ font-size: 16px; line-height: 1\.5; \}/);
+  assert.match(css, /#katex-temp \.katex-display, \.mermaid-block \.katex-display \{ margin: 0; \}/);
+});

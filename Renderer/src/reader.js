@@ -239,6 +239,10 @@ async function renderDiagrams(root) {
     // Mermaid 12 defaults to the ELK layout and a new look; keep the classic ones.
     layout: 'dagre',
     look: 'classic',
+    // Draw $$…$$ labels with KaTeX's HTML layout (as the reader does for all other
+    // math) instead of native MathML: WebKit placed MathML inside diagram labels
+    // against the top of the node instead of centring it.
+    forceLegacyMathML: true,
     fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif',
     flowchart: { htmlLabels: false },
     suppressErrorRendering: true,
