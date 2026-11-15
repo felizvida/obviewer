@@ -7,7 +7,7 @@
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -56,7 +56,7 @@ mkdirSync(join(outDir, 'katex/fonts'), { recursive: true });
 
 // Every input file of every bundle, so the notices list exactly what ships.
 const bundledInputs = new Set();
-const collectInputs = (result) => { for (const file of Object.keys(result.metafile.inputs)) bundledInputs.add(file); return result; };
+const collectInputs = (result) => { for (const file of Object.keys(result.metafile.inputs)) bundledInputs.add(resolve(process.cwd(), file)); return result; };
 
 // Mermaid 12 ships the ELK layout engine (elkjs, licensed EPL-2.0 OR GPL-3.0-or-later,
 // about 1.6 MB). The reader always lays diagrams out with dagre, so ELK is replaced by
@@ -142,7 +142,8 @@ const packageOf = (file) => {
   const parts = file.split('node_modules/');
   if (parts.length < 2) return null;
   const rest = parts[parts.length - 1].split('/');
-  return { name: rest[0].startsWith('@') ? `${rest[0]}/${rest[1]}` : rest[0], dir: join(here, parts.slice(0, -1).join('node_modules/'), 'node_modules') };
+  // `file` is absolute (see collectInputs), so this works from any working directory.
+  return { name: rest[0].startsWith('@') ? `${rest[0]}/${rest[1]}` : rest[0], dir: `${parts.slice(0, -1).join('node_modules/')}node_modules` };
 };
 const shipped = new Map([['katex', join(nodeModules, 'katex')]]);
 for (const file of bundledInputs) {
