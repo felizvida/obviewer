@@ -21,6 +21,35 @@ const esbuildSpecifier = process.env.OBVIEWER_ESBUILD
   : 'esbuild';
 const esbuild = await import(esbuildSpecifier).then((module) => module.default ?? module);
 
+// Security floor for KaTeX: versions before 0.18.2 can treat inherited (polluted)
+// Object.prototype properties such as `trust` as options (GHSA-238p-pmpm-9mq7).
+// Every installed copy must be at or above the floor, including any nested under
+// other packages, or the build stops.
+const KATEX_FLOOR = [0, 18, 2];
+function installedCopies(name, dir = nodeModules, found = []) {
+  if (!existsSync(dir)) return found;
+  for (const entry of readdirSync(dir)) {
+    if (entry.startsWith('.')) continue;
+    const path = join(dir, entry);
+    if (entry.startsWith('@')) { installedCopies(name, path, found); continue; }
+    if (entry === name && existsSync(join(path, 'package.json'))) {
+      found.push({ path, version: JSON.parse(readFileSync(join(path, 'package.json'), 'utf8')).version });
+    }
+    installedCopies(name, join(path, 'node_modules'), found);
+  }
+  return found;
+}
+const katexCopies = installedCopies('katex');
+const belowFloor = katexCopies.filter(({ version }) => {
+  const parts = version.split(/[.-]/).map(Number);
+  for (let i = 0; i < 3; i += 1) if (parts[i] !== KATEX_FLOOR[i]) return parts[i] < KATEX_FLOOR[i];
+  return false;
+});
+if (katexCopies.length === 0 || belowFloor.length > 0) {
+  console.error(`KaTeX below ${KATEX_FLOOR.join('.')} is installed: ${belowFloor.map((c) => `${c.version} at ${relative(here, c.path)}`).join(', ') || 'none found'}. Run npm ci.`);
+  process.exit(1);
+}
+
 const outDir = check ? mkdtempSync(join(tmpdir(), 'obviewer-reader-')) : committedOut;
 if (!check) rmSync(outDir, { recursive: true, force: true });
 mkdirSync(join(outDir, 'katex/fonts'), { recursive: true });
@@ -57,7 +86,26 @@ await esbuild.build({
 
 cpSync(join(here, 'static/reader.html'), join(outDir, 'reader.html'));
 cpSync(join(here, 'static/reader.css'), join(outDir, 'reader.css'));
-cpSync(join(nodeModules, 'mermaid/dist/mermaid.min.js'), join(outDir, 'mermaid.min.js'));
+// Mermaid is bundled here from its ES module build rather than copied from
+// mermaid/dist/mermaid.min.js, which embeds its own (older, vulnerable) KaTeX. Bundling
+// resolves Mermaid's KaTeX import to the single, patched copy checked above.
+await esbuild.build({
+  stdin: {
+    contents: "import mermaid from 'mermaid';\nglobalThis.mermaid = mermaid;\n",
+    resolveDir: here,
+    sourcefile: 'mermaid-entry.js',
+  },
+  outfile: join(outDir, 'mermaid.min.js'),
+  bundle: true,
+  format: 'iife',
+  platform: 'browser',
+  target: ['safari16'],
+  minify: true,
+  legalComments: 'none',
+  charset: 'utf8',
+  nodePaths: [nodeModules],
+  logLevel: 'warning',
+});
 
 // KaTeX: stylesheet plus WOFF2 fonts only (WebKit always picks WOFF2 first).
 const katexDist = join(nodeModules, 'katex/dist');

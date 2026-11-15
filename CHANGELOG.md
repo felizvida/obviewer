@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- **KaTeX 0.19.1** (was 0.16.47), fixing GHSA-238p-pmpm-9mq7 (KaTeX before 0.18.2 could treat polluted `Object.prototype` properties such as `trust` as options). Mermaid's copy is fixed too: Mermaid's prebuilt `mermaid.min.js` embedded its own KaTeX 0.16.47, so the reader now bundles Mermaid from its ES module build, with an npm override making it use the same patched KaTeX. The renderer build refuses to run if any installed KaTeX is older than 0.18.2, and tests check that every shipped bundle embeds the patched version. `npm audit` reports no vulnerabilities. The renderer now needs Node 22.12 or later to build.
+
 ## 0.3.0 (pre-release `v0.3.0-beta.2`, November 2026)
 
 A quieter design, an app icon, fewer controls, and stricter publication checks. Notes: [`docs/RELEASE_NOTES_v0.3.0-beta.2.md`](docs/RELEASE_NOTES_v0.3.0-beta.2.md).

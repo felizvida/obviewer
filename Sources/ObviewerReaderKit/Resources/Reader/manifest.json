@@ -3,12 +3,12 @@
   "versions": {
     "markdown-it": "14.3.3",
     "mermaid": "11.17.2",
-    "katex": "0.16.47",
+    "katex": "0.19.1",
     "highlight.js": "11.12.0",
     "dompurify": "3.4.17"
   },
   "files": {
-    "THIRD_PARTY_NOTICES.txt": "4a014e9d6bfb7b7b5ae41a0f92717d25646e179d66f1099dbf952c00fd83c55a",
+    "THIRD_PARTY_NOTICES.txt": "28918a3af62e6beb09db6e92148a0b432a97bfb3ce6739f73f026334552015a4",
     "katex/fonts/KaTeX_AMS-Regular.woff2": "0cdd387c9590a1a9f9794560022dbb59654a7d86f187aa0c81495ad42d3a7308",
     "katex/fonts/KaTeX_Caligraphic-Bold.woff2": "de7701e42cf1f4cf0b766c03fb27977207eee2f4fd5d76fa82188406da43ea4c",
     "katex/fonts/KaTeX_Caligraphic-Regular.woff2": "5d53e70ad607c2352162dec9e0923fb54ecdafaccbf604cd8dcf7d00facb989b",
@@ -29,11 +29,11 @@
     "katex/fonts/KaTeX_Size3-Regular.woff2": "73d591271b1604960cb10bb90fee021670af7297017e0e98480b332d11f51995",
     "katex/fonts/KaTeX_Size4-Regular.woff2": "a4af7d414440a1c1790825cfb700cf9cf43b0f2c4b04f0ebc523011ad9853ec0",
     "katex/fonts/KaTeX_Typewriter-Regular.woff2": "71d517d67827787cfabdf186914cc3358eda539e37931941f2b2fd4a21f68c0b",
-    "katex/katex.min.css": "0289a02cf451a44dd73add683a09644252363871ac11713a647b732cee8b1ee3",
-    "mermaid.min.js": "581ed7d74bd9048d0e3a91363927d72ef22942d7722546b27f7cc29e35390eb8",
-    "quicklook.js": "2de38e7ccb492608d265392f8c494e83db194d269443f7fa06afeedcc4ef5bfe",
+    "katex/katex.min.css": "00e0b094171b07f58422075f469b4feac2b2f7bce1aeec943c08da4d697f4dcf",
+    "mermaid.min.js": "927b44feed94bf74cb08882c5b3e88dfaf1e0080f4d01e5c9f5ebe44ba94fb18",
+    "quicklook.js": "919fda03a149b65d8cd9f9099a035c7f06cd542a01624738f8f9cdf1dc815c55",
     "reader.css": "ac4be427a8737809eac2ef5925a196c84b1360b7b8bc9d3cde765303377ac09e",
     "reader.html": "26faa582e497be99d33c59bc20f9c175c5d2338a701eb023a951e71fdb6ac771",
-    "reader.js": "a66bd2dc8b0e339e4ab2f2212088d57b0c1a79138df772cf2ef1f2979d19089d"
+    "reader.js": "f785d61bd9d2a18b9b9624d62ca0f5130fb6aee38d01b25f9dae9c409d300809"
   }
 }
