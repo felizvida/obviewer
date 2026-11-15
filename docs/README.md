@@ -18,8 +18,8 @@ Also: [`../QUICKSTART.md`](../QUICKSTART.md) to run from source, and [`../CHANGE
 
 | | |
 | --- | --- |
-| Version | 0.3.0, pre-release `v0.3.0-beta.1` |
-| Platform | macOS 26 or later, Apple silicon (from the release after beta.2); verified on macOS 26 |
+| Version | 0.3.0, pre-releases `v0.3.0-beta.1` to `v0.3.0-beta.3` |
+| Platform | macOS 26 or later, Apple silicon (from beta.3); verified on macOS 26 |
 | Languages | Swift (SwiftUI, AppKit, WebKit, JavaScriptCore); JavaScript for the renderer |
 | Distribution | Ad-hoc signed DMG on GitHub Releases (not notarized) |
 | Permissions | App: sandbox, read-only user-selected files, print, outgoing network (for WebKit). Quick Look: sandbox, read-only user-selected files. |

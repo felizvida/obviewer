@@ -1,11 +1,22 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (pre-release `v0.3.0-beta.3`, November 2026)
+
+A security and platform update. Notes: [`docs/RELEASE_NOTES_v0.3.0-beta.3.md`](docs/RELEASE_NOTES_v0.3.0-beta.3.md).
 
 ### Changed
 
 - **Mermaid 12.3** (was 11.17.2), which itself requires a patched KaTeX. Diagrams keep the classic dagre layout and look. Mermaid 12's ELK layout engine (elkjs, EPL-2.0 or GPL-3.0) is left out of the bundle; a diagram that asks for an ELK layout shows an error. `THIRD_PARTY_NOTICES.txt` is now generated from every package actually in the bundles, including NOTICE files.
 - **macOS 26 or later only.** The deployment target moves from macOS 14 to macOS 26 (Apple silicon). Earlier releases declared macOS 14 but were never run on it; CI now tests on macOS 26. Building needs Xcode 26 or later.
+
+### Fixed
+
+- Diagram math labels are measured the way they're drawn: KaTeX's display margins no longer inflate the measured box, Mermaid's hidden measuring copy uses the diagram's font size, and labels use KaTeX's HTML layout like the rest of the reader.
+- Math in sequence-diagram participant names was never drawn (Mermaid 12.3 serialized the diagram before an asynchronous label was ready). The reader's build now patches Mermaid to wait for it, and fails if that patch stops applying.
+
+### Known bugs
+
+- In Safari's engine, math inside diagrams is painted off-centre (against a flowchart node's top edge, or near a sequence participant box's top left), although it is measured and placed correctly. Math outside diagrams is unaffected.
 
 ### Security
 

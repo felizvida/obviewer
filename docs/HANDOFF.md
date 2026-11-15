@@ -30,6 +30,7 @@ A read-only macOS reader for Markdown files, Obsidian vaults and DokuWiki folder
 
 ## Open decisions
 
+- How to fix math inside diagrams being painted off-centre in WebKit (positioned KaTeX boxes inside an SVG `foreignObject`; the measured geometry is correct). One idea: move the foreignObject's x/y into a transform, or overlay the formulas outside the SVG
 - Whether to improve the Slack paste format (Slack flattens nesting and italicizes bold), or document it as is
 - Whether to pursue a Developer ID for notarized distribution
 

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: November 15, 2026. Version: **0.3.0**, published as the pre-releases `v0.3.0-beta.1` and `v0.3.0-beta.2`. The beta.2 changes (see the CHANGELOG) were verified at commit `9c277cf` (app) and `a4cba2a` (publication check); see [v0.3.0-beta.2](#v030-beta2-maintenance-and-redesign-9c277cf). `v0.3.0-beta.2` was published on November 15, 2026 from commit `223c5bc` (build 8); see [Published: v0.3.0-beta.2](#published-v030-beta2).
+Last updated: November 15, 2026. Version: **0.3.0**, published as the pre-releases `v0.3.0-beta.1`, `v0.3.0-beta.2` and `v0.3.0-beta.3` (see [v0.3.0-beta.3](#v030-beta3-security-and-platform)). The beta.2 changes (see the CHANGELOG) were verified at commit `9c277cf` (app) and `a4cba2a` (publication check); see [v0.3.0-beta.2](#v030-beta2-maintenance-and-redesign-9c277cf). `v0.3.0-beta.2` was published on November 15, 2026 from commit `223c5bc` (build 8); see [Published: v0.3.0-beta.2](#published-v030-beta2).
 
 This page records what works and has been checked, what is known to be limited, and what hasn't been verified. The other documents summarize; this one is the ledger.
 
@@ -8,7 +8,7 @@ This page records what works and has been checked, what is known to be limited, 
 
 - **Automated:** Swift tests (`swift test`: 133 passing on the maintainer's Mac at `9c277cf`, including packaging, linkage and publication-gate tests; 132 at `v0.3.0-beta.1`) and Node tests (`cd Renderer && npm test`: 109 at `a4cba2a`, 104 at `9c277cf`, 86 at `v0.3.0-beta.1`, covering the renderer, the publication check and the release-script gates (run against mock tools)). `node build.mjs --check` confirms that the committed reader bundle matches its source. `node scripts/publication-check.mjs --tracked` passes.
 - **Manual:** the checklist in [`VERIFICATION.md`](./VERIFICATION.md), run on the maintainer's Mac (Apple silicon, macOS 26.7, Xcode 27.2) with a Debug build, using the notes in `Fixtures/notes/` and a generated demo vault.
-- **Not yet run on:** an Intel Mac, or a second Mac with an installed release build. Intel Macs aren't supported after beta.1. From the release after beta.2, the minimum is macOS 26 (beta.1 and beta.2 declared macOS 14 but were only run on macOS 26). CI builds and runs the Swift tests on GitHub's Apple silicon macOS 26 runner but never launches the app.
+- **Not yet run on:** an Intel Mac, or a second Mac with an installed release build. Intel Macs aren't supported after beta.1. From beta.3, the minimum is macOS 26 (beta.1 and beta.2 declared macOS 14 but were only run on macOS 26). CI builds and runs the Swift tests on GitHub's Apple silicon macOS 26 runner but never launches the app.
 
 ## Works and verified on a Mac
 
@@ -32,13 +32,30 @@ This page records what works and has been checked, what is known to be limited, 
 - **Indexing benchmark** (`make benchmark-vault PROFILE=integration`, the maintainer's Mac): a synthetic vault of 201 notes and 17 attachments, with 327 links. Results: cold load 781 ms, warm reload 27 ms, search 1.8 ms, global graph 1.2 ms, selective reload 36 ms. This measures the Swift indexer, not WebKit rendering.
 - **Release build and DMG:** the Release app builds and signs ad-hoc. `v0.3.0-beta.1` is universal (arm64 + x86_64). At its tag, the Swift package tests also passed on GitHub's Intel macOS 15 runner, but the app has never been run on an Intel Mac. Later versions will be built for Apple silicon only. For `v0.3.0-beta.1` (build 3), a clean `make package-adhoc` passed every packaging gate on the staged app, the writable image volume and the mounted final DMG. Separately from those scripts, the mounted app and Quick Look extension were checked: both pass strict signature verification, have the hardened runtime and exactly the allowed entitlements, and carry no Finder info or resource forks. The image root holds only the expected entries. The app, launched from inside the mounted DMG, rendered a sample note with a callout, tasks, a Mermaid diagram and math. Quick Look was checked with the Release extension confirmed as the running provider (build 2, same source). The publication check of the mounted DMG and notes found 0 prohibited references and 0 unreadable files. Details in [`VERIFICATION.md`](./VERIFICATION.md).
 
+## v0.3.0-beta.3: security and platform
+
+- **What changed:** KaTeX 0.19.1 everywhere (GHSA-238p-pmpm-9mq7 fixed; `npm audit` reports 0); Mermaid 12.3 bundled from source against that KaTeX, without the ELK layout engine; macOS 26 minimum; and generated third-party notices. See the CHANGELOG.
+- **Checked by the maintainer's automation on macOS 26:**
+  - 133 Swift tests and 114 renderer tests; the bundle check from the repository root and from `Renderer/`; `npm ls` showing one KaTeX copy;
+  - a Debug app with `LSMinimumSystemVersion` 26.0 for the app and the extension, and a local ad-hoc package passing every gate, arm64 only;
+  - in the app, flowchart, sequence, class, state and ER diagrams; the intended ELK and syntax errors; ordinary math; and the hostile fixture inert.
+  - Before the release files are uploaded, their payload and exact files are checked as for beta.2.
+- **Known bug:** math inside diagrams is painted off-centre in WebKit. A Safari probe of the final bundle measured the formula boxes correctly centred (and sequence participant math now present), but the glyphs paint against the node's top edge, or near the participant box's top left.
+- **Not verified for beta.3:**
+  - Quick Look of this build;
+  - the Web Inspector console;
+  - copying a note with a diagram;
+  - the smallest Finder icon and the Dock icon;
+  - VoiceOver speech;
+  - a second Mac.
+
 ## Published: v0.3.0-beta.2
 
 - **Release:** [v0.3.0-beta.2](https://github.com/felizvida/obviewer/releases/tag/v0.3.0-beta.2), a pre-release published on November 15, 2026 from commit `223c5bc` (build 8; arm64 only; ad-hoc signed, not notarized). Six files: the DMG (SHA-256 `fd91e7eeaa7a5688b8286ed91786355a3d94a0a56d19242409f7f532bd26ee2c`), its checksum file, the install guide, two source archives and their checksum file. `v0.3.0-beta.1` and its files were checked unchanged before and after.
 - **How it was published:** the files were built locally with `scripts/make_release_payload.sh`, checked by the repository's publication check (470 items, 0 prohibited, 0 incomplete) and by the maintainer's separate pre-publication guard on the exact files, notes, tag and history, then uploaded by hand. GitHub's runners uploaded nothing. The uploaded files' sizes and SHA-256 digests were checked against the local ones after publication.
 - **Checks on this build:** 133 Swift tests and 109 Node tests pass. [CI](https://github.com/felizvida/obviewer/actions/runs/43664510032) (six jobs) and [Release verification](https://github.com/felizvida/obviewer/actions/runs/43664584969) passed on the pushed commit and tag. The build-8 Release app launched from the build folder and from the mounted final DMG and rendered a callout, math and a Mermaid diagram; the app and Quick Look extension are arm64 only, strictly signed, with the committed icon and no asset catalog. Both source archives match the tagged tree.
 - **Still not verified for beta.2:** Quick Look of this build (an older registered copy kept answering), the smallest Finder icon and the Dock icon, VoiceOver speech, installation on a second Mac, and macOS 14 or 15.
-- **Known dependency advisory in beta.2:** it ships KaTeX 0.16.47, in the reader and inside Mermaid, which is affected by the low-severity [GHSA-238p-pmpm-9mq7](https://github.com/advisories/GHSA-238p-pmpm-9mq7). Exploiting it needs prior prototype pollution and unsanitized insertion; the reader passes `trust: false` to KaTeX and sanitizes the generated HTML. **Fixed on `main` after beta.2** (KaTeX 0.19.1, Mermaid bundled against it; see the CHANGELOG), pending native verification and the next release.
+- **Known dependency advisory in beta.2:** it ships KaTeX 0.16.47, in the reader and inside Mermaid, which is affected by the low-severity [GHSA-238p-pmpm-9mq7](https://github.com/advisories/GHSA-238p-pmpm-9mq7). Exploiting it needs prior prototype pollution and unsanitized insertion; the reader passes `trust: false` to KaTeX and sanitizes the generated HTML. **Fixed in beta.3** (KaTeX 0.19.1, with Mermaid bundled against it).
 
 ## v0.3.0-beta.2: maintenance and redesign (9c277cf)
 

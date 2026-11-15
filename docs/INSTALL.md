@@ -4,7 +4,7 @@ Obviewer is a read-only reader for Markdown files, Obsidian vaults and DokuWiki 
 
 > Version 0.3.0 has been tested on one Mac running macOS 26 on Apple silicon. Installing on other Macs hasn't been verified yet. Please report what happens.
 >
-> **Older macOS:** from the next release on, Obviewer requires macOS 26. `v0.3.0-beta.1` and `v0.3.0-beta.2` declared macOS 14 as their minimum but were only ever run on macOS 26.
+> **Older macOS:** from `v0.3.0-beta.3` on, Obviewer requires macOS 26. `v0.3.0-beta.1` and `v0.3.0-beta.2` declared macOS 14 as their minimum but were only ever run on macOS 26.
 >
 > **Intel Macs:** from `v0.3.0-beta.2` on, Obviewer is built for Apple silicon only. `v0.3.0-beta.1` is a universal build that remains available, but it has never been run on an Intel Mac.
 
