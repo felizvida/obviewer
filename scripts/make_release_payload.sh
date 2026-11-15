@@ -21,13 +21,18 @@ if [ -z "$TAG" ] || [ -z "$BUILD_NUMBER" ]; then
   echo "Usage: $0 <tag> <build-number>" >&2
   exit 2
 fi
-case "$TAG" in
-  v[0-9]*.[0-9]*.[0-9]*) ;;
-  *) echo "Tag must look like v<x.y.z> or v<x.y.z>-<label>: $TAG" >&2; exit 2 ;;
-esac
-case "$BUILD_NUMBER" in
-  ''|*[!0-9]*) echo "Build number must be a positive integer: $BUILD_NUMBER" >&2; exit 2 ;;
-esac
+# Strict, anchored: v<major>.<minor>.<patch> with an optional dot-separated label of
+# letters and digits. No slashes, dots-only segments or other characters, because the
+# tag becomes part of output paths.
+TAG_PATTERN='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$'
+if ! [[ "$TAG" =~ $TAG_PATTERN ]]; then
+  echo "Tag must look like v<x.y.z> or v<x.y.z>-<label> (letters, digits, dots): $TAG" >&2
+  exit 2
+fi
+if ! [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]{0,8}$ ]]; then
+  echo "Build number must be a positive integer without leading zeros: $BUILD_NUMBER" >&2
+  exit 2
+fi
 
 # Same gates as the release workflow, before anything is built.
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
@@ -66,8 +71,16 @@ node scripts/publication-check.mjs --tracked
 node scripts/publication-check.mjs "$NOTES"
 
 OUT="dist/$TAG"
-rm -rf "$OUT"
-mkdir -p "$OUT"
+if [ -e "$OUT" ] || [ -L "$OUT" ]; then
+  echo "$OUT already exists; move it aside first (this script never overwrites a payload)." >&2
+  exit 1
+fi
+if [ -L dist ] || { [ -e dist ] && [ ! -d dist ]; }; then
+  echo "dist must be a real directory, not a link or a file." >&2
+  exit 1
+fi
+mkdir -p dist
+mkdir "$OUT"
 COMMIT="$(git rev-parse HEAD)"
 
 git archive --format=tar.gz --output="$OUT/obviewer-$TAG-source.tar.gz" "$COMMIT"
