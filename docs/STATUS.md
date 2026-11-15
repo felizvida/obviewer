@@ -44,7 +44,7 @@ Verified on the maintainer's Mac in an isolated checkout of commit `9c277cf` (De
   - **Smallest icons:** Finder's list-view icon was too small to judge; the 16 and 32 px renditions look right when extracted.
   - **Dock icon:** not inspected; the automation could not read the Dock.
   - **VoiceOver:** the accessibility tree was checked (one element per library row with title and reading time), but spoken output was not listened to.
-- **Before anything is published:** the scanner's ordinary PNG path (outside ICNS icons) still ignores bytes after `IEND` and some ancillary chunks, a gap that predates this work; and the maintainers' separate pre-publication guard must itself be confirmed to inspect the exact payload, including the `.icns`. A repository scanner pass is not publication clearance.
+- **Before anything is published:** the maintainers' separate pre-publication guard must itself be confirmed to inspect the exact payload, including the `.icns`. A repository scanner pass is not publication clearance. (The scanner's ordinary-PNG gap was closed afterwards, on the same branch: every PNG now gets the strict profile, and JPEG is refused; see the CHANGELOG.)
 
 ## Known limitations
 
