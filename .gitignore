@@ -12,3 +12,4 @@ DerivedData/
 .tmp-home/
 /Renderer/node_modules
 /Configuration/ObviewerQuickLook-Info.plist
+/dist

@@ -66,10 +66,10 @@ Everything pushed to GitHub, and everything attached to a release, is checked by
 - Anything else fails as unsupported: unknown binaries, SVG, Git LFS pointers, encrypted or ZIP64 archives, and archive members with absolute paths, `..`, links or devices. Size and nesting limits apply.
 - Known limits: compiled code can hold short string literals inside machine instructions, and glyph outlines are shapes. Both are covered by scanning the sources.
 - Gates and their scope:
-  - **CI:** tracked files; commit metadata on pull requests; generated benchmark reports before they're published.
-  - **Release workflow, before building:** the tree, the notes, the release title, the tag name, tagger and message, and the commit messages and identities since the previous release tag.
-  - **Release workflow, before uploading:** every file to be uploaded, with the DMG mounted.
-  - History contents are checked before push by the maintainer's local guard.
+  - **CI:** tracked files; commit metadata on pull requests. CI publishes no generated files (no artifacts, no job summaries).
+  - **Release verification workflow (on a version tag):** the tree, the notes, the release title, the tag name, tagger and message, the commit messages and identities since the previous release tag, and every file a release would contain, with the DMG mounted. It uploads nothing.
+  - **Local release payload** (`scripts/make_release_payload.sh`): the same checks on the exact files to be uploaded.
+  - History contents, and the exact release files, are checked before push or upload by the maintainer's own pre-publication guard. The publication check in this repository does not replace it.
 - To add a rule, generate a fingerprint locally (`node scripts/publication-check.mjs --fingerprint --mode token|stream < terms.txt`) and keep `terms.txt` out of the repository.
 - Tests use random synthetic terms generated at runtime.
 
@@ -81,26 +81,21 @@ Everything pushed to GitHub, and everything attached to a release, is checked by
 - **Renderer:** Node 22: `npm ci`, `npm test`, bundle check.
 - **Swift Package:** `swift build` and `swift test` on GitHub's Apple silicon macOS 15 runner (`macos-15`). Intel Macs aren't supported after `v0.3.0-beta.1`, so there is no Intel job (the beta's tag still ran one). GitHub retired its macOS 14 runners on November 2, 2026, so nothing in CI runs on macOS 14, even though it is the deployment target.
 - **Scaffolding:** entitlement checks, script syntax, XcodeGen, and an unsigned Xcode compile of the app.
-- **Benchmarks:** the smoke profile is enforced by `Configuration/benchmark-smoke-budget.json`; the integration profile reports only.
+- **Benchmarks:** the smoke profile is enforced by `Configuration/benchmark-smoke-budget.json`; the integration profile reports only. Reports stay on the runner.
 
 CI compiles and tests but never launches the app, so UI behavior is covered by the manual verification.
 
 ## Releases
 
-Releases are tag-driven (`.github/workflows/release.yml`):
+Release files are built and checked locally and uploaded by hand, so nothing generated reaches GitHub without the maintainer's pre-publication guard. (Up to `v0.3.0-beta.1`, the tag-driven workflow built and uploaded them itself.)
 
-1. Update `MARKETING_VERSION` in `project.yml` (numeric `x.y.z`).
-2. Write the reviewed notes at `docs/RELEASE_NOTES_<tag>.md`, and update `CHANGELOG.md` and `docs/STATUS.md`.
-3. Declare the channel on the first line of the notes: `<!-- release-channel: prerelease -->` or `<!-- release-channel: stable -->`. A hyphenated tag (for example `v0.3.0-beta.1`) must be a pre-release.
-4. Tag `v<x.y.z>` or `v<x.y.z>-<label>`.
-
-The workflow then:
-
-- Fails unless the tag matches `MARKETING_VERSION`, the notes file exists, and the signing secrets are either complete or entirely absent. **Partial Developer ID secrets fail the run** instead of falling back to ad-hoc.
-- Runs the publication check on the tree, notes, commit and tag. Then come the renderer tests and bundle check, entitlement checks, and `swift build` / `swift test`.
-- Builds the DMG. With all four Developer ID secrets it signs (and notarizes, if the notary secrets are present). With none, it builds an **ad-hoc** DMG and attaches `docs/INSTALL.md`.
-- Runs the publication check on everything in `dist/`, including the mounted DMG, before uploading.
-- Creates the GitHub release from the notes file, on the declared channel. If a release already exists (for example a reviewed draft), it only attaches the files.
+1. Update `MARKETING_VERSION` in `project.yml` (numeric `x.y.z`) if needed.
+2. Write the reviewed notes at `docs/RELEASE_NOTES_<tag>.md`, and update `CHANGELOG.md` and `docs/STATUS.md`. Never edit a notes file after its tag exists.
+3. Declare the channel on the first line of the notes: `<!-- release-channel: prerelease -->` or `<!-- release-channel: stable -->`. A hyphenated tag (for example `v0.3.0-beta.2`) must be a pre-release.
+4. In a clean checkout of the release commit, run `scripts/make_release_payload.sh <tag> <build-number>`. It applies the same gates as the workflow (version, notes, channel, a clean tree, the publication check on the tree and notes), builds the source archives and the ad-hoc DMG (`make package-adhoc` with the release version and build number), copies the install guide, writes the SHA-256 files into `dist/<tag>/`, scans every file with the DMG mounted, and prints the upload command. It uploads nothing.
+5. Run the maintainer's pre-publication guard on the same files, the notes, the tag text and the history being pushed.
+6. Push the commit and the tag. The **Release verification** workflow (`.github/workflows/release.yml`) then repeats every gate on GitHub's runner and builds a DMG, but uploads nothing; with all four Developer ID secrets it signs (and notarizes, if the notary secrets are present), and partial secrets fail the run.
+7. Upload the checked files with the printed `gh release create … --verify-tag` command.
 
 Locally, `make package-adhoc` builds the same ad-hoc DMG: `scripts/build_app.sh`, then `scripts/package_release_dmg.sh`. Packaging verifies the app three times: in the staging folder, on the writable image volume before sealing, and inside the finished, read-only-mounted DMG. Each time it checks:
 

@@ -1,4 +1,9 @@
-name: Release
+# Release verification. A version tag runs every release gate and builds the DMG, but
+# uploads nothing: no workflow artifacts, no GitHub release. Release files are built
+# locally with scripts/make_release_payload.sh, checked by the maintainer's
+# pre-publication guard as well as the publication check, and uploaded by hand
+# (see docs/DEVELOPMENT.md). Generated files never reach GitHub unguarded.
+name: Release verification
 
 on:
   push:
@@ -10,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   release:
@@ -228,33 +233,14 @@ jobs:
           cp docs/INSTALL.md "dist/INSTALL-${GITHUB_REF_NAME}.md"
           shasum -a 256 build/Obviewer-${GITHUB_REF_NAME}-macOS-adhoc.dmg > "dist/obviewer-${GITHUB_REF_NAME}-dmg-sha256.txt"
 
-      # Publication policy, part 2: every file that will be uploaded, including the
-      # DMG (mounted read-only and scanned file by file), source archives, checksums
-      # and the install guide copy.
+      # Publication policy, part 2: every file the release would contain, including the
+      # DMG (mounted read-only and scanned file by file), source archives, checksums and
+      # the install guide copy. Nothing is uploaded from here.
       - name: Publication policy (release payload)
         run: node scripts/publication-check.mjs dist "$RELEASE_NOTES"
 
-      - name: Upload release artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: obviewer-${{ github.ref_name }}-release
-          path: dist/*
-
-      - name: Publish GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Verification only
         run: |
-          set -euo pipefail
-          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            # A release created by hand (e.g. a reviewed draft) keeps its notes; just attach artifacts.
-            gh release upload "${GITHUB_REF_NAME}" dist/* --clobber
-          else
-            # bash 3.2 on macOS runners: guard empty-array expansion under set -u.
-            FLAGS=()
-            if [ "$IS_PRERELEASE" = "true" ]; then FLAGS+=(--prerelease); fi
-            gh release create "${GITHUB_REF_NAME}" dist/* \
-              --notes-file "$RELEASE_NOTES" \
-              --title "Obviewer ${GITHUB_REF_NAME}" \
-              --verify-tag \
-              ${FLAGS[@]+"${FLAGS[@]}"}
-          fi
+          echo "All release gates passed for ${GITHUB_REF_NAME}. This workflow uploads nothing."
+          echo "Build the release files locally with scripts/make_release_payload.sh and upload them by hand"
+          echo "after the maintainer's pre-publication guard has passed them (docs/DEVELOPMENT.md)."

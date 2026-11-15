@@ -91,12 +91,23 @@ final class ReleaseHardeningTests: XCTestCase {
         XCTAssertTrue(ci.contains("publication-check.mjs --tracked"))
         XCTAssertTrue(release.contains("publication-check.mjs --tracked"))
         XCTAssertTrue(release.contains("publication-check.mjs dist"))
-        // The payload scan must run before anything is uploaded or published.
-        let scan = try XCTUnwrap(release.range(of: "publication-check.mjs dist"))
-        let upload = try XCTUnwrap(release.range(of: "actions/upload-artifact"))
-        let publish = try XCTUnwrap(release.range(of: "gh release create"))
-        XCTAssertLessThan(scan.lowerBound, upload.lowerBound)
-        XCTAssertLessThan(scan.lowerBound, publish.lowerBound)
+        // Hosted workflows publish nothing generated: release files are built locally,
+        // passed by the maintainer's pre-publication guard, and uploaded by hand.
+        for workflow in [ci, release] {
+            XCTAssertFalse(workflow.contains("actions/upload-artifact"))
+            XCTAssertFalse(workflow.contains("GITHUB_STEP_SUMMARY"))
+            XCTAssertFalse(workflow.contains("gh release create"))
+            XCTAssertFalse(workflow.contains("gh release upload"))
+            XCTAssertFalse(workflow.contains("contents: write"))
+        }
+        // The local payload script checks every file before it prints the upload command,
+        // and never uploads by itself.
+        let payload = try String(contentsOf: repositoryRootURL.appendingPathComponent("scripts/make_release_payload.sh"), encoding: .utf8)
+        let scan = try XCTUnwrap(payload.range(of: "node scripts/publication-check.mjs \"$OUT\""))
+        let command = try XCTUnwrap(payload.range(of: "echo \"  gh release create"))
+        XCTAssertLessThan(scan.lowerBound, command.lowerBound)
+        let activeLines = payload.split(separator: "\n").filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("#") == false }
+        XCTAssertFalse(activeLines.contains { $0.contains("gh release") && $0.contains("echo") == false })
     }
 
     func testReleaseValidationAlsoChecksTheQuickLookExtension() throws {

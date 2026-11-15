@@ -168,10 +168,8 @@ jobs:
         include:
           - profile: smoke
             budget: Configuration/benchmark-smoke-budget.json
-            artifact: benchmark-smoke-report
           - profile: integration
             budget: ""
-            artifact: benchmark-integration-report
     permissions:
       contents: read
 
@@ -189,17 +187,6 @@ jobs:
           BUDGET='${{ matrix.budget }}' \
           make benchmark-vault
 
-      # Generated reports are published (job summary, artifact), so they pass the policy first.
-      - name: Publication policy (benchmark reports)
-        run: node scripts/publication-check.mjs build/reports
-
-      - name: Publish benchmark job summary
-        run: cat build/reports/benchmark-${{ matrix.profile }}.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload benchmark artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.artifact }}
-          path: |
-            build/reports/benchmark-${{ matrix.profile }}.json
-            build/reports/benchmark-${{ matrix.profile }}.md
+      # Reports stay on the runner: no job summary and no artifact, so nothing generated
+      # is published without the maintainer's pre-publication guard. The smoke budget is
+      # still enforced by the run above.
