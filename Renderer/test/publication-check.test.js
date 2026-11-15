@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { brotliCompressSync, deflateSync, gzipSync, inflateSync } from 'node:zlib';
 import {
-  DEFAULT_POLICY, Scanner, classify, compilePolicy, fingerprint, flattenedPNG, fontText, icnsRenditions, imageMetadataText,
+  DEFAULT_POLICY, Scanner, classify, compilePolicy, decodePNG, fingerprint, flattenedPNG, fontText, icnsRenditions, imageMetadataText,
   strictRGBAPNG,
   loadPolicy, machOText, scanText, tarEntries, wordParts, zipEntries,
 } from '../../scripts/publication-check.mjs';
@@ -462,6 +462,111 @@ test('ICNS: one zlib stream split across several IDAT chunks is fine', () => {
 
 test('text and tar archives that merely start with "icns" are not taken for icons', () => {
   assert.equal(classify(Buffer.from('icns are small pictures\n'), 'notes.txt'), 'text');
+});
+
+// ---------------------------------------------------------------------------
+// Ordinary PNGs: strict profile, every byte is structure, text or pixels
+
+/** Builds a PNG from already-filtered scanlines (each row starts with its filter byte). */
+function plainPNG({ width, height, color = 2, depth = 8, rows, before = [], between = [], after = [], trailing = null, idat = null }) {
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = depth;
+  ihdr[9] = color;
+  const z = deflateSync(rows);
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr), ...before, ...(idat ? idat(z) : [pngChunk('IDAT', z)]), ...between, ...after,
+    pngChunk('IEND', Buffer.alloc(0)), ...(trailing ? [trailing] : []),
+  ]);
+}
+
+const rgbRows = (width, height, fill = 200) => {
+  const rows = Buffer.alloc((width * 3 + 1) * height, fill);
+  for (let y = 0; y < height; y += 1) rows[y * (width * 3 + 1)] = 0;
+  return rows;
+};
+
+test('PNG: opaque images are decoded and OCRed once; metadata text is still read', () => {
+  const ocrCalls = [];
+  const png = plainPNG({
+    width: 4, height: 2, rows: rgbRows(4, 2),
+    before: [pngChunk('gAMA', Buffer.alloc(4)), pngChunk('pHYs', Buffer.alloc(9))],
+    after: [pngChunk('tEXt', Buffer.from(`Author\0${SHORT.toUpperCase()}`, 'latin1'))],
+  });
+  const scanner = scanBuffer(png, 'shot.png', { ocr: (file) => { ocrCalls.push(file); return cleanOCR(); } });
+  assert.equal(ocrCalls.length, 1);
+  assert.deepEqual(scanner.findings.map((f) => [f.where, f.rule]), [['shot.png (metadata)', 'A']]);
+  assert.equal(scanner.incomplete.length, 0);
+  const drawn = scanBuffer(plainPNG({ width: 4, height: 2, rows: rgbRows(4, 2) }), 'shot.png', { ocr: () => `X ${FIVE}` });
+  assert.deepEqual(drawn.findings.map((f) => f.where), ['shot.png (image text)']);
+});
+
+test('PNG: images with transparency are OCRed on white, on black and ignoring transparency', () => {
+  const rows = Buffer.alloc((2 * 4 + 1) * 2); // fully transparent 2x2 RGBA
+  const labels = [];
+  scanBuffer(plainPNG({ width: 2, height: 2, color: 6, rows }), 'logo.png', { ocr: () => `X ${FIVE}` })
+    .findings.forEach((f) => labels.push(f.where));
+  assert.deepEqual(labels, ['logo.png (image text on white)', 'logo.png (image text on black)', 'logo.png (image text ignoring transparency)']);
+});
+
+test('PNG: palette, grey and 16-bit images decode to the right pixels', () => {
+  // Palette, 2-bit: indices 0,1,2,3 with tRNS making index 1 half transparent.
+  const palette = Buffer.from([255, 0, 0, 0, 255, 0, 0, 0, 255, 9, 9, 9]);
+  const pal = decodePNG(plainPNG({
+    width: 4, height: 1, color: 3, depth: 2, rows: Buffer.from([0, 0b00011011]),
+    before: [pngChunk('PLTE', palette), pngChunk('tRNS', Buffer.from([255, 128]))],
+  }));
+  assert.deepEqual([...pal.pixels], [255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 255, 9, 9, 9, 255]);
+  // Grey, 1-bit, with tRNS on value 0.
+  const grey = decodePNG(plainPNG({
+    width: 2, height: 1, color: 0, depth: 1, rows: Buffer.from([0, 0b10000000]),
+    before: [pngChunk('tRNS', Buffer.from([0, 0]))],
+  }));
+  assert.deepEqual([...grey.pixels], [255, 255, 255, 255, 0, 0, 0, 0]);
+  // 16-bit RGB with the Sub filter on the second pixel.
+  const deep = decodePNG(plainPNG({
+    width: 2, height: 1, color: 2, depth: 16,
+    rows: Buffer.from([1, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0x01, 0, 0x01, 0, 0x01, 0]),
+  }));
+  assert.deepEqual([...deep.pixels], [0x12, 0x56, 0x9a, 255, 0x13, 0x57, 0x9b, 255]);
+});
+
+test('PNG: anything not completely inspectable fails closed', () => {
+  const hidden = Buffer.from(`hidden ${SHORT}`);
+  const base = { width: 4, height: 2, rows: rgbRows(4, 2) };
+  const cases = {
+    'data after IEND': plainPNG({ ...base, trailing: hidden }),
+    'bytes after the zlib stream': plainPNG({ ...base, idat: (z) => [pngChunk('IDAT', Buffer.concat([z, hidden]))] }),
+    'a second zlib stream': plainPNG({ ...base, idat: (z) => [pngChunk('IDAT', Buffer.concat([z, deflateSync(hidden)]))] }),
+    'tail in an extra IDAT': plainPNG({ ...base, idat: (z) => [pngChunk('IDAT', z), pngChunk('IDAT', hidden)] }),
+    'IDAT split by another chunk': plainPNG({ ...base, idat: (z) => [pngChunk('IDAT', z.subarray(0, 4)), pngChunk('tEXt', Buffer.from('a\0b')), pngChunk('IDAT', z.subarray(4))] }),
+    'private chunk': plainPNG({ ...base, before: [pngChunk('prVt', hidden)] }),
+    'colour profile': plainPNG({ ...base, before: [pngChunk('iCCP', Buffer.concat([Buffer.from('ICC\0\0'), deflateSync(hidden)]))] }),
+    'Exif (may carry thumbnails)': plainPNG({ ...base, before: [pngChunk('eXIf', hidden)] }),
+    'suggested palette': plainPNG({ ...base, before: [pngChunk('sPLT', Buffer.concat([hidden, Buffer.from([0, 8])]))] }),
+    'APNG frames': plainPNG({ ...base, before: [pngChunk('acTL', Buffer.alloc(8))], after: [pngChunk('fdAT', Buffer.alloc(16))] }),
+    'numeric chunk with room for text': plainPNG({ ...base, before: [pngChunk('gAMA', Buffer.concat([Buffer.alloc(4), hidden]))] }),
+    'zTXt with bytes after its stream': plainPNG({ ...base, after: [pngChunk('zTXt', Buffer.concat([Buffer.from('Comment\0\0'), deflateSync(Buffer.from('ok')), hidden]))] }),
+    'palette image without PLTE': plainPNG({ width: 2, height: 1, color: 3, depth: 8, rows: Buffer.from([0, 0, 0]) }),
+    'interlaced': (() => { const p = plainPNG(base); p[28] = 1; const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(p.subarray(12, 29))); crc.copy(p, 29); return p; })(),
+    'bad CRC': (() => { const p = plainPNG(base); p[30] ^= 0xff; return p; })(),
+  };
+  for (const [name, png] of Object.entries(cases)) {
+    const scanner = scanBuffer(png, 'shot.png', { ocr: cleanOCR });
+    assert.equal(scanner.exitCode, 2, name);
+    assert.ok(scanner.incomplete.some((i) => i.where === 'shot.png'), name);
+  }
+  // Compressed iTXt and zTXt that decompress cleanly are fine.
+  const ok = plainPNG({
+    ...base,
+    after: [
+      pngChunk('zTXt', Buffer.concat([Buffer.from('Comment\0\0'), deflateSync(Buffer.from('fine'))])),
+      pngChunk('iTXt', Buffer.concat([Buffer.from('Title\0\x01\0en\0\0'), deflateSync(Buffer.from('also fine'))])),
+    ],
+  });
+  assert.equal(scanBuffer(ok, 'shot.png', { ocr: cleanOCR }).exitCode, 0);
 });
 
 test('compiled asset catalogs (Assets.car) stay unsupported', () => {

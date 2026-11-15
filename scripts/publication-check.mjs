@@ -15,7 +15,14 @@
 // Inspectors:
 //   text           UTF-8 text (source, docs, JSON, plists in XML). SVG is refused:
 //                  text drawn as paths can't be inspected.
-//   PNG / JPEG     OCR (tesseract) of the pixels + structured metadata chunks
+//   PNG            strict profile: IHDR first, PLTE/tRNS where they belong, IDAT back
+//                  to back holding one zlib stream consumed to its last byte, IEND last
+//                  with nothing after it, valid CRCs, not interlaced, and only chunks
+//                  that are text (tEXt/zTXt/iTXt, read in full) or fixed-size numbers.
+//                  Colour profiles, Exif, sPLT, APNG and private chunks are refused.
+//                  The pixels are decoded and OCRed (three ways when transparent).
+//   JPEG           OCR (tesseract) of the pixels + APPn/COM segment strings. Exif
+//                  thumbnails and data after the image are not inspected separately.
 //   ICNS           Apple icons that hold only PNG renditions, one per known slot,
 //                  each the slot's exact size and in a strict profile (8-bit RGBA,
 //                  not interlaced, only IHDR/IDAT/IEND, valid CRCs, nothing after
@@ -329,17 +336,63 @@ function crc32(buffer) {
   return (c ^ 0xffffffff) >>> 0;
 }
 
+// PNG chunk policy. Critical chunks are structural; the ancillary chunks allowed in
+// ordinary images are either text read in full by imageMetadataText (tEXt, zTXt, iTXt,
+// with compressed text required to decompress to its last byte) or fixed-size numeric
+// fields with no room for text. Everything else is refused: colour profiles (iCCP),
+// Exif (eXIf, which can carry thumbnail images), suggested palettes (sPLT), APNG frames
+// and private chunks. Icon renditions allow only IHDR/IDAT/IEND.
+const PNG_NUMERIC_CHUNKS = new Map([
+  ['gAMA', (n) => n === 4], ['cHRM', (n) => n === 32], ['sRGB', (n) => n === 1], ['pHYs', (n) => n === 9],
+  ['tIME', (n) => n === 7], ['sBIT', (n) => n >= 1 && n <= 4], ['bKGD', (n) => n === 1 || n === 2 || n === 6],
+]);
+const PNG_TEXT_CHUNKS = new Set(['tEXt', 'zTXt', 'iTXt']);
+
+/** Inflates zlib data, refusing anything after the end of the stream. */
+function inflateWhole(data, what) {
+  const { buffer, engine } = inflateSync(data, { info: true });
+  if (engine.bytesWritten !== data.length) throw new Unsupported(`${what} has bytes after its compressed stream`);
+  return buffer;
+}
+
+/** Checks a PNG text chunk's layout so imageMetadataText reads all of it. */
+function checkPNGTextChunk(type, data) {
+  const nul = data.indexOf(0);
+  if (nul < 1 || nul > 79) throw new Unsupported(`PNG ${type} keyword is malformed`);
+  if (type === 'zTXt') {
+    if (data[nul + 1] !== 0) throw new Unsupported('PNG zTXt uses an unknown compression method');
+    inflateWhole(data.subarray(nul + 2), 'PNG zTXt');
+  } else if (type === 'iTXt') {
+    const flag = data[nul + 1];
+    const method = data[nul + 2];
+    const languageEnd = data.indexOf(0, nul + 3);
+    const translatedEnd = languageEnd < 0 ? -1 : data.indexOf(0, languageEnd + 1);
+    if ((flag !== 0 && flag !== 1) || (flag === 1 && method !== 0) || translatedEnd < 0) {
+      throw new Unsupported('PNG iTXt is malformed');
+    }
+    if (flag === 1) inflateWhole(data.subarray(translatedEnd + 1), 'PNG iTXt');
+  }
+}
+const PNG_MAX_PIXELS = 40_000_000;
+
 /**
- * Decodes a PNG held to the strict ICNS-rendition profile: IHDR (8-bit RGBA, not
- * interlaced) first and once, IDAT chunks back to back, IEND last with nothing after
- * it, every CRC valid, no other chunk types. Returns { width, height, pixels } (RGBA).
+ * Decodes a PNG under a strict, fail-closed profile so that every byte is either
+ * structure, inspected metadata text, or pixels: IHDR first and once; PLTE (palette
+ * images only) before the image data; IDAT chunks back to back holding exactly one
+ * zlib stream consumed to its last byte; IEND last with nothing after it; every CRC
+ * valid; only allowed chunk types; not interlaced. `profile` is 'image' (ordinary
+ * PNGs) or 'icon' (ICNS renditions: 8-bit RGBA, IHDR/IDAT/IEND only).
+ * Returns { width, height, pixels } with 8-bit RGBA pixels.
  */
-export function strictRGBAPNG(png) {
+export function decodePNG(png, profile = 'image') {
   if (png.length < 8 || png.readUInt32BE(0) !== 0x89504e47 || png.readUInt32BE(4) !== 0x0d0a1a0a) {
     throw new Unsupported('not a PNG');
   }
+  const icon = profile === 'icon';
   let offset = 8;
   let header = null;
+  let palette = null;
+  let transparency = null;
   const idat = [];
   let sawIEND = false;
   let previous = '';
@@ -349,9 +402,14 @@ export function strictRGBAPNG(png) {
     const length = png.readUInt32BE(offset);
     if (offset + 12 + length > png.length) throw new Unsupported('PNG chunk runs past the end');
     const type = png.toString('latin1', offset + 4, offset + 8);
+    const label = JSON.stringify(type);
     const data = png.subarray(offset + 8, offset + 8 + length);
     if (crc32(png.subarray(offset + 4, offset + 8 + length)) !== png.readUInt32BE(offset + 8 + length)) {
-      throw new Unsupported(`PNG chunk ${JSON.stringify(type)} has a bad CRC`);
+      throw new Unsupported(`PNG chunk ${label} has a bad CRC`);
+    }
+    if (type !== 'IHDR' && !header) throw new Unsupported('PNG IHDR must come first');
+    if (idat.length > 0 && previous === 'IDAT' && type !== 'IDAT' && type !== 'IEND') {
+      if (!PNG_TEXT_CHUNKS.has(type) && !PNG_NUMERIC_CHUNKS.has(type)) throw new Unsupported(`PNG chunk ${label} is not allowed`);
     }
     if (type === 'IHDR') {
       if (header || offset !== 8 || length !== 13) throw new Unsupported('PNG IHDR must come first, once');
@@ -359,28 +417,52 @@ export function strictRGBAPNG(png) {
         width: data.readUInt32BE(0), height: data.readUInt32BE(4),
         depth: data[8], color: data[9], compression: data[10], filter: data[11], interlace: data[12],
       };
-      if (header.depth !== 8 || header.color !== 6 || header.compression !== 0 || header.filter !== 0 || header.interlace !== 0) {
-        throw new Unsupported('icon PNG must be 8-bit RGBA, not interlaced');
+      const depths = { 0: [1, 2, 4, 8, 16], 2: [8, 16], 3: [1, 2, 4, 8], 4: [8, 16], 6: [8, 16] }[header.color];
+      if (!depths || !depths.includes(header.depth) || header.compression !== 0 || header.filter !== 0) {
+        throw new Unsupported('PNG header is invalid');
       }
-      if (header.width === 0 || header.height === 0 || header.width > 4096 || header.height > 4096) {
-        throw new Unsupported('icon PNG has unsupported dimensions');
+      if (header.interlace !== 0) throw new Unsupported('interlaced PNGs are not supported; save the image without interlacing');
+      if (icon && (header.depth !== 8 || header.color !== 6)) throw new Unsupported('icon PNG must be 8-bit RGBA, not interlaced');
+      if (header.width === 0 || header.height === 0 || header.width * header.height > PNG_MAX_PIXELS) {
+        throw new Unsupported('PNG dimensions are unsupported');
       }
     } else if (type === 'IDAT') {
-      if (!header || (idat.length > 0 && previous !== 'IDAT')) throw new Unsupported('PNG IDAT chunks must follow IHDR, back to back');
+      if (idat.length > 0 && previous !== 'IDAT') throw new Unsupported('PNG IDAT chunks must be back to back');
+      if (header.color === 3 && !palette) throw new Unsupported('palette PNG has no PLTE before its image data');
       idat.push(data);
     } else if (type === 'IEND') {
       if (idat.length === 0 || length !== 0) throw new Unsupported('PNG IEND must close the image data');
       sawIEND = true;
+    } else if (icon) {
+      throw new Unsupported(`icon PNG chunk ${label} is not allowed`);
+    } else if (type === 'PLTE') {
+      if (palette || idat.length > 0 || length === 0 || length % 3 !== 0 || length > 768 || header.color === 0 || header.color === 4) {
+        throw new Unsupported('PNG PLTE is misplaced or malformed');
+      }
+      palette = data;
+    } else if (type === 'tRNS') {
+      const ok = idat.length === 0 && !transparency && (
+        (header.color === 0 && length === 2) || (header.color === 2 && length === 6)
+        || (header.color === 3 && palette && length <= palette.length / 3));
+      if (!ok) throw new Unsupported('PNG tRNS is misplaced or malformed');
+      transparency = data;
+    } else if (PNG_NUMERIC_CHUNKS.has(type)) {
+      if (!PNG_NUMERIC_CHUNKS.get(type)(length)) throw new Unsupported(`PNG chunk ${label} has an unexpected size`);
+    } else if (PNG_TEXT_CHUNKS.has(type)) {
+      checkPNGTextChunk(type, data);
     } else {
-      throw new Unsupported(`icon PNG chunk ${JSON.stringify(type)} is not allowed`);
+      throw new Unsupported(`PNG chunk ${label} cannot be inspected`);
     }
     previous = type;
     offset += 12 + length;
   }
   if (!sawIEND) throw new Unsupported('PNG has no IEND');
 
-  const { width, height } = header;
-  const stride = width * 4;
+  const { width, height, depth, color } = header;
+  const channels = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }[color];
+  const bitsPerPixel = channels * depth;
+  const bpp = Math.max(1, bitsPerPixel >> 3);
+  const stride = Math.ceil((width * bitsPerPixel) / 8);
   // Exactly one zlib stream, consumed to its last byte: anything after the stream's
   // end (in the same IDAT or a later one, or a second stream) would never be decoded.
   const compressed = Buffer.concat(idat);
@@ -389,15 +471,16 @@ export function strictRGBAPNG(png) {
     throw new Unsupported('PNG image data has bytes after the end of its compressed stream');
   }
   if (raw.length !== (stride + 1) * height) throw new Unsupported('PNG image data has the wrong size');
-  const pixels = Buffer.alloc(stride * height);
+
+  const lines = Buffer.alloc(stride * height);
   for (let y = 0; y < height; y += 1) {
     const filter = raw[y * (stride + 1)];
     const line = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
     const out = y * stride;
     for (let x = 0; x < stride; x += 1) {
-      const a = x >= 4 ? pixels[out + x - 4] : 0;
-      const b = y > 0 ? pixels[out - stride + x] : 0;
-      const c = x >= 4 && y > 0 ? pixels[out - stride + x - 4] : 0;
+      const a = x >= bpp ? lines[out + x - bpp] : 0;
+      const b = y > 0 ? lines[out - stride + x] : 0;
+      const c = x >= bpp && y > 0 ? lines[out - stride + x - bpp] : 0;
       let predictor;
       switch (filter) {
         case 0: predictor = 0; break;
@@ -412,10 +495,58 @@ export function strictRGBAPNG(png) {
         }
         default: throw new Unsupported('PNG uses an unknown row filter');
       }
-      pixels[out + x] = (line[x] + predictor) & 0xff;
+      lines[out + x] = (line[x] + predictor) & 0xff;
+    }
+  }
+
+  // Expand to 8-bit RGBA.
+  const pixels = Buffer.alloc(width * height * 4);
+  const max = (1 << Math.min(depth, 8)) - 1;
+  const sample = (row, index) => {
+    // index counts samples in the row; returns the sample's raw value at its depth.
+    if (depth === 8) return lines[row + index];
+    if (depth === 16) return lines[row + index * 2] * 256 + lines[row + index * 2 + 1];
+    const bit = index * depth;
+    return (lines[row + (bit >> 3)] >> (8 - depth - (bit & 7))) & ((1 << depth) - 1);
+  };
+  const to8 = (value) => (depth === 16 ? value >> 8 : Math.round((value * 255) / max));
+  const transparentGray = transparency && color === 0 ? transparency.readUInt16BE(0) : null;
+  const transparentRGB = transparency && color === 2
+    ? [transparency.readUInt16BE(0), transparency.readUInt16BE(2), transparency.readUInt16BE(4)] : null;
+  for (let y = 0; y < height; y += 1) {
+    const row = y * stride;
+    for (let x = 0; x < width; x += 1) {
+      const o = (y * width + x) * 4;
+      let r; let g; let b; let alpha = 255;
+      if (color === 0) {
+        const v = sample(row, x);
+        r = g = b = to8(v);
+        if (transparentGray !== null && v === transparentGray) alpha = 0;
+      } else if (color === 2) {
+        const rv = sample(row, x * 3); const gv = sample(row, x * 3 + 1); const bv = sample(row, x * 3 + 2);
+        r = to8(rv); g = to8(gv); b = to8(bv);
+        if (transparentRGB && rv === transparentRGB[0] && gv === transparentRGB[1] && bv === transparentRGB[2]) alpha = 0;
+      } else if (color === 3) {
+        const index = sample(row, x);
+        if (index * 3 + 2 >= palette.length) throw new Unsupported('PNG palette index out of range');
+        r = palette[index * 3]; g = palette[index * 3 + 1]; b = palette[index * 3 + 2];
+        if (transparency && index < transparency.length) alpha = transparency[index];
+      } else if (color === 4) {
+        r = g = b = to8(sample(row, x * 2));
+        alpha = to8(sample(row, x * 2 + 1));
+      } else {
+        r = to8(sample(row, x * 4)); g = to8(sample(row, x * 4 + 1)); b = to8(sample(row, x * 4 + 2));
+        alpha = to8(sample(row, x * 4 + 3));
+      }
+      pixels[o] = r; pixels[o + 1] = g; pixels[o + 2] = b; pixels[o + 3] = alpha;
     }
   }
   return { width, height, pixels };
+}
+
+/** ICNS renditions: the strict PNG profile limited to 8-bit RGBA and IHDR/IDAT/IEND. */
+export function strictRGBAPNG(png) {
+  return decodePNG(png, 'icon');
 }
 
 /**
@@ -952,9 +1083,13 @@ export class Scanner {
           }
           return;
         case 'png':
+          // Strict decode first: every byte must be structure, metadata text or pixels.
+          this.scanPixels(decodePNG(buffer, 'image'), label);
+          this.scanString(`${label} (metadata)`, imageMetadataText(buffer));
+          return;
         case 'jpeg':
           this.scanString(`${label} (metadata)`, imageMetadataText(buffer));
-          this.withFile(buffer, diskPath, kind === 'png' ? '.png' : '.jpg', (file) => this.scanString(`${label} (image text)`, this.tools.ocr(file)));
+          this.withFile(buffer, diskPath, '.jpg', (file) => this.scanString(`${label} (image text)`, this.tools.ocr(file)));
           return;
         case 'icns':
           this.scanICNS(buffer, label);
@@ -996,21 +1131,30 @@ export class Scanner {
     });
   }
 
-  /** Every ICNS rendition is decoded (strict profile) and OCRed three ways. */
+  /** Every ICNS rendition is decoded (strict icon profile) and OCRed like any image. */
   scanICNS(buffer, label) {
     for (const { type, data } of icnsRenditions(buffer)) {
       const where = `${label}#${type}`;
       this.fileCount += 1;
-      this.guard(where, () => {
-        const image = strictRGBAPNG(data);
-        // On white and on black (light or dark text over transparency), and with
-        // transparency ignored (colour hidden under fully transparent pixels).
-        const passes = [['on white', 255, false], ['on black', 0, false], ['ignoring transparency', 255, true]];
-        for (const [name, background, ignoreAlpha] of passes) {
-          this.withFile(flattenedPNG(image, background, 512, ignoreAlpha), null, '.png', (file) => {
-            this.scanString(`${where} (image text ${name})`, this.tools.ocr(file));
-          });
-        }
+      this.guard(where, () => this.scanPixels(strictRGBAPNG(data), where, { alwaysTransparent: true }));
+    }
+  }
+
+  /**
+   * OCRs decoded pixels. Opaque images are read once. Images with any transparency
+   * are read on white, on black (light text over transparency shows on dark
+   * backgrounds), and with transparency ignored (colour under transparent pixels).
+   * Small images are enlarged first.
+   */
+  scanPixels(image, where, { alwaysTransparent = false } = {}) {
+    let transparent = alwaysTransparent;
+    for (let i = 3; !transparent && i < image.pixels.length; i += 4) transparent = image.pixels[i] !== 255;
+    const passes = transparent
+      ? [['on white', 255, false], ['on black', 0, false], ['ignoring transparency', 255, true]]
+      : [['', 255, false]];
+    for (const [name, background, ignoreAlpha] of passes) {
+      this.withFile(flattenedPNG(image, background, 512, ignoreAlpha), null, '.png', (file) => {
+        this.scanString(`${where} (image text${name ? ` ${name}` : ''})`, this.tools.ocr(file));
       });
     }
   }
