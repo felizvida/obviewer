@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (pre-release `v0.3.0-beta.2`, November 2026)
+
+A quieter design, an app icon, fewer controls, and stricter publication checks. Notes: [`docs/RELEASE_NOTES_v0.3.0-beta.2.md`](docs/RELEASE_NOTES_v0.3.0-beta.2.md).
 
 ### Changed
 
@@ -11,6 +13,7 @@
 - **A new look: ink on paper, with a hint of Louisiana.** The reader is set in New York with purple ink links (after LSU purple), an old-gold wash for highlights, Mardi Gras green for tip callouts, and a gold fleur-de-lis closing each note. Metadata is one italic line under the title; backlinks are "Mentioned in". The library uses a plain macOS sidebar (no cards, pills or gradients), a title-page welcome screen, and a quiet loading state.
 - **Stricter publication check for images.** Every PNG must be a plain PNG: one fully consumed compressed stream, nothing after the end, valid checksums, no interlacing, palettes fully used, text chunks read in full, and no other chunks (colour profiles, gamma, Exif, timestamps and so on are refused, since they hold bytes no one reads or change how pixels look). Pixels are read for text as luminance and per colour channel, and on white and black when transparent. JPEG is refused; publish PNGs. The README has a new screenshot of the redesign (`docs/images/reader.png`, a plain PNG).
 - **An app icon.** The Dock showed a blank placeholder because the app had no icon. It is now a page with a purple silk bookmark and a gold fleur-de-lis, drawn by `scripts/generate_app_icon.py` into `App/AppIcon.icns` (PNG renditions only, no asset catalog, so the publication check can inspect the exact shipped file).
+- **Release process.** GitHub workflows no longer upload anything: the tag-driven workflow only verifies, and CI publishes no artifacts or job summaries. `scripts/make_release_payload.sh` builds and checks the exact release files locally; the maintainer's own pre-publication guard checks them before a manual upload.
 - VoiceOver reads each library row as one item; the Live pulse and loading spinner respect Reduce Motion. The Settings text-size slider now moves in the same 10% steps as Bigger/Smaller Text.
 
 ### Removed

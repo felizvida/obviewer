@@ -1,6 +1,6 @@
 # Status
 
-Last updated: November 14, 2026. Version: **0.3.0**, first published as the pre-release `v0.3.0-beta.1`. Unreleased changes since then (see the CHANGELOG) were verified at commit `9c277cf` (app) and `a4cba2a` (publication check); see [Unreleased: maintenance and redesign](#unreleased-maintenance-and-redesign-9c277cf).
+Last updated: November 15, 2026. Version: **0.3.0**, published as the pre-releases `v0.3.0-beta.1` and `v0.3.0-beta.2`. The beta.2 changes (see the CHANGELOG) were verified at commit `9c277cf` (app) and `a4cba2a` (publication check); see [v0.3.0-beta.2](#v030-beta2-maintenance-and-redesign-9c277cf). The beta.2 release files are built from the tagged commit and scanned before upload.
 
 This page records what works and has been checked, what is known to be limited, and what hasn't been verified. The other documents summarize; this one is the ledger.
 
@@ -32,7 +32,7 @@ This page records what works and has been checked, what is known to be limited, 
 - **Indexing benchmark** (`make benchmark-vault PROFILE=integration`, the maintainer's Mac): a synthetic vault of 201 notes and 17 attachments, with 327 links. Results: cold load 781 ms, warm reload 27 ms, search 1.8 ms, global graph 1.2 ms, selective reload 36 ms. This measures the Swift indexer, not WebKit rendering.
 - **Release build and DMG:** the Release app builds and signs ad-hoc. `v0.3.0-beta.1` is universal (arm64 + x86_64). At its tag, the Swift package tests also passed on GitHub's Intel macOS 15 runner, but the app has never been run on an Intel Mac. Later versions will be built for Apple silicon only. For `v0.3.0-beta.1` (build 3), a clean `make package-adhoc` passed every packaging gate on the staged app, the writable image volume and the mounted final DMG. Separately from those scripts, the mounted app and Quick Look extension were checked: both pass strict signature verification, have the hardened runtime and exactly the allowed entitlements, and carry no Finder info or resource forks. The image root holds only the expected entries. The app, launched from inside the mounted DMG, rendered a sample note with a callout, tasks, a Mermaid diagram and math. Quick Look was checked with the Release extension confirmed as the running provider (build 2, same source). The publication check of the mounted DMG and notes found 0 prohibited references and 0 unreadable files. Details in [`VERIFICATION.md`](./VERIFICATION.md).
 
-## Unreleased: maintenance and redesign (9c277cf)
+## v0.3.0-beta.2: maintenance and redesign (9c277cf)
 
 Verified on the maintainer's Mac in an isolated checkout of commit `9c277cf` (Debug build 7 and a Release package, build 7):
 
@@ -44,7 +44,7 @@ Verified on the maintainer's Mac in an isolated checkout of commit `9c277cf` (De
   - **Smallest icons:** Finder's list-view icon was too small to judge; the 16 and 32 px renditions look right when extracted.
   - **Dock icon:** not inspected; the automation could not read the Dock.
   - **VoiceOver:** the accessibility tree was checked (one element per library row with title and reading time), but spoken output was not listened to.
-- **Before anything is published:** the maintainers' separate pre-publication guard must itself be confirmed to inspect the exact payload, including the `.icns`. A repository scanner pass is not publication clearance.
+- **Publication:** a repository scanner pass is not publication clearance. The maintainer's separate pre-publication guard was extended to render every ICNS rendition and PNG the same way the scanner does (via a pinned copy of its decoder) and to OCR all of them; it must pass the exact release files, notes, tag and history before anything is pushed or uploaded.
 
 ### Publication check hardening (a4cba2a)
 
