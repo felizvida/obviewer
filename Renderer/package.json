@@ -11,7 +11,7 @@
     "check": "node build.mjs --check && node --test test/*.test.js"
   },
   "dependencies": {
-    "dompurify": "^3.2.4",
+    "dompurify": "^3.5.0",
     "highlight.js": "^11.10.0",
     "katex": "0.19.1",
     "markdown-it": "^14.1.0",
